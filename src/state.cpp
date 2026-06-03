@@ -6,6 +6,17 @@
 
 #include <cstdio>
 
+static bool state_text_eq(const char* a, const char* b)
+{
+    if (!a || !b) return false;
+    int i = 0;
+    while (a[i] && b[i]) {
+        if (a[i] != b[i]) return false;
+        ++i;
+    }
+    return a[i] == b[i];
+}
+
 constexpr int SCENE_TRAIN = 0;
 constexpr int SCENE_BROWSE = 1;
 
@@ -38,6 +49,33 @@ const char* State::consume_load_request() {
     if (!load_request_pending_) return nullptr;
     load_request_pending_ = false;
     return filename(load_request_index_);
+}
+
+bool State::restore_current_line(const VocabFile& vf, const char* data, int data_len,
+                                 const LineBuf& target)
+{
+    int first_text_match = -1;
+    for (int i = 0; i < vf.line_count; ++i) {
+        LineBuf candidate;
+        if (!vocab_file_show(vf, data, data_len, i, candidate)) {
+            continue;
+        }
+        if (state_text_eq(candidate.a, target.a) && state_text_eq(candidate.b, target.b)) {
+            if (first_text_match < 0) {
+                first_text_match = i;
+            }
+            if (candidate.field == target.field) {
+                current_line_idx_ = i;
+                return true;
+            }
+        }
+    }
+
+    if (first_text_match >= 0) {
+        current_line_idx_ = first_text_match;
+        return true;
+    }
+    return false;
 }
 
 State::Side State::active_side() const {
@@ -148,8 +186,10 @@ bool State::update(VocabFile& vf, const InputState& in)
             current_field_ == undo_field_at_press_) {
             uint8_t new_field = vf.field[undo_line_idx_];
             vf.field[undo_line_idx_] = undo_old_field_;
-            vf.field_counts[new_field - 1]--;
-            vf.field_counts[undo_old_field_ - 1]++;
+            if (new_field != undo_old_field_) {
+                vf.field_counts[new_field - 1]--;
+                vf.field_counts[undo_old_field_ - 1]++;
+            }
             current_line_idx_ = undo_line_idx_;  // jump back
             clear_undo();
             flash_request_ = FLASH_NONE;  // no flash on undo
@@ -185,16 +225,12 @@ bool State::update(VocabFile& vf, const InputState& in)
             int line = current_line_idx_;
             uint8_t old_field = vf.field[line];
             vocab_reset(vf, line);
-            uint8_t new_field = vf.field[line];
-            // B press: the word's field is now 1.
-            if (old_field != new_field) {
-                undo_pending_ = true;
-                undo_line_idx_ = line;
-                undo_old_field_ = old_field;
-                undo_field_at_press_ = (uint8_t)current_field_;
-            } else {
-                clear_undo();
-            }
+            // B press is undoable even when the word was already in field 1:
+            // undo then means "return to the word I just marked wrong".
+            undo_pending_ = true;
+            undo_line_idx_ = line;
+            undo_old_field_ = old_field;
+            undo_field_at_press_ = (uint8_t)current_field_;
             flash_request_ = FLASH_RED;
             find_next_word_in_field(vf);
             if (direction_mode_ == 3) {

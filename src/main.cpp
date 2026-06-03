@@ -108,13 +108,28 @@ int main()
         state.update(g_vocab_file, in);
 
         if (in.start_pressed) {
+            LineBuf line_before_save;
+            bool have_line_before_save = false;
+            int idx_before_save = state.current_line_idx();
+            if (idx_before_save >= 0 && idx_before_save < g_vocab_file.line_count &&
+                !state.current_field_is_empty(g_vocab_file)) {
+                have_line_before_save = vocab_file_show(g_vocab_file, g_builtin_vocab,
+                                                        g_builtin_vocab_used,
+                                                        idx_before_save,
+                                                        line_before_save);
+            }
+
             renderer.set_saving(true);
             render_current_frame(renderer, state);
             bn::core::update();
 
-            vocab_file_save_grouped(g_vocab_file, g_builtin_vocab, g_builtin_vocab_used,
-                                    g_export_buffer, VOCAB_EXPORT_BUFFER_LEN,
-                                    g_export_buffer_used);
+            bool saved = vocab_file_save_grouped(g_vocab_file, g_builtin_vocab, g_builtin_vocab_used,
+                                                 g_export_buffer, VOCAB_EXPORT_BUFFER_LEN,
+                                                 g_export_buffer_used);
+            if (saved && have_line_before_save) {
+                state.restore_current_line(g_vocab_file, g_builtin_vocab, g_builtin_vocab_used,
+                                           line_before_save);
+            }
 
             renderer.set_saving(false);
             renderer.reset();

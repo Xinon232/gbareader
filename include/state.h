@@ -79,6 +79,13 @@ public:
     int scene() const { return scene_; }
     bool undo_pending() const { return undo_pending_; }
 
+    // After saving to SD the file is rewritten grouped by field and then
+    // re-opened, so numeric line indexes can point at different words.
+    // Restore the current line by matching the word text captured before
+    // the save. Returns true if a matching line was found.
+    bool restore_current_line(const VocabFile& vf, const char* data, int data_len,
+                              const LineBuf& target);
+
     bool current_field_is_empty(const VocabFile& vf) const;
 
     Side active_side() const;
@@ -117,7 +124,9 @@ private:
     int load_request_index_;
 
     // Undo state. Single-shot. Stored only if the most recent A/B
-    // press actually changed a field. Cleared by any action that
+    // press should be undoable. For B in field 1 the field does not
+    // change, but undo still returns to the word that was advanced past.
+    // Cleared by any action that
     // changes which field the user is browsing (D-pad L/R to a new
     // box), or by a successful undo. The undo restores the field of
     // the changed word and jumps the display back to that word so

@@ -23,7 +23,7 @@ INCLUDES    :=  include
 # butano treats INCLUDES as relative to CURDIR. Symlink the common
 # headers we need into our own include dir so butano finds them.
 DATA        :=
-GRAPHICS    :=  graphics $(dir $(LIBBUTANO))../common/graphics
+GRAPHICS    :=  graphics $(LIBBUTANO)/../common/graphics
 AUDIO       :=
 AUDIOBACKEND :=  null
 AUDIOTOOL   :=

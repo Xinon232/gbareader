@@ -295,6 +295,109 @@ static int test_empty_box_noop()
     return 0;
 }
 
+// Test 10: B in box 1 is still undoable. The field does not change,
+// but undo must jump back to the word that B advanced past.
+static int test_b_field1_undo_returns_word()
+{
+    printf("[10] B in field 1 undo returns word\n");
+    VocabFile vf; load_n_pairs(vf, 5);
+    State state;
+    state.debug_set_line(0);
+    state.debug_set_field(1);
+
+    int f1_before = vf.field_counts[0];
+    State::InputState in;
+    in.b_pressed = true; state.update(vf, in);
+    if (!state.undo_pending()) {
+        printf("    FAIL: B in field 1 should arm undo\n");
+        return 1;
+    }
+    if (vf.field[0] != 1 || vf.field_counts[0] != f1_before) {
+        printf("    FAIL: field/count changed for B in field 1\n");
+        return 1;
+    }
+    if (state.current_line_idx() == 0) {
+        printf("    FAIL: B should advance to next word before undo\n");
+        return 1;
+    }
+
+    in = State::InputState{};
+    in.up_pressed = true; state.update(vf, in);
+    if (state.current_line_idx() != 0) {
+        printf("    FAIL: undo did not return to line 0, got %d\n", state.current_line_idx());
+        return 1;
+    }
+    if (vf.field[0] != 1 || vf.field_counts[0] != f1_before) {
+        printf("    FAIL: undo changed field/count for no-op B\n");
+        return 1;
+    }
+    if (state.undo_pending()) {
+        printf("    FAIL: undo should be one-shot\n");
+        return 1;
+    }
+    printf("    OK\n");
+    return 0;
+}
+
+// Test 11: grouped save/reload reorders numeric line indexes. Restoring
+// by captured word text keeps START-save on the same displayed word.
+static int test_save_reorder_restore_current_word()
+{
+    printf("[11] Save reorder restores current word\n");
+    static const char source[] =
+        "alpha\tA\n"
+        "bravo\tB\n"
+        "charlie\tC\n"
+        "delta\tD\n";
+
+    VocabFile vf;
+    vocab_open(vf, source, (int)strlen(source));
+    vocab_advance(vf, 1);                  // bravo -> field 2
+    vocab_advance(vf, 3);                  // delta -> field 2
+    vocab_advance(vf, 3);                  // delta -> field 3
+
+    State state;
+    state.debug_set_field(1);
+    state.debug_set_line(2);               // charlie, field 1
+
+    LineBuf before;
+    if (!vocab_show(vf, source, (int)strlen(source), state.current_line_idx(), before)) {
+        printf("    FAIL: couldn't capture current word\n");
+        return 1;
+    }
+
+    char grouped[512];
+    int grouped_len = vocab_export_grouped(vf, source, (int)strlen(source), grouped, sizeof(grouped));
+    if (grouped_len <= 0) {
+        printf("    FAIL: grouped export failed\n");
+        return 1;
+    }
+
+    VocabFile reloaded;
+    vocab_open(reloaded, grouped, grouped_len);
+    // In grouped order, index 2 is now bravo (field 2), not charlie.
+    LineBuf wrong_without_restore;
+    vocab_show(reloaded, grouped, grouped_len, 2, wrong_without_restore);
+    if (strcmp(wrong_without_restore.a, "charlie") == 0) {
+        printf("    FAIL: test setup did not reorder line 2\n");
+        return 1;
+    }
+
+    if (!state.restore_current_line(reloaded, grouped, grouped_len, before)) {
+        printf("    FAIL: restore_current_line returned false\n");
+        return 1;
+    }
+    LineBuf after;
+    vocab_show(reloaded, grouped, grouped_len, state.current_line_idx(), after);
+    if (strcmp(after.a, before.a) != 0 || strcmp(after.b, before.b) != 0 || after.field != before.field) {
+        printf("    FAIL: restored '%s/%s/F%u', expected '%s/%s/F%u'\n",
+               after.a, after.b, after.field, before.a, before.b, before.field);
+        return 1;
+    }
+    printf("    OK\n");
+    return 0;
+}
+
 int main()
 {
     int rc = 0;
@@ -307,10 +410,12 @@ int main()
     rc |= test_browse();
     rc |= test_empty_box();
     rc |= test_empty_box_noop();
+    rc |= test_b_field1_undo_returns_word();
+    rc |= test_save_reorder_restore_current_word();
     if (rc) {
         printf("\nFAIL\n");
         return 1;
     }
-    printf("\nPASS: state machine end-to-end (9 scenarios)\n");
+    printf("\nPASS: state machine end-to-end (11 scenarios)\n");
     return 0;
 }
