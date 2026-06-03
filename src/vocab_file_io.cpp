@@ -215,11 +215,62 @@ static bool line_is_blank(const char* line, int line_len)
 }
 
 #ifdef __DEVKITARM__
-static bool ff_read_char(FIL& fp, char& out)
+static uint32_t s_save_line_offsets[VOCAB_MAX_LINES];
+
+struct SdReader {
+    FIL* fp;
+    uint8_t buf[512];
+    UINT pos;
+    UINT len;
+    uint32_t absolute_pos;
+
+    void init(FIL& file) {
+        fp = &file;
+        pos = 0;
+        len = 0;
+        absolute_pos = (uint32_t)f_tell(&file);
+    }
+
+    bool refill() {
+        UINT br = 0;
+        if (f_read(fp, buf, sizeof(buf), &br) != FR_OK || br == 0) {
+            len = 0;
+            return false;
+        }
+        pos = 0;
+        len = br;
+        return true;
+    }
+
+    bool read_char(char& out) {
+        if (pos >= len && !refill()) return false;
+        out = (char)buf[pos++];
+        absolute_pos++;
+        return true;
+    }
+
+    uint32_t tell() const { return absolute_pos; }
+};
+
+static bool read_line_buffered(SdReader& reader, char* line, int line_cap,
+                               int& line_len, bool& overflow, bool strip_cr)
 {
-    UINT br = 0;
-    FRESULT fr = f_read(&fp, &out, 1, &br);
-    return fr == FR_OK && br == 1;
+    line_len = 0;
+    overflow = false;
+    bool got_any = false;
+    char ch = 0;
+    while (reader.read_char(ch)) {
+        got_any = true;
+        if (ch == '\n') break;
+        if (strip_cr && ch == '\r') continue;
+        if (line_len < line_cap - 1) {
+            line[line_len++] = ch;
+        } else {
+            overflow = true;
+        }
+    }
+    line[line_len] = 0;
+    return got_any;
 }
 
 static bool open_sd_streaming(const char* filename, VocabFile& vf)
@@ -233,24 +284,16 @@ static bool open_sd_streaming(const char* filename, VocabFile& vf)
     bool had_valid_in_current_group = false;
     bool pending_group_advance = false;
     char line[VOCAB_RAW_LINE_MAX];
+    SdReader reader;
+    reader.init(fp);
 
-    while (loaded < VOCAB_MAX_LINES && !f_eof(&fp)) {
-        FSIZE_t offset = f_tell(&fp);
+    while (loaded < VOCAB_MAX_LINES) {
+        FSIZE_t offset = (FSIZE_t)reader.tell();
         int line_len = 0;
-        bool got_any = false;
         bool overflow = false;
-        char ch = 0;
-        while (ff_read_char(fp, ch)) {
-            got_any = true;
-            if (line_len < VOCAB_RAW_LINE_MAX - 1) {
-                line[line_len++] = ch;
-            } else {
-                overflow = true;
-            }
-            if (ch == '\n') break;
-        }
+        bool got_any = read_line_buffered(reader, line, VOCAB_RAW_LINE_MAX,
+                                          line_len, overflow, false);
         if (!got_any) break;
-        line[line_len] = 0;
 
         if (overflow) continue;
         if (line_is_blank(line, line_len)) {
@@ -314,15 +357,15 @@ bool vocab_file_show(const VocabFile& vf, const char* fallback_buf, int fallback
             f_close(&fp);
             return false;
         }
+        SdReader reader;
+        reader.init(fp);
         char line[VOCAB_RAW_LINE_MAX];
         int line_len = 0;
-        char ch = 0;
-        while (line_len < VOCAB_RAW_LINE_MAX - 1 && ff_read_char(fp, ch)) {
-            line[line_len++] = ch;
-            if (ch == '\n') break;
-        }
+        bool overflow = false;
+        bool got_any = read_line_buffered(reader, line, VOCAB_RAW_LINE_MAX,
+                                          line_len, overflow, false);
         f_close(&fp);
-        line[line_len] = 0;
+        if (!got_any || overflow) return false;
         if (!parse_line_into(line, line_len, out)) return false;
         out.field = vf.field[line_idx];
         return true;
@@ -335,16 +378,11 @@ bool vocab_file_show(const VocabFile& vf, const char* fallback_buf, int fallback
 static bool read_raw_line(FIL& fp, uint32_t offset, char* line, int line_cap, int& line_len)
 {
     if (f_lseek(&fp, (FSIZE_t)offset) != FR_OK) return false;
-    line_len = 0;
-    char ch = 0;
-    while (line_len < line_cap - 1 && ff_read_char(fp, ch)) {
-        if (ch == '\n') break;
-        if (ch != '\r') {
-            line[line_len++] = ch;
-        }
-    }
-    line[line_len] = 0;
-    return line_len > 0;
+    SdReader reader;
+    reader.init(fp);
+    bool overflow = false;
+    bool got_any = read_line_buffered(reader, line, line_cap, line_len, overflow, true);
+    return got_any && !overflow && line_len > 0;
 }
 
 static bool write_all(FIL& fp, const char* data, int len)
@@ -378,6 +416,8 @@ static bool save_sd_grouped(VocabFile& vf)
 
     char line[VOCAB_RAW_LINE_MAX];
     bool ok = true;
+    int new_index = 0;
+    uint32_t out_offset = 0;
     for (int field = 1; field <= 5 && ok; field++) {
         for (int i = 0; i < vf.line_count && ok; i++) {
             if (vf.field[i] != field) continue;
@@ -386,13 +426,18 @@ static bool save_sd_grouped(VocabFile& vf)
                 ok = false;
                 break;
             }
+            s_save_line_offsets[new_index++] = out_offset;
             if (!write_all(out, line, line_len)) ok = false;
+            out_offset += (uint32_t)line_len;
             if (ok && !write_all(out, "\r\n", 2)) ok = false;
+            out_offset += 2;
         }
         if (field < 5 && ok) {
             if (!write_all(out, "\r\n", 2)) ok = false;
+            out_offset += 2;
         }
     }
+    if (new_index != vf.line_count) ok = false;
 
     f_close(&in);
     if (f_close(&out) != FR_OK) ok = false;
@@ -405,8 +450,21 @@ static bool save_sd_grouped(VocabFile& vf)
     if (f_rename(tmp_name, s_loaded_name) != FR_OK) {
         return false;
     }
+
+    for (int i = 0; i < vf.line_count; ++i) {
+        vf.line_offsets[i] = s_save_line_offsets[i];
+    }
+    int idx = 0;
+    for (int field = 1; field <= 5; ++field) {
+        int count = vf.field_counts[field - 1];
+        for (int j = 0; j < count && idx < vf.line_count; ++j) {
+            vf.field[idx++] = (uint8_t)field;
+        }
+    }
     vocab_clear_dirty(vf);
-    return open_sd_streaming(s_loaded_name, vf);
+    vf.loaded = (vf.line_count > 0);
+    s_loaded_from_sd = vf.loaded;
+    return vf.loaded;
 }
 #endif
 
