@@ -6,17 +6,6 @@
 
 #include <cstdio>
 
-static bool state_text_eq(const char* a, const char* b)
-{
-    if (!a || !b) return false;
-    int i = 0;
-    while (a[i] && b[i]) {
-        if (a[i] != b[i]) return false;
-        ++i;
-    }
-    return a[i] == b[i];
-}
-
 constexpr int SCENE_TRAIN = 0;
 constexpr int SCENE_BROWSE = 1;
 
@@ -51,31 +40,13 @@ const char* State::consume_load_request() {
     return filename(load_request_index_);
 }
 
-bool State::restore_current_line(const VocabFile& vf, const char* data, int data_len,
-                                 const LineBuf& target)
+bool State::restore_current_line_index(const VocabFile& vf, int line_idx)
 {
-    int first_text_match = -1;
-    for (int i = 0; i < vf.line_count; ++i) {
-        LineBuf candidate;
-        if (!vocab_file_show(vf, data, data_len, i, candidate)) {
-            continue;
-        }
-        if (state_text_eq(candidate.a, target.a) && state_text_eq(candidate.b, target.b)) {
-            if (first_text_match < 0) {
-                first_text_match = i;
-            }
-            if (candidate.field == target.field) {
-                current_line_idx_ = i;
-                return true;
-            }
-        }
+    if (line_idx < 0 || line_idx >= vf.line_count) {
+        return false;
     }
-
-    if (first_text_match >= 0) {
-        current_line_idx_ = first_text_match;
-        return true;
-    }
-    return false;
+    current_line_idx_ = line_idx;
+    return true;
 }
 
 State::Side State::active_side() const {

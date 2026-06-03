@@ -81,10 +81,8 @@ public:
 
     // After saving to SD the file is rewritten grouped by field and then
     // re-opened, so numeric line indexes can point at different words.
-    // Restore the current line by matching the word text captured before
-    // the save. Returns true if a matching line was found.
-    bool restore_current_line(const VocabFile& vf, const char* data, int data_len,
-                              const LineBuf& target);
+    // Restore to a precomputed line index in the new grouped order.
+    bool restore_current_line_index(const VocabFile& vf, int line_idx);
 
     bool current_field_is_empty(const VocabFile& vf) const;
 

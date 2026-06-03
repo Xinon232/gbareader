@@ -340,7 +340,8 @@ static int test_b_field1_undo_returns_word()
 }
 
 // Test 11: grouped save/reload reorders numeric line indexes. Restoring
-// by captured word text keeps START-save on the same displayed word.
+// by a precomputed grouped-order index keeps START-save on the same word
+// without scanning the SD file again.
 static int test_save_reorder_restore_current_word()
 {
     printf("[11] Save reorder restores current word\n");
@@ -383,8 +384,9 @@ static int test_save_reorder_restore_current_word()
         return 1;
     }
 
-    if (!state.restore_current_line(reloaded, grouped, grouped_len, before)) {
-        printf("    FAIL: restore_current_line returned false\n");
+    int grouped_idx_after_save = 1;
+    if (!state.restore_current_line_index(reloaded, grouped_idx_after_save)) {
+        printf("    FAIL: restore_current_line_index returned false\n");
         return 1;
     }
     LineBuf after;
