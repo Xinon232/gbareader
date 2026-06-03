@@ -1,0 +1,6 @@
+[submodule "apultra"]
+	path = apultra
+	url = https://github.com/emmanuel-marty/apultra
+[submodule "upkr"]
+	path = upkr
+	url = https://github.com/exoticorn/upkr

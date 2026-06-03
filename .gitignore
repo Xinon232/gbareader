@@ -1,0 +1,9 @@
+build/
+*.o
+*.d
+*.elf
+*.map
+*.sav
+*.gba
+*.zip
+.DS_Store

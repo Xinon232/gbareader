@@ -1,0 +1,9 @@
+*.gba
+*.elf
+*.comp
+*.map
+*.payload
+*.gcda
+*.gcno
+*.info
+*.i

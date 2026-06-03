@@ -1,0 +1,476 @@
+dienstplicht {de}	Wehrpflicht {f}
+demonstratie {de}	Demonstration {f}
+knikker {de}	Murmel {f}
+fooi {de}	Trinkgeld {n}
+openbare verkoop {de}	Zwangsversteigerung {f}
+lood {het}	Blei {n} <Pb>
+achterban {de}	Anhängerschaft {f}
+rotsen {mv}	Felsen {pl}
+schim {de}	Schatten {m}
+vernieling {de}	Zerstörung {f}
+nors	barsch
+morsen	kleckern [ugs.]
+stuntelig	tollpatschig [ugs.]
+stuur {het}	Lenker {m}
+puin {het}	Trümmer {pl}
+tarten	trotzen
+smeken	anflehen
+lef {het} {de}	Mut {m}
+wanhopig	verzweifelt
+iem. beffen [vulg.]	jdn. lecken [vulg.] [Oralverkehr an einer Frau vollziehen]
+meeuwen {mv}	Möwen {pl}
+mientras (que)	während
+peligroso	gefährlich
+amable	nett [freundlich, liebenswürdig]
+amistoso [persona]	freundlich [Person]
+tareas {f.pl}	Hausaufgaben {pl}
+cariñoso (con)	liebevoll (zu)
+raro [curioso]	merkwürdig
+sueño {m}	Traum {m}
+bajo [de estatura]	klein
+obra {f} musical	Musikstück {n}
+piedra {f}	Stein {m}
+durante	während [+Gen.]
+serio	ernst
+relajante	entspannend
+baile {m}	Tanz {m}
+día {m} de la semana	Wochentag {m}
+estación {f}	Jahreszeit {f}
+cuántos	wie viele
+cuánto	wieviel [alt]
+¿Cuándo?	Wann?
+¿Cuál?	Welcher?
+quiénes	wer [pl]
+alcalde {m}	Bürgermeister {m}
+jardín {m} zoológico	Tiergarten {m}
+tigre {m} [Panthera tigris]	Tiger {m}
+estrella {f}	Stern {m}
+salida {f}	Ausgang {m}
+autovía {f}	Schnellstraße {f}
+bolígrafo {m}	Kugelschreiber {m}
+bastante	genug
+corto	kurz
+más de	mehr als
+libreta {f} [libro para anotaciones]	Notizbuch {f}
+zapato {m}	Schuh {m}
+rápido	schnell
+alcoba {f} [dormitorio]	Schlafzimmer {n}
+suave [caricia, aterrizaje]	sanft
+mochila {f}	Rucksack {m}
+teatro {m}	Theater {n}
+largo	lang
+papel {m}	Papier {n}
+pesado [fig.]	anstrengend
+tarde {f} [de día]	Nachmittag {m}
+¡Buenas tardes!	Guten Tag! [nachmittags]
+¡Buenas noches!	Gute Nacht!
+guerra {f}	Krieg {m}
+pueblo {m} [aldea, población]	Dorf {n}
+¿Por qué?	Warum?
+alfombra {f}	Teppich {m} [Vorleger]
+pesado	schwer [auch fig.]
+primavera {f}	Frühling {m}
+mayor [personas]	alt
+¿Cómo dice?	Wie bitte?
+árbol {m}	Baum {m}
+dinero {m}	Geld {n}
+pared {f}	Wand {f}
+estudio {m} [cuarto]	Arbeitszimmer {n}
+hoja {f}	Blatt {n}
+cuenta {f}	Rechnung {f}
+avenida {f} [calle]	Allee {f}
+equipaje {m}	Gepäck {n}
+si	falls
+maestra {f} (de primera enseñanza)	Lehrerin {f} [Grundschule]
+duro	hart [auch Wasser]
+escuela {f}	Schule {f}
+gente {f}	Menschen {pl}
+bombón {m}	Praline {f}
+verano {m}	Sommer {m}
+invierno {m}	Winter {m}
+otoño {m}	Herbst {m}
+minúscula {f}	Kleinbuchstabe {m}
+todavía	noch
+fuego {m}	Feuer {n}
+mayúscula {f}	Großbuchstabe {m}
+lapicero {m}	Stift {m}
+porque	weil
+¡Así es!	So ist es!
+lento	langsam
+gracioso [chistoso]	lustig [witzig]
+cuarto {m}	Zimmer {n}
+de	aus
+emocionante [excitante]	spannend
+porque	da [weil]
+llave {f}	Schlüssel {m}
+habitación {f}	Zimmer {n}
+así o así	so oder so
+ciego [también fig.]	blind [auch fig.]
+video {m} [am.]	Video {n}
+bello	schön
+piso {m} [vivienda]	Wohnung {f}
+piso {m} [suelo]	Fußboden {m}
+vivienda {f} [piso]	Wohnung {f} <Whg.>
+suelo {m} [piso]	Fußboden {m}
+o	oder
+tranquilo	ruhig
+comedor {m}	Esszimmer {n}
+nevera {f}	Kühlschrank {m}
+suave [blando]	weich
+otra vez	noch einmal
+orgulloso	stolz
+coche {m}	Auto {n}
+gabinetes {m.pl} [en la cocina]	Küchenschrank {m}
+cuaderno {m}	Notizblock {m}
+mes {m}	Monat {m} [ugs. auch {n} in Bayern, Österreich]
+calle {f}	Bahn {f}
+campo {m} [opuesto a ciudad]	Land {n}
+revista {f}	Zeitschrift {f}
+vaso {m}	Glas {n} [Trinkglas]
+salud {f}	Gesundheit {f}
+fiel	treu
+mensaje {m}	Nachricht {f}
+tarea {f} doméstica	Haushaltsarbeit {f}
+todavía no	noch nicht
+estrecho	eng
+así	auf diese Weise
+¿Cómo se llama usted?	Wie heißen Sie?
+fiesta {f} [celebración]	Party {f}
+tarjeta {f} postal	Postkarte {f}
+salón {m} de clases [am.]	Unterrichtsraum {m}
+abrir algo	etw. [Akk.] öffnen
+especial	besonders
+flojo	locker
+vestíbulo {m}	Foyer {n}
+vidrio {m}	Glas {n}
+viaje {m}	Reise {f}
+camisa {f}	Hemd {n}
+sonreír	lächeln
+(Yo) no sé.	Ich weiß (es) nicht.
+periódico {m}	Zeitung {f}
+grueso	dick
+pregunta {f}	Frage {f}
+frase {f}	Satz {m}
+horno {m}	Ofen {m}
+precio {m}	Preis {m}
+muñeca {f}	Puppe {f}
+Lo siento.	Es tut mir leid.
+parque {m}	Park {m}
+ruido {m}	Lärm {m}
+estuche {m}	Etui {n}
+estudio {m}	Studium {n}
+flojo [am.]	faul
+cenicero {m}	Aschenbecher {m}
+medicina {f}	Medizin {f}
+cambio {m} de tema	Themenwechsel {m}
+bastante	ausreichend
+felicidad {f} [dicha]	Glück {n}
+palabra {f}	Wort {n}
+carta {f}	Brief {m}
+sitio {m}	Platz {m}
+lápiz {m}	Bleistift {m}
+nuevo	neu
+cuaderno {m}	Heft {n} [Schreibheft]
+arquitecto {m}	Architekt {m}
+limpio	sauber
+hondo	tief
+sencillo	einfach
+mañana {f} [parte del día]	Morgen {m}
+patio {m}	Innenhof {m}
+edificio {m}	Gebäude {n}
+dulce [sabor]	süß
+hogar {m}	Zuhause {n}
+¿Cómo se escribe?	Wie schreibt man das?
+madera {f}	Holz {n}
+ancho	breit
+estación {f}	Bahnhof {m}
+cumpleaños {m}	Geburtstag {m}
+estufa {f}	Ofen {m}
+privado	privat
+tarea {f}	Aufgabe {f}
+sala {f} (de estar)	Wohnzimmer {n}
+este año	dieses Jahr
+jurado {m}	Jury {f}
+pobreza {f}	Armut {f}
+cómico [divertido]	witzig
+película {f}	Film {m}
+alto	hoch
+alto [personas]	groß
+alegre	fröhlich
+¡Salud!	Gesundheit! [nach dem Niesen]
+octrooi {het}	Patent {n}
+
+comida {f}	Mahlzeit {f}
+todo {m}	Ganze {n}
+¡Perdona!	Entschuldigung!
+calle {f} <c/ | C/ | c. | C.>	Straße {f} <Str.>
+pero	aber
+dedo {m}	Finger {m}
+caro	teuer
+interesante	interessant
+ilusión {f} [visión]	Illusion {f}
+fantástico	fantastisch
+mercado {m}	Markt {m}
+morado	violett
+Estados Unidos {m.pl}	Vereinigte Staaten {pl}
+noche {f}	Nacht {f}
+universidad {f}	Universität {f}
+¿Dónde?	Wo?
+cine {m}	Kino {n}
+aquí	hier
+estupendo	großartig
+desaparecido	verschwunden
+fino	fein
+enojado	verärgert
+¿Cómo?	Wie?
+repetir algo [reiterar]	etw. [Akk.] wiederholen
+algo	etwas
+marrón	braun
+más ... que	eher ... als
+escribir (algo)	(etw. [Akk.]) schreiben
+jardín {m} botánico	botanischer Garten {m}
+fútbol {m} [también: futbol]	Fußball {m} [Spiel]
+mi	mein
+azul marino	marineblau
+semana {f}	Woche {f}
+lengua {f}	Sprache {f}
+tableta {f}	Tablet-PC {m}
+bar {m}	Bar {f}
+flaco	mager [dünn]
+sordo [que no oye]	taub [gehörlos]
+todo	alles
+amor {m}	Liebe {f}
+viejo	alt
+naturaleza {f}	Natur {f}
+vez {f}	Mal {n}
+goma {f} de borrar	Radiergummi {m} {n}
+puerta {f}	Tür {f}
+muchacho {m} [niño]	Junge {m}
+otra vez	nochmals
+agenda {f}	Terminkalender {m}
+¿Cómo se dice ... en alemán / inglés?	Wie sagt man ... auf Deutsch / Englisch?
+cocina {f}	Küche {f} [Raum]
+silla {f}	Stuhl {m}
+abogado {m}	Anwalt {m}
+colección {f}	Sammlung {f}
+playa {f}	Strand {m}
+despacio	langsam
+escuchar a-algn/algo	jdm./etw. zuhören
+farmacia {f} [tienda]	Apotheke {f}
+acá [esp. Lat.Am.]	hier
+amplio [casa]	geräumig
+ascensor {m}	Aufzug {m} [Lift]
+día {m}	Tag {m}
+con	mit
+cielo {m}	Himmel {m}
+más	mehr
+bus {m}	Bus {m} [Sammelleitung]
+prohibido	verboten
+cuero {m}	Leder {n}
+elegante	elegant
+letra {f} [signo]	Buchstabe {m}
+infierno {m}	Hölle {f}
+cómodo	bequem
+obra {f} de la vida	Lebenswerk {n}
+tema {m}	Thema {n}
+sopa {f}	Suppe {f}
+amplio [informe]	umfassend
+escalera {f} [construida]	Treppe {f}
+católico	katholisch
+ingeniero {m}	Ingenieur {m} <Ing.>
+deporte {m}	Sport {m}
+Creo que sí.	Ich denke schon.
+gente {f}	Leute {pl}
+año {m}	Jahr {n}
+reloj {m}	Uhr {f}
+Metro {m}	U-Bahn {f}
+naturaleza {f}	Wesen {n} [Charakter]
+cortina {f}	Vorhang {m}
+entrada {f} [puerta]	Eingang {m}
+hoy	heute
+encantada	erfreut [sagt eine Frau]
+avión {m}	Flugzeug {n}
+pronunciar algo [articular]	etw. [Akk.] aussprechen [artikulieren]
+antiguo	alt [altertümlich]
+libre	frei
+ducha {f}	Dusche {f}
+
+gris	grau
+también	ebenfalls
+jardín {m}	Garten {m}
+animal {m}	Tier {n}
+lindo	bildhübsch
+hombre {m} [varón]	Mann {m}
+televisión {f}	Fernsehen {n}
+amarillo	gelb
+página {f}	Blatt {n} [Papier, Seite]
+verdad {f}	Wahrheit {f}
+artista {m}	Künstler {m}
+corriente	fließend
+fuerte	stark
+hacer algo	etw. [Akk.] machen
+clase {f}	Klasse {f}
+feliz	glücklich
+agradable	angenehm
+hermoso	hübsch
+doctor {m}	Arzt {m}
+Gracias.	Danke.
+niño {m} [chico]	Junge {m}
+pianista {f}	Pianistin {f}
+libro {m}	Buch {n}
+¿Quién?	Wer?
+dentista {f}	Zahnärztin {f}
+conocer a algn [descubrir]	jdn. kennen lernen
+idea {f}	Idee {f}
+anaranjado	orange
+ciudad {f}	Stadt {f}
+delgado	mager [dünn]
+fácil	einfach
+simpático	sympathisch
+excepción {f}	Ausnahme {f}
+persona {f}	Person {f}
+delgado	dünn
+pluma {f} [estilográfica]	Füller {m}
+aparecer	erscheinen
+banco {m}	Bank {f}
+mujer {f}	Frau {f}
+librería {f}	Buchhandlung {f}
+tique {m}	Kassenbon {m}
+deuda {f}	Schulden {pl}
+estudiante {m} [de universidad]	Student {m}
+cansado	müde
+ojo {m}	Auge {n}
+¡Ven acá! [mex.] [cent.]	Komm her!
+inteligente	intelligent
+ella [f]	sie [f]
+mano {f}	Hand {f}
+ventana {f}	Fenster {n}
+foto {f}	Foto {n} [schweiz. auch {f}]
+muchacha {f}	Mädchen {n}
+conversación {f}	Gespräch {n}
+delicioso [comida]	lecker
+iglesia {f}	Kirche {f}
+piel {f}	Haut {f}
+hacer ejercicio	Sport treiben
+sillón {m} [butaca]	Sessel {m}
+espejo {m}	Spiegel {m}
+dentista {m}	Zahnarzt {m}
+lección {f}	Lektion {f}
+taxista {f}	Taxifahrerin {f}
+guapo	hübsch
+lengua {f} materna	Muttersprache {f}
+museo {m}	Museum {n}
+café {m} [local]	Café {n}
+planta {f}	Pflanze {f}
+feo	hässlich
+programa {m}	Programm {n}
+biblioteca {f}	Bibliothek {f}
+maleta {f}	Koffer {m}
+sincero	ehrlich
+contento	zufrieden
+música {f}	Musik {f}
+verde	grün
+pequeño	klein
+culpar a algn	jdn. beschuldigen
+cantante {m}	Sänger {m}
+frágil	fragil
+actitud {f}	Einstellung {f} [Haltung]
+gato {m}	Katze {f} [Hauskatze]
+rico [adinerado, uso con ser]	reich
+vino {m}	Wein {m}
+quejarse	meckern [ugs.]
+poema {m}	Gedicht {n}
+blusa {f}	Bluse {f}
+rojo	rot
+hotel {m}	Hotel {n}
+gerente {f}	Geschäftsführerin {f}
+tacaño	geizig
+allá	dort [entfernter als allí]
+sabroso	schmackhaft
+excelente	ausgezeichnet
+artista {f}	Künstlerin {f}
+niña {f}	Mädchen {n}
+pluma {f}	Feder {f}
+drama {m}	Drama {n}
+¿Verdad?	Wirklich?
+encantado	erfreut
+triste	traurig
+idioma {m}	Sprache {f}
+baño {m} [habitación]	Badezimmer {n}
+cama {f}	Bett {n}
+pobre	arm
+amigo {m}	Freund {m} [Freundschaft]
+casa {f}	Haus {n}
+enfermo	krank
+tienda {f}	Laden {m}
+lámpara {f}	Lampe {f}
+perro {m}	Hund {m}
+niño {m}	Kind {n}
+mapa {m}	Karte {f} [Landkarte]
+problema {m}	Problem {n}
+hermano {m}	Bruder {m}
+tomate {m}	Tomate {f}
+renta {f} [alquiler]	Miete {f}
+radio {f}	Radio {n}
+puerco {m}	Schwein {n}
+blanco	weiß
+¡Es un placer conocerle!	Angenehm, Sie kennen zu lernen!
+hablante {m} nativo	Muttersprachler {m}
+bonito	hübsch
+alguien <algn>	jemand <jd.>
+taxista {m}	Taxifahrer {m}
+maravilloso	wunderbar
+padre {m}	Vater {m}
+lo típico [col.]	das Übliche {n}
+negro	schwarz
+hermana {f}	Schwester {f}
+presidente {m}	Präsident {m}
+gerente {m}	Geschäftsführer {m}
+mesa {f}	Tisch {m}
+grande	groß
+cerveza {f}	Bier {n}
+rosado	pink
+madre {f}	Mutter {f}
+casado	verheiratet
+débil	schwach
+interruptor {m}	Lichtschalter {m}
+canción {f} [canto]	Lied {n}
+moreno	dunkelbraun
+planeta {m}	Planet {m}
+allí	dort
+estudiante {f} [de universidad]	Studentin {f}
+flor {f} [planta]	Blume {f}
+invitación {f}	Einladung {f}
+azul	blau
+tren {m}	Zug {m}
+típico (de algn/algo)	typisch (für jdn./etw.)
+maravilloso	wunderschön
+luz {f}	Licht {n}
+barco {m}	Schiff {n}
+flaco	dünn
+moreno	dunkelhäutig
+desaparecer	verschwinden
+bolsa {f}	Tüte {f}
+presidente {f}	Präsidentin {f}
+barato [a bajo precio]	billig [preiswert]
+guapo [atractivo]	gut aussehend
+horrible	schrecklich
+joven	jung
+teléfono {m}	Telefon {n}
+sistema {m}	System {n}
+pianista {m}	Pianist {m}
+clima {m}	Klima {n}
+gratitud {f}	Dankbarkeit {f}
+buscar algo	etw. suchen
+amiga {f}	Freundin {f} [Freundschaft]
+amistad {f}	Freundschaft {f}
+difícil	schwierig
+cantante {f}	Sängerin {f}
+plaza {f}	Platz {m}
+salón {m}	Wohnzimmer {n}
+
+suerte {f}	Glück {n}
+país {m}	Land {n}
+gordo	dick
+
+carro {m} [am.]	Auto {n}
