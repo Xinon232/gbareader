@@ -23,6 +23,7 @@
 //   L: tap            → cycle direction_mode 1→2→3→1
 //   D-pad Left/Right: switch between boxes (fields), including empty ones
 //   D-pad Up:         undo the most recent A/B press (one-shot).
+//   D-pad Down:       ask to shuffle only the current box; A confirms, B cancels.
 //   START: save .txt back to disk (Step 6 stub: clears dirty flags)
 //   SELECT: file browser (Step 6, stub for now)
 //
@@ -78,6 +79,7 @@ public:
     bool show_answer() const { return show_answer_; }
     int scene() const { return scene_; }
     bool undo_pending() const { return undo_pending_; }
+    bool shuffle_confirm_active() const { return scene_ == 2; }
 
     // After saving to SD the file is rewritten grouped by field and then
     // re-opened, so numeric line indexes can point at different words.
@@ -120,6 +122,8 @@ private:
     int browse_top_;
     bool load_request_pending_;
     int load_request_index_;
+    int last_line_by_field_[5];
+    uint32_t shuffle_seed_;
 
     // Undo state. Single-shot. Stored only if the most recent A/B
     // press should be undoable. For B in field 1 the field does not
@@ -141,8 +145,12 @@ private:
 
     void clear_undo() { undo_pending_ = false; }
 
+    void remember_current_line_for_field(const VocabFile& vf);
+    void restore_current_line_for_field(const VocabFile& vf);
+    void set_current_line_for_field(const VocabFile& vf, int line_idx);
     void find_next_word_in_field(const VocabFile& vf);
     void jump_to_next_field(const VocabFile& vf);
     void jump_to_prev_field(const VocabFile& vf);
+    void shuffle_current_field(VocabFile& vf);
 };
 

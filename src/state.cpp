@@ -8,6 +8,7 @@
 
 constexpr int SCENE_TRAIN = 0;
 constexpr int SCENE_BROWSE = 1;
+constexpr int SCENE_SHUFFLE_CONFIRM = 2;
 
 State::State()
     : current_line_idx_(0),
@@ -21,6 +22,8 @@ State::State()
       browse_top_(0),
       load_request_pending_(false),
       load_request_index_(0),
+      last_line_by_field_{-1, -1, -1, -1, -1},
+      shuffle_seed_(0x13579BDFu),
       undo_pending_(false),
       undo_line_idx_(0),
       undo_old_field_(1),
@@ -46,6 +49,7 @@ bool State::restore_current_line_index(const VocabFile& vf, int line_idx)
         return false;
     }
     current_line_idx_ = line_idx;
+    remember_current_line_for_field(vf);
     return true;
 }
 
@@ -62,13 +66,14 @@ bool State::current_field_is_empty(const VocabFile& vf) const {
     return true;
 }
 
-static bool find_word_in_field(const VocabFile& vf, int start_idx,
-                              int target_field, int& out_idx)
+static bool find_word_in_field_from(const VocabFile& vf, int start_idx,
+                                    int target_field, int& out_idx)
 {
     int n = vf.line_count;
     if (n == 0) return false;
-    for (int step = 1; step <= n; step++) {
-        int i = (start_idx + step) % n;
+    int start = start_idx < 0 ? 0 : start_idx;
+    for (int step = 0; step < n; step++) {
+        int i = (start + step) % n;
         if (vf.field[i] == target_field) {
             out_idx = i;
             return true;
@@ -77,13 +82,13 @@ static bool find_word_in_field(const VocabFile& vf, int start_idx,
     return false;
 }
 
-static bool find_word_in_field_back(const VocabFile& vf, int start_idx,
-                                   int target_field, int& out_idx)
+static bool find_next_word_in_field_from(const VocabFile& vf, int start_idx,
+                                         int target_field, int& out_idx)
 {
     int n = vf.line_count;
     if (n == 0) return false;
     for (int step = 1; step <= n; step++) {
-        int i = (start_idx - step + n) % n;
+        int i = (start_idx + step) % n;
         if (vf.field[i] == target_field) {
             out_idx = i;
             return true;
@@ -99,37 +104,95 @@ static int wrap_field(int field)
     return field;
 }
 
+void State::remember_current_line_for_field(const VocabFile& vf)
+{
+    int field_index = current_field_ - 1;
+    if (field_index < 0 || field_index >= 5) return;
+    if (current_line_idx_ >= 0 && current_line_idx_ < vf.line_count &&
+        vf.field[current_line_idx_] == (uint8_t)current_field_) {
+        last_line_by_field_[field_index] = current_line_idx_;
+    }
+}
+
+void State::restore_current_line_for_field(const VocabFile& vf)
+{
+    int field_index = current_field_ - 1;
+    if (field_index < 0 || field_index >= 5) return;
+
+    int remembered = last_line_by_field_[field_index];
+    if (remembered >= 0 && remembered < vf.line_count &&
+        vf.field[remembered] == (uint8_t)current_field_) {
+        current_line_idx_ = remembered;
+        return;
+    }
+
+    int first = current_line_idx_;
+    if (find_word_in_field_from(vf, 0, current_field_, first)) {
+        current_line_idx_ = first;
+        last_line_by_field_[field_index] = first;
+    }
+}
+
+void State::set_current_line_for_field(const VocabFile& vf, int line_idx)
+{
+    current_line_idx_ = line_idx;
+    remember_current_line_for_field(vf);
+}
+
 void State::find_next_word_in_field(const VocabFile& vf)
 {
     int new_idx = current_line_idx_;
-    if (find_word_in_field(vf, current_line_idx_, current_field_, new_idx)) {
-        current_line_idx_ = new_idx;
+    if (find_next_word_in_field_from(vf, current_line_idx_, current_field_, new_idx)) {
+        set_current_line_for_field(vf, new_idx);
     }
 }
 
 void State::jump_to_next_field(const VocabFile& vf)
 {
+    remember_current_line_for_field(vf);
     current_field_ = wrap_field(current_field_ + 1);
-
-    int new_idx = current_line_idx_;
-    if (find_word_in_field(vf, current_line_idx_, current_field_, new_idx)) {
-        current_line_idx_ = new_idx;
-    }
+    restore_current_line_for_field(vf);
 }
 
 void State::jump_to_prev_field(const VocabFile& vf)
 {
+    remember_current_line_for_field(vf);
     current_field_ = wrap_field(current_field_ - 1);
+    restore_current_line_for_field(vf);
+}
 
-    int new_idx = current_line_idx_;
-    if (find_word_in_field_back(vf, current_line_idx_, current_field_, new_idx)) {
-        current_line_idx_ = new_idx;
+void State::shuffle_current_field(VocabFile& vf)
+{
+    int old_idx = current_line_idx_;
+    shuffle_seed_ = shuffle_seed_ * 1103515245u + 12345u + (uint32_t)current_field_;
+    if (!vocab_shuffle_field(vf, current_field_, shuffle_seed_)) {
+        return;
+    }
+
+    int first = old_idx;
+    if (find_word_in_field_from(vf, 0, current_field_, first)) {
+        current_line_idx_ = first;
+    }
+    if (vf.field_counts[current_field_ - 1] > 1 && current_line_idx_ == old_idx) {
+        find_next_word_in_field(vf);
+    } else {
+        remember_current_line_for_field(vf);
     }
 }
 
 bool State::update(VocabFile& vf, const InputState& in)
 {
-    if (scene_ == SCENE_TRAIN) {
+    if (scene_ == SCENE_SHUFFLE_CONFIRM) {
+        show_answer_ = false;
+        if (in.a_pressed) {
+            shuffle_current_field(vf);
+            clear_undo();
+            flash_request_ = FLASH_NONE;
+            scene_ = SCENE_TRAIN;
+        } else if (in.b_pressed) {
+            scene_ = SCENE_TRAIN;
+        }
+    } else if (scene_ == SCENE_TRAIN) {
         show_answer_ = in.r_held;
 
         if (in.l_pressed) {
@@ -146,6 +209,12 @@ bool State::update(VocabFile& vf, const InputState& in)
         if (in.left_pressed) {
             jump_to_prev_field(vf);
             clear_undo();
+        }
+
+        if (in.down_pressed) {
+            clear_undo();
+            scene_ = SCENE_SHUFFLE_CONFIRM;
+            return true;
         }
 
         // D-pad Up: undo the most recent A/B press, if one is pending.
@@ -196,6 +265,12 @@ bool State::update(VocabFile& vf, const InputState& in)
             int line = current_line_idx_;
             uint8_t old_field = vf.field[line];
             vocab_reset(vf, line);
+            if (old_field == 1 && current_field_ == 1) {
+                int moved_idx = line;
+                vocab_move_line_to_field_end(vf, line, 1, moved_idx);
+                line = moved_idx;
+                current_line_idx_ = moved_idx;
+            }
             // B press is undoable even when the word was already in field 1:
             // undo then means "return to the word I just marked wrong".
             undo_pending_ = true;

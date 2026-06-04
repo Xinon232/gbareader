@@ -114,6 +114,12 @@ bool vocab_show(VocabFile& vf, const char* data, int data_len,
 void vocab_advance(VocabFile& vf, int line_idx);
 void vocab_reset(VocabFile& vf, int line_idx);
 
+// Reorder helpers. These change the review order while keeping each
+// line's offset/field/dirty state attached to the same word.
+bool vocab_move_line_to_field_end(VocabFile& vf, int line_idx, int field,
+                                  int& new_idx);
+bool vocab_shuffle_field(VocabFile& vf, int field, uint32_t seed);
+
 // Dirty-bit queries / clearing.
 bool vocab_is_dirty(const VocabFile& vf, int line_idx);
 void vocab_clear_dirty(VocabFile& vf);

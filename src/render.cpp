@@ -322,6 +322,17 @@ void Renderer::update_browser(const State& state)
     }
 }
 
+void Renderer::update_shuffle_confirm(int current_field)
+{
+    bn::bg_palettes::set_transparent_color(bn::color(BG_R, BG_G, BG_B));
+    text_sprites.clear();
+
+    small_gen.generate(0, -36, "Shuffle items", text_sprites);
+    bn::string<32> line = bn::format<32>("in box {}?", current_field);
+    small_gen.generate(0, -14, line, text_sprites);
+    small_gen.generate(0, 20, "A yes   B no", text_sprites);
+}
+
 void Renderer::render_full(const VocabFile& vf, int current_line_idx, int current_field,
                            const LineBuf& current,
                            State::Side active_side, bool show_answer,

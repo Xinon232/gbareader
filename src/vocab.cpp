@@ -423,6 +423,35 @@ static void set_dirty(VocabFile& vf, int line_idx) {
     vf.dirty[line_idx / 8] |= (uint8_t)(1 << (line_idx % 8));
 }
 
+static bool get_dirty(const VocabFile& vf, int line_idx) {
+    return (vf.dirty[line_idx / 8] & (uint8_t)(1 << (line_idx % 8))) != 0;
+}
+
+static void set_dirty_value(VocabFile& vf, int line_idx, bool dirty) {
+    uint8_t mask = (uint8_t)(1 << (line_idx % 8));
+    if (dirty) {
+        vf.dirty[line_idx / 8] |= mask;
+    } else {
+        vf.dirty[line_idx / 8] &= (uint8_t)~mask;
+    }
+}
+
+static void swap_line_records(VocabFile& vf, int a, int b) {
+    if (a == b) return;
+
+    uint32_t off = vf.line_offsets[a];
+    uint8_t field = vf.field[a];
+    bool dirty = get_dirty(vf, a);
+
+    vf.line_offsets[a] = vf.line_offsets[b];
+    vf.field[a] = vf.field[b];
+    set_dirty_value(vf, a, get_dirty(vf, b));
+
+    vf.line_offsets[b] = off;
+    vf.field[b] = field;
+    set_dirty_value(vf, b, dirty);
+}
+
 void vocab_advance(VocabFile& vf, int line_idx)
 {
     if (line_idx < 0 || line_idx >= vf.line_count) return;
@@ -451,6 +480,73 @@ void vocab_reset(VocabFile& vf, int line_idx)
     vf.field_counts[old - 1]--;
     vf.field_counts[0]++;
     set_dirty(vf, line_idx);
+}
+
+bool vocab_move_line_to_field_end(VocabFile& vf, int line_idx, int field,
+                                  int& new_idx)
+{
+    new_idx = line_idx;
+    if (line_idx < 0 || line_idx >= vf.line_count || field < 1 || field > 5) return false;
+    if (vf.field[line_idx] != (uint8_t)field) return false;
+
+    int last = line_idx;
+    for (int i = line_idx + 1; i < vf.line_count; ++i) {
+        if (vf.field[i] == (uint8_t)field) {
+            last = i;
+        }
+    }
+    if (last == line_idx) {
+        return true;
+    }
+
+    uint32_t off = vf.line_offsets[line_idx];
+    uint8_t fld = vf.field[line_idx];
+    bool dirty = get_dirty(vf, line_idx);
+    for (int i = line_idx; i < last; ++i) {
+        vf.line_offsets[i] = vf.line_offsets[i + 1];
+        vf.field[i] = vf.field[i + 1];
+        set_dirty_value(vf, i, get_dirty(vf, i + 1));
+    }
+    vf.line_offsets[last] = off;
+    vf.field[last] = fld;
+    set_dirty_value(vf, last, dirty);
+    new_idx = last;
+    return true;
+}
+
+static uint32_t shuffle_next(uint32_t& state)
+{
+    state = state * 1664525u + 1013904223u;
+    return state;
+}
+
+static int nth_index_in_field(const VocabFile& vf, int field, int nth)
+{
+    for (int i = 0; i < vf.line_count; ++i) {
+        if (vf.field[i] == (uint8_t)field) {
+            if (nth == 0) return i;
+            --nth;
+        }
+    }
+    return -1;
+}
+
+bool vocab_shuffle_field(VocabFile& vf, int field, uint32_t seed)
+{
+    if (field < 1 || field > 5) return false;
+    int count = vf.field_counts[field - 1];
+    if (count <= 1) return count == 1;
+    uint32_t rng = seed ? seed : 0xA341316Cu;
+
+    for (int k = count - 1; k > 0; --k) {
+        int j = (int)(shuffle_next(rng) % (uint32_t)(k + 1));
+        int idx_k = nth_index_in_field(vf, field, k);
+        int idx_j = nth_index_in_field(vf, field, j);
+        if (idx_k >= 0 && idx_j >= 0) {
+            swap_line_records(vf, idx_k, idx_j);
+        }
+    }
+    return true;
 }
 
 bool vocab_is_dirty(const VocabFile& vf, int line_idx) {

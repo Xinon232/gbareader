@@ -24,6 +24,7 @@ public:
                 bool field_is_empty);      // current box has no words
 
     void update_browser(const State& state);
+    void update_shuffle_confirm(int current_field);
 
     // Show/hide the short save indicator in the top-right corner.
     void set_saving(bool saving);

@@ -97,6 +97,10 @@ static void render_current_frame(Renderer& renderer, State& state)
         renderer.update_browser(state);
         return;
     }
+    if (state.shuffle_confirm_active()) {
+        renderer.update_shuffle_confirm(state.current_field());
+        return;
+    }
 
     int idx = state.current_line_idx();
     if (idx < 0 || idx >= g_vocab_file.line_count) idx = 0;
@@ -128,7 +132,7 @@ int main()
         State::InputState in = read_input();
         state.update(g_vocab_file, in);
 
-        if (in.start_pressed) {
+        if (in.start_pressed && state.scene() == 0) {
             int grouped_idx_after_save = -1;
             int idx_before_save = state.current_line_idx();
             if (vocab_file_loaded_from_sd() &&
