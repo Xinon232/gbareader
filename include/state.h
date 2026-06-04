@@ -80,6 +80,7 @@ public:
     int scene() const { return scene_; }
     bool undo_pending() const { return undo_pending_; }
     bool shuffle_confirm_active() const { return scene_ == 2; }
+    bool feedback_active() const { return scene_ == 3; }
 
     // After saving to SD the file is rewritten grouped by field and then
     // re-opened, so numeric line indexes can point at different words.
@@ -124,6 +125,13 @@ private:
     int load_request_index_;
     int last_line_by_field_[5];
     uint32_t shuffle_seed_;
+    int feedback_frames_left_;
+
+    // Feedback scene: after A/B, keep the pressed card visible with
+    // answer shown during the green/red flash. Only after the flash
+    // expires do we advance to the next word and toggle alternation.
+    int feedback_line_idx_;
+    bool feedback_toggle_alternation_;
 
     // Undo state. Single-shot. Stored only if the most recent A/B
     // press should be undoable. For B in field 1 the field does not
@@ -149,6 +157,7 @@ private:
     void restore_current_line_for_field(const VocabFile& vf);
     void set_current_line_for_field(const VocabFile& vf, int line_idx);
     void find_next_word_in_field(const VocabFile& vf);
+    void finish_feedback(VocabFile& vf);
     void jump_to_next_field(const VocabFile& vf);
     void jump_to_prev_field(const VocabFile& vf);
     void shuffle_current_field(VocabFile& vf);

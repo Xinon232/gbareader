@@ -25,6 +25,13 @@ static void load_n_pairs(VocabFile& vf, int n)
     vocab_open(vf, buf, len);
 }
 
+static void finish_feedback(State& state, VocabFile& vf)
+{
+    for (int i = 0; i < 12 && state.feedback_active(); ++i) {
+        state.update(vf, State::InputState{});
+    }
+}
+
 // Test 1: mode cycling 1→2→3→1
 static int test_modes()
 {
@@ -40,7 +47,10 @@ static int test_modes()
     in.l_pressed = true; state.update(vf, in);  // 2→3
     if (state.active_side() != State::SIDE_A) return 1;  // phase 0
     in = State::InputState{};
-    in.a_pressed = true; state.update(vf, in);  // phase toggle
+    in.a_pressed = true; state.update(vf, in);  // feedback, no phase toggle yet
+    if (!state.feedback_active() || !state.show_answer()) return 1;
+    if (state.active_side() != State::SIDE_A) return 1;
+    finish_feedback(state, vf);                 // phase toggle after flash
     if (state.active_side() != State::SIDE_B) return 1;
     in = State::InputState{};
     in.l_pressed = true; state.update(vf, in);  // 3→1
@@ -143,8 +153,11 @@ static int test_undo_one_shot()
         state.debug_set_field(1);
         State::InputState in;
         in.a_pressed = true; state.update(vf, in);
+        if (!state.feedback_active() || !state.show_answer()) { printf("    FA: A should show feedback\n"); return 1; }
         if (!state.undo_pending()) { printf("    FA: A should arm\n"); return 1; }
         if (vf.field[0] != 2) { printf("    FA: word[0]=%u, expect 2\n", vf.field[0]); return 1; }
+        finish_feedback(state, vf);
+        state.debug_set_line(0);
         in = State::InputState{};
         in.up_pressed = true; state.update(vf, in);
         if (vf.field[0] != 1) { printf("    FA: Up didn't restore, got %u\n", vf.field[0]); return 1; }
@@ -160,6 +173,7 @@ static int test_undo_one_shot()
         State::InputState in;
         in.a_pressed = true; state.update(vf, in);
         if (!state.undo_pending()) { printf("    FB: A should arm\n"); return 1; }
+        finish_feedback(state, vf);
         in = State::InputState{};
         in.right_pressed = true; state.update(vf, in);
         if (state.undo_pending()) { printf("    FB: D-pad Right should clear undo\n"); return 1; }
@@ -173,8 +187,9 @@ static int test_undo_one_shot()
         state.debug_set_line(0);
         state.debug_set_field(1);
         State::InputState in;
-        in.a_pressed = true; state.update(vf, in);  // 1→2
+        in.a_pressed = true; state.update(vf, in);  // 1→2, then feedback
         if (vf.field[0] != 2) { printf("    FC: expect 2, got %u\n", vf.field[0]); return 1; }
+        finish_feedback(state, vf);
         // Find_next_word_in_field moved us to a different line. We
         // want to test undoing a SECOND A press on the SAME word.
         // So we manually put line back to 0.
@@ -183,6 +198,8 @@ static int test_undo_one_shot()
         in.a_pressed = true; state.update(vf, in);  // 2→3
         if (vf.field[0] != 3) { printf("    FC: expect 3, got %u\n", vf.field[0]); return 1; }
         if (!state.undo_pending()) { printf("    FC: undo should be armed\n"); return 1; }
+        finish_feedback(state, vf);
+        state.debug_set_line(0);
         // Undo once: should restore to 2 (only 1 step).
         in = State::InputState{};
         in.up_pressed = true; state.update(vf, in);
@@ -205,6 +222,7 @@ static int test_dpad_clears_undo()
     State::InputState in;
     in.a_pressed = true; state.update(vf, in);
     if (!state.undo_pending()) return 1;
+    finish_feedback(state, vf);
     in = State::InputState{};
     in.right_pressed = true; state.update(vf, in);
     if (state.undo_pending()) {
@@ -317,8 +335,17 @@ static int test_b_field1_undo_returns_word()
         printf("    FAIL: field/count changed for B in field 1\n");
         return 1;
     }
+    if (!state.feedback_active() || !state.show_answer()) {
+        printf("    FAIL: B should show feedback with answer\n");
+        return 1;
+    }
+    if (vf.line_offsets[state.current_line_idx()] != original_offset) {
+        printf("    FAIL: B should keep original word visible during feedback\n");
+        return 1;
+    }
+    finish_feedback(state, vf);
     if (vf.line_offsets[state.current_line_idx()] == original_offset) {
-        printf("    FAIL: B should advance to another word before undo\n");
+        printf("    FAIL: B should advance to another word after feedback\n");
         return 1;
     }
 
@@ -457,6 +484,11 @@ static int test_b_field1_rotates_to_back_and_remembers_next()
 
     State::InputState in;
     in.b_pressed = true; state.update(vf, in);
+    if (!state.feedback_active() || vf.line_offsets[state.current_line_idx()] != missed_offset) {
+        printf("    FAIL: B should keep missed word visible during feedback\n");
+        return 1;
+    }
+    finish_feedback(state, vf);
     uint32_t next_offset = vf.line_offsets[state.current_line_idx()];
     if (state.current_field() != 1 || next_offset == missed_offset) {
         printf("    FAIL: expected another F1 word, got field %d offset %u\n",
@@ -524,6 +556,40 @@ static int test_shuffle_confirm()
     return 0;
 }
 
+// Test 15: A/B feedback shows answer for the pressed card first, then
+// advances only after the short flash period.
+static int test_feedback_delays_advance_and_shows_answer()
+{
+    printf("[15] Feedback delays advance and shows answer\n");
+    VocabFile vf; load_n_pairs(vf, 5);
+    State state;
+    state.debug_set_field(1);
+    state.debug_set_line(0);
+    uint32_t pressed_offset = vf.line_offsets[0];
+
+    State::InputState in;
+    in.a_pressed = true; state.update(vf, in);
+    if (!state.feedback_active() || !state.show_answer()) {
+        printf("    FAIL: A did not enter answer feedback\n");
+        return 1;
+    }
+    if (vf.line_offsets[state.current_line_idx()] != pressed_offset) {
+        printf("    FAIL: advanced before feedback finished\n");
+        return 1;
+    }
+    finish_feedback(state, vf);
+    if (state.feedback_active() || state.show_answer()) {
+        printf("    FAIL: feedback did not finish cleanly\n");
+        return 1;
+    }
+    if (vf.line_offsets[state.current_line_idx()] == pressed_offset) {
+        printf("    FAIL: did not advance after feedback finished\n");
+        return 1;
+    }
+    printf("    OK\n");
+    return 0;
+}
+
 int main()
 {
     int rc = 0;
@@ -541,10 +607,11 @@ int main()
     rc |= test_box_switch_restores_last_seen();
     rc |= test_b_field1_rotates_to_back_and_remembers_next();
     rc |= test_shuffle_confirm();
+    rc |= test_feedback_delays_advance_and_shows_answer();
     if (rc) {
         printf("\nFAIL\n");
         return 1;
     }
-    printf("\nPASS: state machine end-to-end (14 scenarios)\n");
+    printf("\nPASS: state machine end-to-end (15 scenarios)\n");
     return 0;
 }

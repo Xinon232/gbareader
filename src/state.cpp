@@ -9,6 +9,8 @@
 constexpr int SCENE_TRAIN = 0;
 constexpr int SCENE_BROWSE = 1;
 constexpr int SCENE_SHUFFLE_CONFIRM = 2;
+constexpr int SCENE_FEEDBACK = 3;
+constexpr int FEEDBACK_FRAMES = 10;
 
 State::State()
     : current_line_idx_(0),
@@ -24,6 +26,9 @@ State::State()
       load_request_index_(0),
       last_line_by_field_{-1, -1, -1, -1, -1},
       shuffle_seed_(0x13579BDFu),
+      feedback_frames_left_(0),
+      feedback_line_idx_(-1),
+      feedback_toggle_alternation_(false),
       undo_pending_(false),
       undo_line_idx_(0),
       undo_old_field_(1),
@@ -180,9 +185,31 @@ void State::shuffle_current_field(VocabFile& vf)
     }
 }
 
+void State::finish_feedback(VocabFile& vf)
+{
+    current_line_idx_ = feedback_line_idx_;
+    find_next_word_in_field(vf);
+    if (feedback_toggle_alternation_) {
+        alternation_phase_ = (alternation_phase_ == SIDE_A) ? SIDE_B : SIDE_A;
+    }
+    feedback_frames_left_ = 0;
+    feedback_line_idx_ = -1;
+    feedback_toggle_alternation_ = false;
+    show_answer_ = false;
+    scene_ = SCENE_TRAIN;
+}
+
 bool State::update(VocabFile& vf, const InputState& in)
 {
-    if (scene_ == SCENE_SHUFFLE_CONFIRM) {
+    if (scene_ == SCENE_FEEDBACK) {
+        show_answer_ = true;
+        if (feedback_frames_left_ > 0) {
+            --feedback_frames_left_;
+        }
+        if (feedback_frames_left_ <= 0) {
+            finish_feedback(vf);
+        }
+    } else if (scene_ == SCENE_SHUFFLE_CONFIRM) {
         show_answer_ = false;
         if (in.a_pressed) {
             shuffle_current_field(vf);
@@ -255,10 +282,11 @@ bool State::update(VocabFile& vf, const InputState& in)
                 clear_undo();
             }
             flash_request_ = FLASH_GREEN;
-            find_next_word_in_field(vf);
-            if (direction_mode_ == 3) {
-                alternation_phase_ = (alternation_phase_ == SIDE_A) ? SIDE_B : SIDE_A;
-            }
+            feedback_line_idx_ = line;
+            feedback_frames_left_ = FEEDBACK_FRAMES;
+            feedback_toggle_alternation_ = (direction_mode_ == 3);
+            show_answer_ = true;
+            scene_ = SCENE_FEEDBACK;
         }
 
         if (in.b_pressed && vf.line_count > 0 && !in_empty_box) {
@@ -278,10 +306,11 @@ bool State::update(VocabFile& vf, const InputState& in)
             undo_old_field_ = old_field;
             undo_field_at_press_ = (uint8_t)current_field_;
             flash_request_ = FLASH_RED;
-            find_next_word_in_field(vf);
-            if (direction_mode_ == 3) {
-                alternation_phase_ = (alternation_phase_ == SIDE_A) ? SIDE_B : SIDE_A;
-            }
+            feedback_line_idx_ = line;
+            feedback_frames_left_ = FEEDBACK_FRAMES;
+            feedback_toggle_alternation_ = (direction_mode_ == 3);
+            show_answer_ = true;
+            scene_ = SCENE_FEEDBACK;
         }
 
         if (in.start_pressed) {

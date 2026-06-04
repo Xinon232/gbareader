@@ -106,7 +106,7 @@ static void render_current_frame(Renderer& renderer, State& state)
     if (idx < 0 || idx >= g_vocab_file.line_count) idx = 0;
 
     LineBuf current;
-    bool field_empty = state.current_field_is_empty(g_vocab_file);
+    bool field_empty = !state.feedback_active() && state.current_field_is_empty(g_vocab_file);
     if (vocab_file_show(g_vocab_file, g_builtin_vocab, g_builtin_vocab_used,
                         idx, current) || field_empty) {
         renderer.update(g_vocab_file, idx, state.current_field(),
