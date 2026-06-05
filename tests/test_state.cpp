@@ -4,6 +4,7 @@
 // test where a single A press's effect would bleed into later checks.
 
 #include "vocab.h"
+#include "vocab_file_io.h"
 #include "state.h"
 
 #include <cstdio>
@@ -27,7 +28,7 @@ static void load_n_pairs(VocabFile& vf, int n)
 
 static void finish_feedback(State& state, VocabFile& vf)
 {
-    for (int i = 0; i < 70 && state.feedback_active(); ++i) {
+    for (int i = 0; i < 12 && state.feedback_active(); ++i) {
         state.update(vf, State::InputState{});
     }
 }
@@ -577,14 +578,14 @@ static int test_feedback_delays_advance_and_shows_answer()
         printf("    FAIL: advanced before feedback finished\n");
         return 1;
     }
-    for (int frame = 0; frame < 59; ++frame) {
+    for (int frame = 0; frame < 9; ++frame) {
         state.update(vf, State::InputState{});
         if (!state.feedback_active() || !state.show_answer()) {
-            printf("    FAIL: feedback ended before one second at frame %d\n", frame + 1);
+            printf("    FAIL: feedback ended before short flash completed at frame %d\n", frame + 1);
             return 1;
         }
         if (vf.line_offsets[state.current_line_idx()] != pressed_offset) {
-            printf("    FAIL: advanced before minimum one-second feedback\n");
+            printf("    FAIL: advanced before feedback flash completed\n");
             return 1;
         }
     }
@@ -595,6 +596,42 @@ static int test_feedback_delays_advance_and_shows_answer()
     }
     if (vf.line_offsets[state.current_line_idx()] == pressed_offset) {
         printf("    FAIL: did not advance after feedback finished\n");
+        return 1;
+    }
+    printf("    OK\n");
+    return 0;
+}
+
+// Test 16: built-in starter list shows language samples for the expanded fonts
+// instead of the old Dutch/German animal/house list.
+static int test_builtin_language_samples()
+{
+    printf("[16] Built-in starter language samples\n");
+    char buf[4096];
+    int used = 0;
+    if (!vocab_file_read_builtin_or_stub("builtin.txt", buf, sizeof(buf), used)) {
+        printf("    FAIL: builtin.txt not available\n");
+        return 1;
+    }
+    VocabFile vf;
+    int loaded = vocab_open(vf, buf, used);
+    if (loaded != 16) {
+        printf("    FAIL: loaded %d built-in lines, expected 16\n", loaded);
+        return 1;
+    }
+    const char* required[] = {
+        "français\tFrench", "Deutsch\tGerman", "español\tSpanish",
+        "Ελληνικά\tGreek", "русский\tRussian", "日本語\tJapanese",
+        "中文\tChinese", "한국어\tKorean"
+    };
+    for (unsigned i = 0; i < sizeof(required) / sizeof(required[0]); ++i) {
+        if (!strstr(buf, required[i])) {
+            printf("    FAIL: missing '%s'\n", required[i]);
+            return 1;
+        }
+    }
+    if (strstr(buf, "hond\tHund") || strstr(buf, "huis\tHaus")) {
+        printf("    FAIL: old Dutch/German starter words are still present\n");
         return 1;
     }
     printf("    OK\n");
@@ -619,10 +656,11 @@ int main()
     rc |= test_b_field1_rotates_to_back_and_remembers_next();
     rc |= test_shuffle_confirm();
     rc |= test_feedback_delays_advance_and_shows_answer();
+    rc |= test_builtin_language_samples();
     if (rc) {
         printf("\nFAIL\n");
         return 1;
     }
-    printf("\nPASS: state machine end-to-end (15 scenarios)\n");
+    printf("\nPASS: state machine end-to-end (16 scenarios)\n");
     return 0;
 }

@@ -10,7 +10,7 @@ constexpr int SCENE_TRAIN = 0;
 constexpr int SCENE_BROWSE = 1;
 constexpr int SCENE_SHUFFLE_CONFIRM = 2;
 constexpr int SCENE_FEEDBACK = 3;
-constexpr int FEEDBACK_FRAMES = 60;
+constexpr int FEEDBACK_FRAMES = 10;
 
 State::State()
     : current_line_idx_(0),

@@ -91,26 +91,22 @@ static bool copy_text(const char* text, char* out, int out_len, int& out_used)
 bool vocab_file_read_builtin_or_stub(const char* filename, char* out, int out_len, int& out_used)
 {
     static const char* builtin =
-        "hond\tHund\n"
-        "kat\tKatze\n"
-        "boom\tBaum\n"
-        "huis\tHaus\n"
-        "boek\tBuch\n"
-        "water\tWasser\n"
-        "brood\tBrot\n"
-        "school\tSchule\n"
-        "leraar\tLehrer\n"
-        "meisje\tMaedchen\n"
-        "jongen\tJunge\n"
-        "auto\tAuto\n"
-        "trein\tZug\n"
-        "fiets\tFahrrad\n"
-        "appel\tApfel\n"
-        "peer\tBirne\n"
-        "tafel\tTisch\n"
-        "stoel\tStuhl\n"
-        "raam\tFenster\n"
-        "deur\tTuer\n";
+        "English\tEnglish\n"
+        "français\tFrench\n"
+        "Deutsch\tGerman\n"
+        "español\tSpanish\n"
+        "português\tPortuguese\n"
+        "italiano\tItalian\n"
+        "Nederlands\tDutch\n"
+        "polski\tPolish\n"
+        "čeština\tCzech\n"
+        "Türkçe\tTurkish\n"
+        "Ελληνικά\tGreek\n"
+        "русский\tRussian\n"
+        "українська\tUkrainian\n"
+        "日本語\tJapanese\n"
+        "中文\tChinese\n"
+        "한국어\tKorean\n";
 
     static const char* nl_de =
         "hond\tHund\r\n"

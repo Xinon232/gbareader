@@ -46,6 +46,8 @@ Hund	dog
 
 The importer keeps 5-box progress when reopening files saved/exported by the trainer.
 
+If no SD-card vocabulary file is loaded yet, the built-in starter list shows one language-name sample for each main supported font group/language family, including English, French, German, Spanish, Portuguese, Italian, Dutch, Polish, Czech, Turkish, Greek, Russian, Ukrainian, Japanese, Chinese, and Korean.
+
 ## Build
 
 Requirements:
