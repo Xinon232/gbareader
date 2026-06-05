@@ -23,8 +23,11 @@
 #include "bn_string.h"
 
 #include "common_variable_8x16_sprite_font.h"
-#include "vocab_latin_old_ext_sprite_font.h"
-#include "vocab_superfw_cyrillic_font_sprite_font.h"
+#include "vocab_superfw_latin_ext_font_sprite_font.h"
+#include "vocab_superfw_greek_cyrillic_font_sprite_font.h"
+#include "vocab_superfw_japanese_font_sprite_font.h"
+#include "vocab_superfw_cjk_font_sprite_font.h"
+#include "vocab_superfw_hangul_font_sprite_font.h"
 #include "vocab_dejavu_arabic_font_sprite_font.h"
 #include "bn_sprite_items_field_underline.h"
 
@@ -42,7 +45,7 @@ constexpr int WRAP_MAX_CHARS = 27;
 constexpr int WRAP_MAX_LINES = 2;
 constexpr int WRAP_LINE_STEP = 12;
 
-constexpr int FLASH_FRAMES = 10;  // ~150ms at 60fps
+constexpr int FLASH_FRAMES = 60;  // at least one second at 60fps
 
 // Very light blue background. 5-bit RGB: (24, 30, 31).
 constexpr int BG_R = 24;
@@ -144,6 +147,15 @@ bool decode_utf8_codepoint(const char* text, int& index, unsigned& code)
         index += 3;
         return true;
     }
+    if ((ch & 0xF8) == 0xF0 && (text[index + 1] & 0xC0) == 0x80 &&
+        (text[index + 2] & 0xC0) == 0x80 && (text[index + 3] & 0xC0) == 0x80) {
+        code = ((ch & 0x07) << 18) |
+               ((static_cast<unsigned char>(text[index + 1]) & 0x3F) << 12) |
+               ((static_cast<unsigned char>(text[index + 2]) & 0x3F) << 6) |
+               (static_cast<unsigned char>(text[index + 3]) & 0x3F);
+        index += 4;
+        return true;
+    }
     index += 1;
     code = '?';
     return false;
@@ -151,14 +163,20 @@ bool decode_utf8_codepoint(const char* text, int& index, unsigned& code)
 
 enum class FlashcardFontKind {
     LATIN,
-    CYRILLIC,
+    GREEK_CYRILLIC,
+    JAPANESE,
+    CJK,
+    HANGUL,
     ARABIC
 };
 
 FlashcardFontKind flashcard_font_kind(const char* text)
 {
     int i = 0;
-    bool saw_cyrillic = false;
+    bool saw_greek_cyrillic = false;
+    bool saw_japanese = false;
+    bool saw_cjk = false;
+    bool saw_hangul = false;
     while (text[i] != 0) {
         unsigned code = 0;
         decode_utf8_codepoint(text, i, code);
@@ -166,11 +184,25 @@ FlashcardFontKind flashcard_font_kind(const char* text)
             (code >= 0xFB50 && code <= 0xFEFF)) {
             return FlashcardFontKind::ARABIC;
         }
-        if (code >= 0x0400 && code <= 0x04FF) {
-            saw_cyrillic = true;
+        if (code >= 0xAC00 && code <= 0xD7A3) {
+            saw_hangul = true;
+        }
+        if ((code >= 0x4E00 && code <= 0x9FEF) ||
+            (code >= 0x20000 && code <= 0x200CC)) {
+            saw_cjk = true;
+        }
+        if (code >= 0x3000 && code <= 0x30FF) {
+            saw_japanese = true;
+        }
+        if (code >= 0x0370 && code <= 0x04FF) {
+            saw_greek_cyrillic = true;
         }
     }
-    return saw_cyrillic ? FlashcardFontKind::CYRILLIC : FlashcardFontKind::LATIN;
+    if (saw_hangul) return FlashcardFontKind::HANGUL;
+    if (saw_cjk) return FlashcardFontKind::CJK;
+    if (saw_japanese) return FlashcardFontKind::JAPANESE;
+    if (saw_greek_cyrillic) return FlashcardFontKind::GREEK_CYRILLIC;
+    return FlashcardFontKind::LATIN;
 }
 
 void generate_wrapped_big(bn::sprite_text_generator& gen, int base_y, const char* text,
@@ -197,12 +229,16 @@ void generate_save_indicator(bn::sprite_text_generator& gen,
 
 Renderer::Renderer()
     : small_gen(common::variable_8x16_sprite_font),
-      big_gen(vocab_font::latin_old_ext_sprite_font),
-      cyrillic_gen(vocab_superfw_cyrillic_font_sprite_font),
+      latin_gen(vocab_font::vocab_superfw_latin_ext_font_sprite_font),
+      greek_cyrillic_gen(vocab_font::vocab_superfw_greek_cyrillic_font_sprite_font),
+      japanese_gen(vocab_font::vocab_superfw_japanese_font_sprite_font),
+      cjk_gen(vocab_font::vocab_superfw_cjk_font_sprite_font),
+      hangul_gen(vocab_font::vocab_superfw_hangul_font_sprite_font),
       multilang_gen(vocab_dejavu_arabic_font_sprite_font),
       last_line_idx(-1),
       last_field(0),
       last_active_side(State::SIDE_A),
+      last_alternate_mode(false),
       last_show_answer(false),
       last_field_is_empty(false),
       last_counts{-1, -1, -1, -1, -1},
@@ -212,8 +248,11 @@ Renderer::Renderer()
       flash_color(0)
 {
     small_gen.set_center_alignment();
-    big_gen.set_center_alignment();
-    cyrillic_gen.set_center_alignment();
+    latin_gen.set_center_alignment();
+    greek_cyrillic_gen.set_center_alignment();
+    japanese_gen.set_center_alignment();
+    cjk_gen.set_center_alignment();
+    hangul_gen.set_center_alignment();
     multilang_gen.set_center_alignment();
 }
 Renderer::~Renderer() {
@@ -223,6 +262,7 @@ void Renderer::reset() {
     last_line_idx = -1;
     last_field = 0;
     last_active_side = State::SIDE_A;
+    last_alternate_mode = false;
     last_show_answer = false;
     last_field_is_empty = false;
     for (int i = 0; i < 5; i++) last_counts[i] = -1;
@@ -241,7 +281,7 @@ void Renderer::set_saving(bool saving) {
 
 void Renderer::update(const VocabFile& vf, int current_line_idx, int current_field,
                       const LineBuf& current,
-                      State::Side active_side, bool show_answer,
+                      State::Side active_side, bool alternate_mode, bool show_answer,
                       bool field_is_empty)
 {
     // Background: light blue, or flash color if active.
@@ -270,15 +310,17 @@ void Renderer::update(const VocabFile& vf, int current_line_idx, int current_fie
     if (current_line_idx != last_line_idx ||
         current_field != last_field ||
         active_side != last_active_side ||
+        alternate_mode != last_alternate_mode ||
         show_answer != last_show_answer ||
         field_is_empty != last_field_is_empty ||
         saving_visible != last_saving_visible ||
         counts_changed) {
         render_full(vf, current_line_idx, current_field, current,
-                    active_side, show_answer, field_is_empty);
+                    active_side, alternate_mode, show_answer, field_is_empty);
         last_line_idx = current_line_idx;
         last_field = current_field;
         last_active_side = active_side;
+        last_alternate_mode = alternate_mode;
         last_show_answer = show_answer;
         last_field_is_empty = field_is_empty;
         last_saving_visible = saving_visible;
@@ -335,15 +377,16 @@ void Renderer::update_shuffle_confirm(int current_field)
 
 void Renderer::render_full(const VocabFile& vf, int current_line_idx, int current_field,
                            const LineBuf& current,
-                           State::Side active_side, bool show_answer,
+                           State::Side active_side, bool alternate_mode, bool show_answer,
                            bool field_is_empty)
 {
     text_sprites.clear();
 
-    // Mode indicator (very top, centered): "Mode N"
+    // Mode indicator (very top, centered): "Mode N" or alternate-mode label.
     {
-        bn::string<8> mode_str = bn::format<8>("Mode {}",
-            (active_side == State::SIDE_A) ? 1 : 2);
+        bn::string<32> mode_str = alternate_mode ?
+            bn::format<32>("Mode {} (alternate)", (active_side == State::SIDE_A) ? 1 : 2) :
+            bn::format<32>("Mode {}", (active_side == State::SIDE_A) ? 1 : 2);
         small_gen.generate(0, Y_MODE, mode_str, text_sprites);
     }
 
@@ -363,13 +406,16 @@ void Renderer::render_full(const VocabFile& vf, int current_line_idx, int curren
     // Prompt: the active side of the current word. 16x16 — BIG.
     if (field_is_empty) {
         bn::string<8> empty_str = "EMPTY";
-        big_gen.generate(0, Y_PROMPT, empty_str, text_sprites);
+        latin_gen.generate(0, Y_PROMPT, empty_str, text_sprites);
     } else {
         const char* prompt = (active_side == State::SIDE_A) ? current.a : current.b;
         if (prompt[0] != 0) {
             FlashcardFontKind kind = flashcard_font_kind(prompt);
             bn::sprite_text_generator& gen = (kind == FlashcardFontKind::ARABIC) ? multilang_gen :
-                                             ((kind == FlashcardFontKind::CYRILLIC) ? cyrillic_gen : big_gen);
+                                             ((kind == FlashcardFontKind::HANGUL) ? hangul_gen :
+                                             ((kind == FlashcardFontKind::CJK) ? cjk_gen :
+                                             ((kind == FlashcardFontKind::JAPANESE) ? japanese_gen :
+                                             ((kind == FlashcardFontKind::GREEK_CYRILLIC) ? greek_cyrillic_gen : latin_gen))));
             generate_wrapped_big(gen, Y_PROMPT, prompt, text_sprites);
         }
     }
@@ -380,7 +426,10 @@ void Renderer::render_full(const VocabFile& vf, int current_line_idx, int curren
         if (answer[0] != 0) {
             FlashcardFontKind kind = flashcard_font_kind(answer);
             bn::sprite_text_generator& gen = (kind == FlashcardFontKind::ARABIC) ? multilang_gen :
-                                             ((kind == FlashcardFontKind::CYRILLIC) ? cyrillic_gen : big_gen);
+                                             ((kind == FlashcardFontKind::HANGUL) ? hangul_gen :
+                                             ((kind == FlashcardFontKind::CJK) ? cjk_gen :
+                                             ((kind == FlashcardFontKind::JAPANESE) ? japanese_gen :
+                                             ((kind == FlashcardFontKind::GREEK_CYRILLIC) ? greek_cyrillic_gen : latin_gen))));
             generate_wrapped_big(gen, Y_ANSWER, answer, text_sprites);
         }
     }

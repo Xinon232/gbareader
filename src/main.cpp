@@ -110,8 +110,8 @@ static void render_current_frame(Renderer& renderer, State& state)
     if (vocab_file_show(g_vocab_file, g_builtin_vocab, g_builtin_vocab_used,
                         idx, current) || field_empty) {
         renderer.update(g_vocab_file, idx, state.current_field(),
-                        current, state.active_side(), state.show_answer(),
-                        field_empty);
+                        current, state.active_side(), state.direction_mode() == 3,
+                        state.show_answer(), field_empty);
     }
 }
 

@@ -27,7 +27,7 @@ static void load_n_pairs(VocabFile& vf, int n)
 
 static void finish_feedback(State& state, VocabFile& vf)
 {
-    for (int i = 0; i < 12 && state.feedback_active(); ++i) {
+    for (int i = 0; i < 70 && state.feedback_active(); ++i) {
         state.update(vf, State::InputState{});
     }
 }
@@ -577,7 +577,18 @@ static int test_feedback_delays_advance_and_shows_answer()
         printf("    FAIL: advanced before feedback finished\n");
         return 1;
     }
-    finish_feedback(state, vf);
+    for (int frame = 0; frame < 59; ++frame) {
+        state.update(vf, State::InputState{});
+        if (!state.feedback_active() || !state.show_answer()) {
+            printf("    FAIL: feedback ended before one second at frame %d\n", frame + 1);
+            return 1;
+        }
+        if (vf.line_offsets[state.current_line_idx()] != pressed_offset) {
+            printf("    FAIL: advanced before minimum one-second feedback\n");
+            return 1;
+        }
+    }
+    state.update(vf, State::InputState{});
     if (state.feedback_active() || state.show_answer()) {
         printf("    FAIL: feedback did not finish cleanly\n");
         return 1;
