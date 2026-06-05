@@ -64,12 +64,12 @@ make LIBBUTANO=/path/to/butano/butano
 
 The ROM output is `vocab.gba`.
 
-## Credits
+## Notes
+
+This is an early public source snapshot. It is useful for experimentation and for testing dict.cc vocabulary files on GBA hardware, but it is not a polished release yet.
+
+### Credits
 
 - [SuperFW](https://github.com/davidgfnet/superfw) by David Guillen Fandos: source of the matching flashcard font packs used for Latin Extended, Greek/Cyrillic, Japanese kana, CJK ideographs, and Korean Hangul coverage.
 - Butano common sprite fonts: used for the small UI text.
 - [dict.cc](https://www.dict.cc/): target vocabulary-export format and language-data workflow this trainer is designed around.
-
-## Notes
-
-This is an early public source snapshot. It is useful for experimentation and for testing dict.cc vocabulary files on GBA hardware, but it is not a polished release yet.
