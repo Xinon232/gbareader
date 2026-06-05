@@ -621,12 +621,39 @@ static int test_builtin_language_samples()
     }
     const char* required[] = {
         "français\tFrench", "Deutsch\tGerman", "español\tSpanish",
-        "Ελληνικά\tGreek", "русский\tRussian", "日本語\tJapanese",
-        "中文\tChinese", "한국어\tKorean"
+        "čeština\tCzech", "Ελληνικά\tGreek", "русский\tRussian",
+        "日本語\tJapanese", "中文\tChinese", "한국어\tKorean"
     };
     for (unsigned i = 0; i < sizeof(required) / sizeof(required[0]); ++i) {
         if (!strstr(buf, required[i])) {
-            printf("    FAIL: missing '%s'\n", required[i]);
+            printf("    FAIL: missing raw '%s'\n", required[i]);
+            return 1;
+        }
+    }
+
+    const char* expected_a[] = {
+        "English", "français", "Deutsch", "español", "português", "italiano",
+        "Nederlands", "polski", "čeština", "Türkçe", "Ελληνικά", "русский",
+        "українська", "日本語", "中文", "한국어"
+    };
+    const char* expected_b[] = {
+        "English", "French", "German", "Spanish", "Portuguese", "Italian",
+        "Dutch", "Polish", "Czech", "Turkish", "Greek", "Russian",
+        "Ukrainian", "Japanese", "Chinese", "Korean"
+    };
+    for (int i = 0; i < loaded; ++i) {
+        LineBuf lb;
+        if (!vocab_show(vf, buf, used, i, lb)) {
+            printf("    FAIL: vocab_show(%d) failed\n", i);
+            return 1;
+        }
+        if (strcmp(lb.a, expected_a[i]) != 0 || strcmp(lb.b, expected_b[i]) != 0) {
+            printf("    FAIL: line %d parsed '%s'/'%s', expected '%s'/'%s'\n",
+                   i, lb.a, lb.b, expected_a[i], expected_b[i]);
+            return 1;
+        }
+        if (strchr(lb.a, '?') || strchr(lb.b, '?')) {
+            printf("    FAIL: line %d contains '?' after parse: '%s'/'%s'\n", i, lb.a, lb.b);
             return 1;
         }
     }

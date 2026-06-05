@@ -39,6 +39,11 @@ static bool append_utf8_codepoint(char* out, int& out_len, unsigned code)
         encoded[len++] = (char)(0xE0 | (code >> 12));
         encoded[len++] = (char)(0x80 | ((code >> 6) & 0x3F));
         encoded[len++] = (char)(0x80 | (code & 0x3F));
+    } else if (code <= 0x10FFFF) {
+        encoded[len++] = (char)(0xF0 | (code >> 18));
+        encoded[len++] = (char)(0x80 | ((code >> 12) & 0x3F));
+        encoded[len++] = (char)(0x80 | ((code >> 6) & 0x3F));
+        encoded[len++] = (char)(0x80 | (code & 0x3F));
     } else {
         return append_text(out, out_len, "?");
     }
@@ -49,8 +54,16 @@ static bool append_utf8_codepoint(char* out, int& out_len, unsigned code)
 static bool font_supports_codepoint(unsigned code)
 {
     if (code >= 0x20 && code <= 0x7E) return true;
-    if (code >= 0x00A1 && code <= 0x00FF && code != 0x00AD) return true;
-    if (code >= 0x0400 && code <= 0x04FF) return true;  // Cyrillic
+
+    // SuperFW-derived flashcard fonts generated in tests/build_superfw_flashcard_fonts.py.
+    if (code >= 0x0080 && code <= 0x024F) return true;  // Latin Extended
+    if (code >= 0x0370 && code <= 0x04FF) return true;  // Greek + Cyrillic
+    if (code >= 0x3000 && code <= 0x30FF) return true;  // Japanese punctuation/kana
+    if (code >= 0x4E00 && code <= 0x9FEF) return true;  // CJK Unified Ideographs
+    if (code >= 0x20000 && code <= 0x200CC) return true; // SuperFW CJK Ext-B subset
+    if (code >= 0xAC00 && code <= 0xD7A3) return true;  // Korean Hangul syllables
+
+    // Existing experimental Arabic path. Do not expand/modify for v0.2.1.
     if (code >= 0x0600 && code <= 0x06FF) return true;  // Arabic
     if (code >= 0x0750 && code <= 0x077F) return true;  // Arabic Supplement
     if (code >= 0x08A0 && code <= 0x08FF) return true;  // Arabic Extended-A
@@ -114,6 +127,22 @@ static bool decode_utf8(const char* src, int src_len, int& i, unsigned& code)
             if (decoded >= 0x800) {
                 code = decoded;
                 i += 2;
+                return true;
+            }
+        }
+    }
+    if ((ch & 0xF8) == 0xF0 && i + 3 < src_len) {
+        unsigned char b1 = (unsigned char)src[i + 1];
+        unsigned char b2 = (unsigned char)src[i + 2];
+        unsigned char b3 = (unsigned char)src[i + 3];
+        if ((b1 & 0xC0) == 0x80 && (b2 & 0xC0) == 0x80 && (b3 & 0xC0) == 0x80) {
+            unsigned decoded = ((unsigned)(ch & 0x07) << 18) |
+                               ((unsigned)(b1 & 0x3F) << 12) |
+                               ((unsigned)(b2 & 0x3F) << 6) |
+                               (unsigned)(b3 & 0x3F);
+            if (decoded >= 0x10000 && decoded <= 0x10FFFF) {
+                code = decoded;
+                i += 3;
                 return true;
             }
         }
