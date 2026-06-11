@@ -33,20 +33,27 @@ static void finish_feedback(State& state, VocabFile& vf)
     }
 }
 
-// Test 1: mode cycling 1→2→3→1
+// Test 1: mode cycling 3→1→2→3→1, with alternate as the startup default
 static int test_modes()
 {
     printf("[1] Direction modes\n");
     VocabFile vf; load_n_pairs(vf, 5);
     State state;
     State::InputState in;
+    if (state.direction_mode() != 3) {
+        printf("    FAIL: default mode should be alternate (3), got %d\n", state.direction_mode());
+        return 1;
+    }
     if (state.active_side() != State::SIDE_A) return 1;
     in = State::InputState{};
+    in.l_pressed = true; state.update(vf, in);  // 3→1
+    if (state.direction_mode() != 1 || state.active_side() != State::SIDE_A) return 1;
+    in = State::InputState{};
     in.l_pressed = true; state.update(vf, in);  // 1→2
-    if (state.active_side() != State::SIDE_B) return 1;
+    if (state.direction_mode() != 2 || state.active_side() != State::SIDE_B) return 1;
     in = State::InputState{};
     in.l_pressed = true; state.update(vf, in);  // 2→3
-    if (state.active_side() != State::SIDE_A) return 1;  // phase 0
+    if (state.direction_mode() != 3 || state.active_side() != State::SIDE_A) return 1;  // phase 0
     in = State::InputState{};
     in.a_pressed = true; state.update(vf, in);  // feedback, no phase toggle yet
     if (!state.feedback_active() || !state.show_answer()) return 1;
@@ -55,7 +62,7 @@ static int test_modes()
     if (state.active_side() != State::SIDE_B) return 1;
     in = State::InputState{};
     in.l_pressed = true; state.update(vf, in);  // 3→1
-    if (state.active_side() != State::SIDE_A) return 1;
+    if (state.direction_mode() != 1 || state.active_side() != State::SIDE_A) return 1;
     printf("    OK\n");
     return 0;
 }
@@ -206,6 +213,28 @@ static int test_undo_one_shot()
         in.up_pressed = true; state.update(vf, in);
         if (vf.field[0] != 2) { printf("    FC: undo only restores 1 step, got %u (expect 2)\n", vf.field[0]); return 1; }
         if (state.undo_pending()) { printf("    FC: undo should be cleared\n"); return 1; }
+    }
+
+    // Sub-test D: In alternate mode, undo must not trigger another
+    // alternation. The restored word should be shown from the same side
+    // it was shown from before the A/B press.
+    {
+        VocabFile vf; load_n_pairs(vf, 5);
+        State state;
+        state.debug_set_direction(3);
+        state.debug_set_alternation(State::SIDE_A);
+        state.debug_set_line(0);
+        state.debug_set_field(1);
+        State::InputState in;
+        if (state.active_side() != State::SIDE_A) { printf("    FD: start side should be A\n"); return 1; }
+        in.a_pressed = true; state.update(vf, in);
+        finish_feedback(state, vf);
+        if (state.active_side() != State::SIDE_B) { printf("    FD: normal alternate advance should toggle to B\n"); return 1; }
+        in = State::InputState{};
+        in.up_pressed = true; state.update(vf, in);
+        if (vf.field[0] != 1) { printf("    FD: Up didn't restore field, got %u\n", vf.field[0]); return 1; }
+        if (state.current_line_idx() != 0) { printf("    FD: Up didn't return to word 0\n"); return 1; }
+        if (state.active_side() != State::SIDE_A) { printf("    FD: undo toggled alternate side; expected original SIDE_A\n"); return 1; }
     }
 
     printf("    OK\n");
@@ -615,12 +644,14 @@ static int test_builtin_language_samples()
     }
     VocabFile vf;
     int loaded = vocab_open(vf, buf, used);
-    if (loaded != 16) {
-        printf("    FAIL: loaded %d built-in lines, expected 16\n", loaded);
+    if (loaded != 22) {
+        printf("    FAIL: loaded %d built-in lines, expected 22\n", loaded);
         return 1;
     }
     const char* required[] = {
         "français\tFrench", "Deutsch\tGerman", "español\tSpanish",
+        "svenska\tSwedish", "dansk\tDanish", "norsk\tNorwegian",
+        "suomi\tFinnish", "íslenska\tIcelandic", "føroyskt\tFaroese",
         "čeština\tCzech", "Ελληνικά\tGreek", "русский\tRussian",
         "日本語\tJapanese", "中文\tChinese", "한국어\tKorean"
     };
@@ -633,11 +664,13 @@ static int test_builtin_language_samples()
 
     const char* expected_a[] = {
         "English", "français", "Deutsch", "español", "português", "italiano",
+        "svenska", "dansk", "norsk", "suomi", "íslenska", "føroyskt",
         "Nederlands", "polski", "čeština", "Türkçe", "Ελληνικά", "русский",
         "українська", "日本語", "中文", "한국어"
     };
     const char* expected_b[] = {
         "English", "French", "German", "Spanish", "Portuguese", "Italian",
+        "Swedish", "Danish", "Norwegian", "Finnish", "Icelandic", "Faroese",
         "Dutch", "Polish", "Czech", "Turkish", "Greek", "Russian",
         "Ukrainian", "Japanese", "Chinese", "Korean"
     };

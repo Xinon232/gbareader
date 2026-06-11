@@ -32,6 +32,7 @@
 //   mode 2: show B (column 2), recall A. Prompt = word B.
 //   mode 3: alternate per word. alternation_phase_ tracks which side
 //           is the prompt for the NEXT word. Each A/B press toggles it.
+//           Mode 3 is the default on app start.
 //
 // Undo semantics (simplified):
 //   - After A or B press, undo_pending_ = true. The previous
@@ -150,6 +151,7 @@ private:
     int undo_line_idx_;
     uint8_t undo_old_field_;
     uint8_t undo_field_at_press_;
+    Side undo_alternation_phase_;
 
     void clear_undo() { undo_pending_ = false; }
 

@@ -14,7 +14,7 @@ constexpr int FEEDBACK_FRAMES = 10;
 
 State::State()
     : current_line_idx_(0),
-      direction_mode_(1),
+      direction_mode_(3),
       current_field_(1),
       alternation_phase_(SIDE_A),
       show_answer_(false),
@@ -32,7 +32,8 @@ State::State()
       undo_pending_(false),
       undo_line_idx_(0),
       undo_old_field_(1),
-      undo_field_at_press_(1)
+      undo_field_at_press_(1),
+      undo_alternation_phase_(SIDE_A)
 {
 }
 
@@ -258,6 +259,9 @@ bool State::update(VocabFile& vf, const InputState& in)
                 vf.field_counts[undo_old_field_ - 1]++;
             }
             current_line_idx_ = undo_line_idx_;  // jump back
+            if (direction_mode_ == 3) {
+                alternation_phase_ = undo_alternation_phase_;
+            }
             clear_undo();
             flash_request_ = FLASH_NONE;  // no flash on undo
         }
@@ -278,6 +282,7 @@ bool State::update(VocabFile& vf, const InputState& in)
                 undo_line_idx_ = line;
                 undo_old_field_ = old_field;
                 undo_field_at_press_ = (uint8_t)current_field_;
+                undo_alternation_phase_ = alternation_phase_;
             } else {
                 clear_undo();
             }
@@ -305,6 +310,7 @@ bool State::update(VocabFile& vf, const InputState& in)
             undo_line_idx_ = line;
             undo_old_field_ = old_field;
             undo_field_at_press_ = (uint8_t)current_field_;
+            undo_alternation_phase_ = alternation_phase_;
             flash_request_ = FLASH_RED;
             feedback_line_idx_ = line;
             feedback_frames_left_ = FEEDBACK_FRAMES;
