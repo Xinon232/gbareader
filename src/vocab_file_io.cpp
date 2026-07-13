@@ -5,6 +5,7 @@
 #include <cstring>
 
 #ifdef __DEVKITARM__
+#include "bn_core.h"
 #include "fatfs/ff.h"
 #include "gbahw.h"
 extern "C" {
@@ -18,6 +19,17 @@ static bool s_sd_ready = false;
 static bool s_loaded_from_sd = false;
 static char s_loaded_name[VOCAB_FILENAME_MAX];
 static uint32_t s_loaded_generation = 0;
+static VocabIoStats s_io_stats = {};
+
+void vocab_file_io_reset_stats()
+{
+    s_io_stats = {};
+}
+
+VocabIoStats vocab_file_io_stats()
+{
+    return s_io_stats;
+}
 
 // One parsed card (~193 bytes), keyed by source generation + array generation
 // + physical source offset. This keeps ordinary/feedback/animation frames off
@@ -26,7 +38,11 @@ static bool s_card_cache_valid = false;
 static uint32_t s_card_cache_loaded_generation = 0;
 static uint32_t s_card_cache_array_generation = 0;
 static uint32_t s_card_cache_offset = 0;
+#ifdef __DEVKITARM__
+BN_DATA_EWRAM_BSS static LineBuf s_card_cache_line;
+#else
 static LineBuf s_card_cache_line;
+#endif
 static int s_card_cache_misses = 0;
 
 static void invalidate_card_cache()
@@ -54,8 +70,155 @@ int vocab_file_cache_misses_for_tests()
     return s_card_cache_misses;
 }
 
+template<typename Ops>
+static bool run_replacement_transaction(Ops& ops)
+{
+    if (!ops.rename_original_to_backup()) return false;
+    if (!ops.rename_temporary_to_original()) {
+        ops.restore_backup();
+        return false;
+    }
+    if (!ops.reindex_replacement()) {
+        if (ops.park_failed_replacement()) ops.restore_backup();
+        return false;
+    }
+    return ops.remove_backup();
+}
+
+#ifndef __DEVKITARM__
+class HostTransactionOps {
+public:
+    explicit HostTransactionOps(VocabIoFailurePoint failure) :
+        failure_(failure), original_(true), backup_(false), temporary_(true),
+        reindex_ok_(false), stats_{} {}
+
+    bool rename_original_to_backup() {
+        ++stats_.renames;
+        if (failure_ == VOCAB_IO_FAIL_BACKUP_RENAME) return false;
+        original_ = false; backup_ = true; return true;
+    }
+    bool rename_temporary_to_original() {
+        ++stats_.renames;
+        if (failure_ == VOCAB_IO_FAIL_REPLACEMENT_RENAME) return false;
+        temporary_ = false; original_ = true; return true;
+    }
+    bool reindex_replacement() {
+        ++stats_.index_scans;
+        reindex_ok_ = failure_ != VOCAB_IO_FAIL_REINDEX;
+        return reindex_ok_;
+    }
+    bool park_failed_replacement() {
+        ++stats_.renames;
+        if (!original_ || temporary_) return false;
+        original_ = false; temporary_ = true; return true;
+    }
+    bool restore_backup() {
+        ++stats_.renames;
+        if (!backup_ || original_) return false;
+        backup_ = false; original_ = true; return true;
+    }
+    bool remove_backup() {
+        ++stats_.unlinks;
+        if (!backup_ || failure_ == VOCAB_IO_FAIL_BACKUP_UNLINK) return false;
+        backup_ = false; return true;
+    }
+
+    bool original() const { return original_; }
+    bool backup() const { return backup_; }
+    bool temporary() const { return temporary_; }
+    const VocabIoStats& stats() const { return stats_; }
+
+private:
+    VocabIoFailurePoint failure_;
+    bool original_;
+    bool backup_;
+    bool temporary_;
+    bool reindex_ok_;
+    VocabIoStats stats_;
+};
+
+VocabTransactionTestResult vocab_file_transaction_for_tests(VocabIoFailurePoint failure)
+{
+    VocabTransactionTestResult result = {};
+    result.dirty = true;
+    result.original_valid = true;
+    if (failure == VOCAB_IO_FAIL_WRITE || failure == VOCAB_IO_FAIL_CLOSE) {
+        result.stats.write_calls = 1;
+        result.stats.closes = failure == VOCAB_IO_FAIL_CLOSE ? 1 : 0;
+        result.temporary_valid = false;
+        return result;
+    }
+
+    HostTransactionOps ops(failure);
+    result.success = run_replacement_transaction(ops);
+    result.dirty = !result.success;
+    result.original_valid = ops.original();
+    result.backup_valid = ops.backup();
+    result.temporary_valid = ops.temporary();
+    result.stats = ops.stats();
+    return result;
+}
+#endif
+
 #ifdef __DEVKITARM__
 static FATFS s_fatfs;
+// Save-only reindex scratch: bounded metadata (offsets/fields/dirty/counts), not
+// vocabulary text. Keeping it static places it in normal EWRAM/BSS rather than
+// on the small GBA stack and preserves the live dirty state if reindex fails.
+BN_DATA_EWRAM_BSS static VocabFile s_reindex_scratch;
+BN_DATA_EWRAM_BSS alignas(4) static char s_sequential_read_buffer[512];
+BN_DATA_EWRAM_BSS alignas(4) static char s_save_write_buffer[512];
+
+static FRESULT tracked_open(FIL* fp, const char* path, BYTE mode)
+{
+    ++s_io_stats.file_opens;
+    return f_open(fp, path, mode);
+}
+
+static FRESULT tracked_close(FIL* fp)
+{
+    ++s_io_stats.closes;
+    return f_close(fp);
+}
+
+static FRESULT tracked_seek(FIL* fp, FSIZE_t offset)
+{
+    ++s_io_stats.seeks;
+    return f_lseek(fp, offset);
+}
+
+static FRESULT tracked_read(FIL* fp, void* buffer, UINT bytes, UINT* read)
+{
+    ++s_io_stats.read_calls;
+    FRESULT result = f_read(fp, buffer, bytes, read);
+    if (read) s_io_stats.bytes_read += *read;
+    return result;
+}
+
+static FRESULT tracked_write(FIL* fp, const void* buffer, UINT bytes, UINT* written)
+{
+    ++s_io_stats.write_calls;
+    FRESULT result = f_write(fp, buffer, bytes, written);
+    if (written) s_io_stats.bytes_written += *written;
+    return result;
+}
+
+static FRESULT tracked_sync(FIL* fp)
+{
+    return f_sync(fp);
+}
+
+static FRESULT tracked_rename(const char* from, const char* to)
+{
+    ++s_io_stats.renames;
+    return f_rename(from, to);
+}
+
+static FRESULT tracked_unlink(const char* path)
+{
+    ++s_io_stats.unlinks;
+    return f_unlink(path);
+}
 #endif
 
 static bool str_eq_local(const char* a, const char* b)
@@ -80,6 +243,33 @@ static bool has_txt_ext(const char* name)
            (e[1] == 't' || e[1] == 'T') &&
            (e[2] == 'x' || e[2] == 'X') &&
            (e[3] == 't' || e[3] == 'T');
+}
+
+static bool make_sidecar_name(const char* original, const char* suffix,
+                              char out[VOCAB_FILENAME_MAX])
+{
+    if (!original || !suffix || !has_txt_ext(original)) return false;
+    int len = 0;
+    while (original[len]) {
+        if (len >= VOCAB_FILENAME_MAX - 1) return false;
+        out[len] = original[len];
+        ++len;
+    }
+    if (len < 4 || suffix[0] != '.' || !suffix[1] || !suffix[2] || !suffix[3] || suffix[4]) {
+        return false;
+    }
+    out[len - 4] = suffix[0];
+    out[len - 3] = suffix[1];
+    out[len - 2] = suffix[2];
+    out[len - 1] = suffix[3];
+    out[len] = 0;
+    return !str_eq_local(original, out);
+}
+
+bool vocab_file_sidecar_name_for_tests(const char* original, const char* suffix,
+                                       char out[VOCAB_FILENAME_MAX])
+{
+    return make_sidecar_name(original, suffix, out);
 }
 
 static void add_name(const char* name)
@@ -302,8 +492,7 @@ static int scan_sequential_source(Source& source, VocabFile& vf)
             continue;
         }
 
-        LineBuf parsed;
-        if (parse_line_into(line, line_len, parsed)) {
+        if (vocab_validate_raw_row(line, line_len)) {
             if (pending_group_advance) {
                 if (current_field < 5) current_field++;
                 pending_group_advance = false;
@@ -392,7 +581,8 @@ public:
         if (buffer_pos_ >= buffer_len_) {
             buffer_start_ = (uint32_t)f_tell(&fp_);
             UINT bytes_read = 0;
-            FRESULT result = f_read(&fp_, buffer_, sizeof(buffer_), &bytes_read);
+            FRESULT result = tracked_read(&fp_, s_sequential_read_buffer,
+                                          sizeof(s_sequential_read_buffer), &bytes_read);
             if (result != FR_OK) {
                 failed_ = true;
                 return false;
@@ -402,7 +592,7 @@ public:
             if (buffer_len_ == 0) return false;
         }
         absolute_offset = buffer_start_ + (uint32_t)buffer_pos_;
-        out = buffer_[buffer_pos_++];
+        out = s_sequential_read_buffer[buffer_pos_++];
         return true;
     }
 
@@ -414,24 +604,79 @@ private:
     int buffer_pos_;
     int buffer_len_;
     bool failed_;
-    alignas(4) char buffer_[512];
 };
 
-static bool open_sd_streaming(const char* filename, VocabFile& vf)
+static bool scan_sd_index(const char* filename, VocabFile& vf)
 {
     FIL fp;
-    if (f_open(&fp, filename, FA_READ | FA_OPEN_EXISTING) != FR_OK) return false;
+    if (tracked_open(&fp, filename, FA_READ | FA_OPEN_EXISTING) != FR_OK) return false;
 
     FatFsSequentialSource source(fp);
+    ++s_io_stats.index_scans;
     int loaded = scan_sequential_source(source, vf);
-    bool close_ok = f_close(&fp) == FR_OK;
+    bool close_ok = tracked_close(&fp) == FR_OK;
     if (source.failed() || !close_ok || loaded <= 0) {
         vf.reset();
         return false;
     }
+    return true;
+}
+
+static bool open_sd_streaming(const char* filename, VocabFile& vf)
+{
+    if (!scan_sd_index(filename, vf)) return false;
     set_loaded_name(filename);
     s_loaded_from_sd = true;
     return true;
+}
+
+static bool path_exists(const char* path)
+{
+    FILINFO info;
+    return f_stat(path, &info) == FR_OK;
+}
+
+static bool recover_sd_sidecars(const char* filename)
+{
+    char tmp[VOCAB_FILENAME_MAX];
+    char bak[VOCAB_FILENAME_MAX];
+    if (!make_sidecar_name(filename, ".tmp", tmp) ||
+        !make_sidecar_name(filename, ".bak", bak)) return false;
+
+    bool original_exists = path_exists(filename);
+    bool backup_exists = path_exists(bak);
+    bool temp_exists = path_exists(tmp);
+    VocabFile& probe = s_reindex_scratch;
+
+    if (!original_exists && backup_exists) {
+        if (!scan_sd_index(bak, probe)) return false;
+        if (tracked_rename(bak, filename) != FR_OK) return false;
+        original_exists = true;
+        backup_exists = false;
+    }
+
+    if (original_exists && backup_exists) {
+        if (scan_sd_index(filename, probe)) {
+            if (tracked_unlink(bak) != FR_OK) return false;
+            backup_exists = false;
+        } else {
+            if (!scan_sd_index(bak, probe) || temp_exists) return false;
+            if (tracked_rename(filename, tmp) != FR_OK) return false;
+            if (tracked_rename(bak, filename) != FR_OK) {
+                tracked_rename(tmp, filename);
+                return false;
+            }
+            temp_exists = true;
+            backup_exists = false;
+        }
+    }
+
+    // A temporary is stale only after a structurally valid original is proven.
+    if (original_exists && !backup_exists && temp_exists) {
+        if (!scan_sd_index(filename, probe)) return false;
+        if (tracked_unlink(tmp) != FR_OK) return false;
+    }
+    return original_exists;
 }
 #endif
 
@@ -443,7 +688,7 @@ bool vocab_file_load(const char* filename, VocabFile& vf,
     begin_loaded_file_generation();
 #ifdef __DEVKITARM__
     if (s_sd_ready && filename && has_txt_ext(filename)) {
-        if (open_sd_streaming(filename, vf)) {
+        if (recover_sd_sidecars(filename) && open_sd_streaming(filename, vf)) {
             fallback_used = 0;
             return true;
         }
@@ -454,6 +699,7 @@ bool vocab_file_load(const char* filename, VocabFile& vf,
         return false;
     }
     set_loaded_name(filename);
+    ++s_io_stats.index_scans;
     return vocab_open(vf, fallback_buf, fallback_used) > 0;
 }
 
@@ -462,11 +708,14 @@ static bool read_bounded_raw_line(FIL& fp, uint32_t offset,
                                   char* line, int line_cap, int& line_len)
 {
     if (!line || line_cap < 2) return false;
-    if (f_lseek(&fp, (FSIZE_t)offset) != FR_OK) return false;
+    if (tracked_seek(&fp, (FSIZE_t)offset) != FR_OK) return false;
 
     UINT bytes_read = 0;
-    UINT request = (UINT)(line_cap - 1);
-    if (f_read(&fp, line, request, &bytes_read) != FR_OK) return false;
+    // Read one byte beyond the maximum accepted content length so a delimiter
+    // at index VOCAB_RAW_LINE_MAX - 1 is observable. The buffer itself is
+    // exactly VOCAB_RAW_LINE_MAX bytes; the delimiter is replaced by NUL.
+    UINT request = (UINT)line_cap;
+    if (tracked_read(&fp, line, request, &bytes_read) != FR_OK) return false;
 
     for (UINT i = 0; i < bytes_read; ++i) {
         if (line[i] == '\r' || line[i] == '\n') {
@@ -476,9 +725,10 @@ static bool read_bounded_raw_line(FIL& fp, uint32_t offset,
         }
     }
 
-    // A full buffer without CR/LF is only valid when it is exactly the final
-    // row at EOF. Otherwise the source row was truncated/overlong.
-    if (bytes_read == request && !f_eof(&fp)) return false;
+    // Without CR/LF, only a short read at EOF is a valid final row. Filling
+    // the entire buffer proves that content exceeds the 191-byte limit and
+    // leaves no room for a terminator.
+    if (bytes_read >= (UINT)line_cap || !f_eof(&fp)) return false;
     line_len = (int)bytes_read;
     line[line_len] = 0;
     return line_len > 0;
@@ -504,12 +754,13 @@ bool vocab_file_show(const VocabFile& vf, const char* fallback_buf, int fallback
     }
 
     ++s_card_cache_misses;
+    ++s_io_stats.full_display_parses;
     LineBuf parsed;
     bool ok = false;
 #ifdef __DEVKITARM__
     if (s_loaded_from_sd) {
         FIL fp;
-        if (f_open(&fp, s_loaded_name, FA_READ | FA_OPEN_EXISTING) != FR_OK) {
+        if (tracked_open(&fp, s_loaded_name, FA_READ | FA_OPEN_EXISTING) != FR_OK) {
             invalidate_card_cache();
             return false;
         }
@@ -518,10 +769,19 @@ bool vocab_file_show(const VocabFile& vf, const char* fallback_buf, int fallback
         if (read_bounded_raw_line(fp, source_offset, line, sizeof(line), line_len)) {
             ok = parse_line_into(line, line_len, parsed);
         }
-        f_close(&fp);
+        tracked_close(&fp);
     } else
 #endif
     {
+        // Host/fallback source access is counted as one bounded adapter read so
+        // cache tests can mechanically assert that unchanged frames add none.
+        int start = (int)source_offset;
+        int end = start;
+        int limit = start + VOCAB_RAW_LINE_MAX - 1;
+        if (limit > fallback_used) limit = fallback_used;
+        while (end < limit && fallback_buf[end] != '\r' && fallback_buf[end] != '\n') ++end;
+        ++s_io_stats.read_calls;
+        s_io_stats.bytes_read += (uint32_t)(end - start);
         ok = vocab_show(const_cast<VocabFile&>(vf), fallback_buf, fallback_used,
                         line_idx, parsed);
     }
@@ -549,11 +809,11 @@ public:
     bool append(const char* data, int len)
     {
         while (len > 0 && ok_) {
-            int room = (int)sizeof(buffer_) - used_;
+            int room = (int)sizeof(s_save_write_buffer) - used_;
             if (room == 0 && !flush()) return false;
-            room = (int)sizeof(buffer_) - used_;
+            room = (int)sizeof(s_save_write_buffer) - used_;
             int take = len < room ? len : room;
-            std::memcpy(buffer_ + used_, data, (size_t)take);
+            std::memcpy(s_save_write_buffer + used_, data, (size_t)take);
             used_ += take;
             data += take;
             len -= take;
@@ -565,7 +825,7 @@ public:
     {
         if (!ok_ || used_ == 0) return ok_;
         UINT written = 0;
-        ok_ = f_write(&fp_, buffer_, (UINT)used_, &written) == FR_OK &&
+        ok_ = tracked_write(&fp_, s_save_write_buffer, (UINT)used_, &written) == FR_OK &&
               written == (UINT)used_;
         used_ = 0;
         return ok_;
@@ -575,69 +835,100 @@ private:
     FIL& fp_;
     int used_;
     bool ok_;
-    alignas(4) char buffer_[512];
 };
 
-static bool save_sd_grouped(VocabFile& vf)
+static bool write_sd_grouped_temp(const VocabFile& vf, const char* tmp_name)
 {
     FIL in;
-    if (f_open(&in, s_loaded_name, FA_READ | FA_OPEN_EXISTING) != FR_OK) return false;
-
-    char tmp_name[VOCAB_FILENAME_MAX + 5];
-    int n = 0;
-    while (s_loaded_name[n] && n < VOCAB_FILENAME_MAX - 5) {
-        tmp_name[n] = s_loaded_name[n];
-        n++;
-    }
-    tmp_name[n++] = '.';
-    tmp_name[n++] = 't';
-    tmp_name[n++] = 'm';
-    tmp_name[n++] = 'p';
-    tmp_name[n] = 0;
+    if (tracked_open(&in, s_loaded_name, FA_READ | FA_OPEN_EXISTING) != FR_OK) return false;
 
     FIL out;
-    if (f_open(&out, tmp_name, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK) {
-        f_close(&in);
+    if (tracked_open(&out, tmp_name, FA_WRITE | FA_CREATE_NEW) != FR_OK) {
+        tracked_close(&in);
         return false;
     }
 
     char line[VOCAB_RAW_LINE_MAX];
     FatFsBufferedWriter writer(out);
     bool ok = true;
-    for (int field = 1; field <= 5 && ok; field++) {
-        for (int i = 0; i < vf.line_count && ok; i++) {
+    for (int field = 1; field <= 5 && ok; ++field) {
+        for (int i = 0; i < vf.line_count && ok; ++i) {
             if (vf.field[i] != field) continue;
             int line_len = 0;
             if (!read_bounded_raw_line(in, vf.line_offsets[i], line,
-                                       VOCAB_RAW_LINE_MAX, line_len)) {
+                                       VOCAB_RAW_LINE_MAX, line_len) ||
+                !writer.append(line, line_len) || !writer.append("\r\n", 2)) {
                 ok = false;
-                break;
             }
-            if (!writer.append(line, line_len)) ok = false;
-            if (ok && !writer.append("\r\n", 2)) ok = false;
         }
-        if (field < 5 && ok && !writer.append("\r\n", 2)) {
-            ok = false;
-        }
+        if (field < 5 && ok && !writer.append("\r\n", 2)) ok = false;
     }
     if (ok && !writer.flush()) ok = false;
+    if (ok && tracked_sync(&out) != FR_OK) ok = false;
+    if (tracked_close(&in) != FR_OK) ok = false;
+    if (tracked_close(&out) != FR_OK) ok = false;
+    return ok;
+}
 
-    if (f_close(&in) != FR_OK) ok = false;
-    if (f_close(&out) != FR_OK) ok = false;
-    if (!ok) {
-        f_unlink(tmp_name);
+class FatFsReplacementOps {
+public:
+    FatFsReplacementOps(const char* original, const char* temporary, const char* backup) :
+        original_(original), temporary_(temporary), backup_(backup) {}
+
+    bool rename_original_to_backup() {
+        return tracked_rename(original_, backup_) == FR_OK;
+    }
+    bool rename_temporary_to_original() {
+        return tracked_rename(temporary_, original_) == FR_OK;
+    }
+    bool reindex_replacement() {
+        return scan_sd_index(original_, s_reindex_scratch);
+    }
+    bool park_failed_replacement() {
+        return tracked_rename(original_, temporary_) == FR_OK;
+    }
+    bool restore_backup() {
+        return tracked_rename(backup_, original_) == FR_OK;
+    }
+    bool remove_backup() {
+        return tracked_unlink(backup_) == FR_OK;
+    }
+
+private:
+    const char* original_;
+    const char* temporary_;
+    const char* backup_;
+};
+
+static bool save_sd_grouped(VocabFile& vf)
+{
+    char tmp_name[VOCAB_FILENAME_MAX];
+    char bak_name[VOCAB_FILENAME_MAX];
+    if (!make_sidecar_name(s_loaded_name, ".tmp", tmp_name) ||
+        !make_sidecar_name(s_loaded_name, ".bak", bak_name)) return false;
+
+    if (!recover_sd_sidecars(s_loaded_name)) return false;
+
+    // Recovery removes sidecars only after proving a structurally valid original.
+    if (path_exists(tmp_name) || path_exists(bak_name)) return false;
+
+    if (!write_sd_grouped_temp(vf, tmp_name)) {
+        // The original is still present, so this known-incomplete temp is safe
+        // to remove. Failure to remove it is conservative and blocks retry.
+        tracked_unlink(tmp_name);
         return false;
     }
 
-    f_unlink(s_loaded_name);
-    if (f_rename(tmp_name, s_loaded_name) != FR_OK) {
-        return false;
-    }
-    if (!open_sd_streaming(s_loaded_name, vf)) {
+    FatFsReplacementOps replacement(s_loaded_name, tmp_name, bak_name);
+    if (!run_replacement_transaction(replacement)) {
         invalidate_card_cache();
         return false;
     }
+
+    vf = s_reindex_scratch;
+    s_loaded_from_sd = true;
     vocab_clear_dirty(vf);
+    vf.array_generation = 0;
     begin_loaded_file_generation();
     return true;
 }
@@ -646,6 +937,12 @@ static bool save_sd_grouped(VocabFile& vf)
 bool vocab_file_save_grouped(VocabFile& vf, const char* fallback_buf, int fallback_used,
                              char* out_buf, int out_len, int& out_used)
 {
+    // Dirty bits cover field movement; array_generation covers reorder/shuffle.
+    // A clean unchanged file is an immediate success with no I/O or reindex.
+    if (!vocab_any_dirty(vf) && vf.array_generation == 0) {
+        out_used = 0;
+        return true;
+    }
 #ifdef __DEVKITARM__
     if (s_loaded_from_sd) {
         out_used = 0;
@@ -655,7 +952,10 @@ bool vocab_file_save_grouped(VocabFile& vf, const char* fallback_buf, int fallba
     int written = vocab_export_grouped(vf, fallback_buf, fallback_used, out_buf, out_len);
     if (written < 0) return false;
     out_used = written;
+    ++s_io_stats.write_calls;
+    s_io_stats.bytes_written += (uint32_t)written;
     vocab_clear_dirty(vf);
+    vf.array_generation = 0;
     begin_loaded_file_generation();
     return true;
 }

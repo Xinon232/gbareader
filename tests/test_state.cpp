@@ -698,6 +698,46 @@ static int test_builtin_language_samples()
     return 0;
 }
 
+static int test_field_count_invariants()
+{
+    printf("[17] Field-count invariants\n");
+    VocabFile vf; load_n_pairs(vf, 20);
+    if (!vocab_field_counts_valid(vf)) return 1;
+
+    vocab_advance(vf, 0);
+    vocab_reset(vf, 1);
+    int moved = -1;
+    if (!vocab_move_line_to_field_end(vf, 2, 1, moved) ||
+        !vocab_shuffle_field(vf, 1, 0x12345678) ||
+        !vocab_field_counts_valid(vf)) return 1;
+
+    VocabFile all_fields; load_n_pairs(all_fields, 10);
+    for (int target = 2; target <= 5; ++target) {
+        for (int step = 1; step < target; ++step) vocab_advance(all_fields, target - 1);
+    }
+    if (!vocab_field_counts_valid(all_fields)) return 1;
+    for (int field = 1; field <= 5; ++field) {
+        if (all_fields.field_counts[field - 1] == 0) return 1;
+    }
+
+    VocabFile undo_vf; load_n_pairs(undo_vf, 5);
+    State state;
+    state.debug_set_line(0);
+    state.debug_set_field(1);
+    State::InputState in;
+    in.a_pressed = true;
+    state.update(undo_vf, in);
+    if (!vocab_field_counts_valid(undo_vf)) return 1;
+    finish_feedback(state, undo_vf);
+    in = State::InputState{};
+    in.up_pressed = true;
+    state.update(undo_vf, in);
+    if (!vocab_field_counts_valid(undo_vf)) return 1;
+
+    printf("    OK\n");
+    return 0;
+}
+
 int main()
 {
     int rc = 0;
@@ -717,10 +757,11 @@ int main()
     rc |= test_shuffle_confirm();
     rc |= test_feedback_delays_advance_and_shows_answer();
     rc |= test_builtin_language_samples();
+    rc |= test_field_count_invariants();
     if (rc) {
         printf("\nFAIL\n");
         return 1;
     }
-    printf("\nPASS: state machine end-to-end (16 scenarios)\n");
+    printf("\nPASS: state machine end-to-end (17 scenarios)\n");
     return 0;
 }

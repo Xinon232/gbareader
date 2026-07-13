@@ -66,10 +66,8 @@ State::Side State::active_side() const {
 }
 
 bool State::current_field_is_empty(const VocabFile& vf) const {
-    for (int i = 0; i < vf.line_count; i++) {
-        if (vf.field[i] == (uint8_t)current_field_) return false;
-    }
-    return true;
+    int index = current_field_ - 1;
+    return index < 0 || index >= 5 || vf.field_counts[index] == 0;
 }
 
 static bool find_word_in_field_from(const VocabFile& vf, int start_idx,

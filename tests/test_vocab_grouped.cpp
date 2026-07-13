@@ -88,6 +88,13 @@ static int test_grouped_export_reopen_preserves_fields()
         printf("    FAIL: field 1 first card should be three, got %s\n", lb.a);
         return 1;
     }
+    // The app's grouped-index restoration maps the selected "two" card to
+    // field-3 rank zero after reindex: 1 field-1 card + 1 field-2 card.
+    if (!vocab_show(vf2, out, written, 2, lb) || strcmp(lb.a, "two") != 0 ||
+        strcmp(lb.b, "zwei") != 0) {
+        printf("    FAIL: grouped-index restoration lost selected pair\n");
+        return 1;
+    }
     printf("    OK\n");
     return 0;
 }
@@ -133,6 +140,26 @@ static int test_utf8_russian_and_arabic_are_preserved()
     return 0;
 }
 
+static int test_multilingual_raw_bytes_survive_grouped_save()
+{
+    printf("[6] Multilingual raw bytes survive grouped save\n");
+    const char data[] =
+        "français\tüber\nдом\tслово\r\nبيت\tدار\n日本語\tかな\n中文\t词\n한국어\t단어";
+    const char expected[] =
+        "français\tüber\r\nдом\tслово\r\nبيت\tدار\r\n日本語\tかな\r\n"
+        "中文\t词\r\n한국어\t단어\r\n\r\n\r\n\r\n\r\n";
+    VocabFile vf;
+    if (vocab_open(vf, data, (int)strlen(data)) != 6) return 1;
+    char output[512];
+    int written = vocab_export_grouped(vf, data, (int)strlen(data), output, sizeof(output));
+    if (written != (int)strlen(expected) || memcmp(output, expected, (size_t)written) != 0) {
+        printf("    FAIL: grouped save changed multilingual raw bytes\n");
+        return 1;
+    }
+    printf("    OK\n");
+    return 0;
+}
+
 int main()
 {
     int rc = 0;
@@ -141,6 +168,7 @@ int main()
     rc |= test_grouped_export_reopen_preserves_fields();
     rc |= test_latin1_umlaut_is_preserved_for_gba_font();
     rc |= test_utf8_russian_and_arabic_are_preserved();
+    rc |= test_multilingual_raw_bytes_survive_grouped_save();
     if (rc) { printf("\nFAIL\n"); return 1; }
     printf("\nPASS: grouped vocab import/export\n");
     return 0;

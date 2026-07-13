@@ -28,6 +28,46 @@ bool vocab_file_load(const char* filename, VocabFile& vf,
 bool vocab_file_show(const VocabFile& vf, const char* fallback_buf, int fallback_used,
                      int line_idx, LineBuf& out);
 
+struct VocabIoStats {
+    uint32_t file_opens;
+    uint32_t seeks;
+    uint32_t read_calls;
+    uint32_t bytes_read;
+    uint32_t write_calls;
+    uint32_t bytes_written;
+    uint32_t closes;
+    uint32_t renames;
+    uint32_t unlinks;
+    uint32_t index_scans;
+    uint32_t full_display_parses;
+};
+
+void vocab_file_io_reset_stats();
+VocabIoStats vocab_file_io_stats();
+
+enum VocabIoFailurePoint {
+    VOCAB_IO_FAIL_NONE = 0,
+    VOCAB_IO_FAIL_WRITE,
+    VOCAB_IO_FAIL_CLOSE,
+    VOCAB_IO_FAIL_BACKUP_RENAME,
+    VOCAB_IO_FAIL_REPLACEMENT_RENAME,
+    VOCAB_IO_FAIL_REINDEX,
+    VOCAB_IO_FAIL_BACKUP_UNLINK
+};
+
+struct VocabTransactionTestResult {
+    bool success;
+    bool dirty;
+    bool original_valid;
+    bool backup_valid;
+    bool temporary_valid;
+    VocabIoStats stats;
+};
+
+VocabTransactionTestResult vocab_file_transaction_for_tests(VocabIoFailurePoint failure);
+bool vocab_file_sidecar_name_for_tests(const char* original, const char* suffix,
+                                       char out[VOCAB_FILENAME_MAX]);
+
 // Host regression instrumentation for the bounded current-card cache. A miss
 // means the source row had to be read and parsed; hits still refresh field.
 void vocab_file_cache_reset_stats_for_tests();

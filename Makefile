@@ -31,7 +31,10 @@ DMGAUDIO    :=
 DMGAUDIOBACKEND :=  null
 ROMTITLE    :=  VOCAB TRAIN
 ROMCODE     :=  AVTB
-USERFLAGS   :=
+# Optional Supercard second-ROM-mirror transfers. Default 0 preserves the
+# release-safe path; use `make SC_FAST_ROM_MIRROR=1 ...` only for hardware tests.
+SC_FAST_ROM_MIRROR ?= 0
+USERFLAGS   :=  -DSC_FAST_ROM_MIRROR=$(SC_FAST_ROM_MIRROR)
 USERCXXFLAGS :=
 USERASFLAGS :=
 USERLDFLAGS :=
@@ -55,13 +58,15 @@ endif
 include $(LIBBUTANOABS)/butano.mak
 
 #---------------------------------------------------------------------------------------------------------------------
-# Test target: run the ROM through mgba headless for 5 seconds and check for opcode errors.
-# Requires mgba-sdl (apt: sudo apt install mgba-sdl).
+# Test target: run a short headless mGBA smoke check for immediate opcode/header errors.
+# This is not proof of a successful boot or of SD/Supercard behavior.
 #---------------------------------------------------------------------------------------------------------------------
-ROM := $(BUILD)/$(TARGET).gba
+ROM := $(TARGET).gba
 
 .PHONY: test
-test: $(ROM)
+test:
+	@test -f $(ROM) || { echo "ERROR: build $(ROM) first"; exit 1; }
+	@command -v mgba >/dev/null 2>&1 || { echo "SKIP: mgba executable is not installed; no emulator claim"; exit 2; }
 	@echo "=== Testing $(ROM) in mgba ==="
 	@rm -f $(BUILD)/test.log
 	@SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
@@ -76,6 +81,6 @@ test: $(ROM)
 	   cat $(BUILD)/test.log; \
 	   exit 1; \
 	 fi
-	@echo "PASS: no opcode errors, ROM is bootable"
+	@echo "PASS: no immediate opcode/header rejection (not a boot or hardware-I/O proof)"
 	@echo "Test log tail:"
 	@tail -10 $(BUILD)/test.log 2>/dev/null || true

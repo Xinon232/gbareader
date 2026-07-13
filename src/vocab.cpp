@@ -290,58 +290,66 @@ static bool copy_display_text(const char* src, int src_len, char* dst)
     return true;
 }
 
+struct RawRowParts {
+    int a_start;
+    int a_len;
+    int b_start;
+    int b_len;
+};
+
+static bool raw_row_parts(const char* line, int line_len, RawRowParts& parts)
+{
+    if (!line || line_len <= 0 || line_len > VOCAB_RAW_LINE_MAX - 1) return false;
+
+    int start = 0;
+    while (start < line_len && (line[start] == ' ' || line[start] == '\t')) ++start;
+    if (start >= line_len) return false;
+
+    int tab_pos = -1;
+    for (int i = start; i < line_len; ++i) {
+        if (line[i] == '\t') {
+            tab_pos = i;
+            break;
+        }
+    }
+    if (tab_pos < 0) return false;
+
+    int a_end = tab_pos;
+    while (a_end > start && (line[a_end - 1] == '\r' || line[a_end - 1] == '\n' ||
+                              line[a_end - 1] == ' ')) {
+        --a_end;
+    }
+    int b_start = tab_pos + 1;
+    while (b_start < line_len && (line[b_start] == ' ' || line[b_start] == '\t')) ++b_start;
+    int b_end = line_len;
+    while (b_end > b_start && (line[b_end - 1] == '\r' || line[b_end - 1] == '\n' ||
+                                line[b_end - 1] == ' ')) {
+        --b_end;
+    }
+
+    parts.a_start = start;
+    parts.a_len = a_end - start;
+    parts.b_start = b_start;
+    parts.b_len = b_end - b_start;
+    return parts.a_len > 0 && parts.b_len > 0;
+}
+
+bool vocab_validate_raw_row(const char* line, int line_len)
+{
+    RawRowParts parts;
+    return raw_row_parts(line, line_len, parts);
+}
+
 bool parse_line_into(const char* line, int line_len, LineBuf& out)
 {
     out.a[0] = 0;
     out.b[0] = 0;
     out.field = 1;
 
-    if (line_len <= 0) {
-        return false;
-    }
-
-    // Skip leading whitespace on the line.
-    int start = 0;
-    while (start < line_len && (line[start] == ' ' || line[start] == '\t')) {
-        start++;
-    }
-    if (start >= line_len) {
-        return false;  // empty/whitespace-only
-    }
-
-    // Find the first tab.
-    int tab_pos = -1;
-    for (int i = start; i < line_len; i++) {
-        if (line[i] == '\t') {
-            tab_pos = i;
-            break;
-        }
-    }
-    if (tab_pos < 0) {
-        return false;  // malformed — no tab
-    }
-
-    // Trim trailing \r/\n/space from each side.
-    int a_end = tab_pos;
-    while (a_end > start && (line[a_end - 1] == '\r' || line[a_end - 1] == '\n' || line[a_end - 1] == ' ')) {
-        a_end--;
-    }
-    int b_start = tab_pos + 1;
-    while (b_start < line_len && (line[b_start] == ' ' || line[b_start] == '\t')) {
-        b_start++;
-    }
-    int b_end = line_len;
-    while (b_end > b_start && (line[b_end - 1] == '\r' || line[b_end - 1] == '\n' || line[b_end - 1] == ' ')) {
-        b_end--;
-    }
-
-    int a_len = a_end - start;
-    int b_len = b_end - b_start;
-    if (a_len <= 0 || b_len <= 0) {
-        return false;
-    }
-    return copy_display_text(line + start, a_len, out.a) &&
-           copy_display_text(line + b_start, b_len, out.b);
+    RawRowParts parts;
+    if (!raw_row_parts(line, line_len, parts)) return false;
+    return copy_display_text(line + parts.a_start, parts.a_len, out.a) &&
+           copy_display_text(line + parts.b_start, parts.b_len, out.b);
 }
 
 // --------------------------------------------------------------------
@@ -381,9 +389,9 @@ int vocab_open(VocabFile& vf, const char* data, int data_len)
                 pending_group_advance = true;
             }
         } else if (line_len > 0) {
-            // Try to parse.
-            LineBuf lb;
-            if (parse_line_into(data + i, line_len, lb)) {
+            // Indexing is structural only: no font mapping, UTF-8 display
+            // conversion, or Arabic shaping is performed here.
+            if (vocab_validate_raw_row(data + i, line_len)) {
                 if (loaded >= VOCAB_MAX_LINES) {
                     // Cap reached. Stop loading. (Future: overflow msg.)
                     break;
@@ -585,6 +593,29 @@ bool vocab_shuffle_field(VocabFile& vf, int field, uint32_t seed)
 bool vocab_is_dirty(const VocabFile& vf, int line_idx) {
     if (line_idx < 0 || line_idx >= vf.line_count) return false;
     return (vf.dirty[line_idx / 8] & (uint8_t)(1 << (line_idx % 8))) != 0;
+}
+
+bool vocab_any_dirty(const VocabFile& vf) {
+    int bytes = (vf.line_count + 7) / 8;
+    for (int i = 0; i < bytes; ++i) {
+        if (vf.dirty[i] != 0) return true;
+    }
+    return false;
+}
+
+bool vocab_field_counts_valid(const VocabFile& vf) {
+    uint16_t direct[5] = {0, 0, 0, 0, 0};
+    for (int i = 0; i < vf.line_count; ++i) {
+        uint8_t field = vf.field[i];
+        if (field < 1 || field > 5) return false;
+        ++direct[field - 1];
+    }
+    int sum = 0;
+    for (int i = 0; i < 5; ++i) {
+        if (vf.field_counts[i] != direct[i]) return false;
+        sum += vf.field_counts[i];
+    }
+    return sum == vf.line_count;
 }
 
 void vocab_clear_dirty(VocabFile& vf) {

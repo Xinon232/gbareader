@@ -89,29 +89,23 @@ struct VocabFile {
     }
 };
 
-// Parse a single line of "source\ttarget\n" into a LineBuf.
-// Returns true on success, false on empty/malformed.
-// Used by both vocab_open (to build the offset table) and
-// vocab_show (to format the current line for display).
+// Lightweight structural validation used by indexing. It applies the same raw
+// length, first-tab split, and whitespace rules as parse_line_into(), without
+// any UTF-8/font conversion or Arabic shaping.
+bool vocab_validate_raw_row(const char* line, int line_len);
+
+// Fully parse one "source\ttarget" row for display. Returns false on malformed
+// input or when converted display text does not fit LineBuf.
 bool parse_line_into(const char* line, int line_len, LineBuf& out);
 
-// Phase 1 of file open: streaming pass to build line_offsets[] and
-// field[] and field_counts[]. Reads the whole file but does not
-// store its text — only the offsets and the field of each line.
-// On GBA, this opens the .txt via libugba/FatFS and reads sector
-// by sector. On host, it works on a byte buffer.
-//
-// For v1, this is a host-side test only. The GBA-side implementation
-// will come in Step 6 when libugba is wired up.
+// Phase 1 of file open: a buffered streaming pass builds line_offsets[],
+// field[], and field_counts[]. It validates raw row structure only and does not
+// store text, perform font mapping, convert display bytes, or shape Arabic.
+// The SD adapter uses 512-byte FatFS reads; host tests use the same scanner.
 int vocab_open(VocabFile& vf, const char* data, int data_len);
 
-// Parse one physical TXT row into source/target columns. Exposed so the
-// SD/FAT streaming layer can build offsets without loading the file.
-bool parse_line_into(const char* line, int line_len, LineBuf& out);
-
-// Phase 2 of file open: for a given line index, stream-read that
-// line from the file and populate the LineBuf. On host, this is
-// data + line_offsets[i]. On GBA, f_lseek + f_read.
+// Phase 2: read and fully parse one physical row only when it must be shown.
+// Host uses data + line_offsets[i]; GBA uses one seek and one bounded bulk read.
 bool vocab_show(VocabFile& vf, const char* data, int data_len,
                 int line_idx, LineBuf& out);
 
@@ -128,6 +122,8 @@ bool vocab_shuffle_field(VocabFile& vf, int field, uint32_t seed);
 
 // Dirty-bit queries / clearing.
 bool vocab_is_dirty(const VocabFile& vf, int line_idx);
+bool vocab_any_dirty(const VocabFile& vf);
+bool vocab_field_counts_valid(const VocabFile& vf);
 void vocab_clear_dirty(VocabFile& vf);
 
 // Serialize a LineBuf back into "a\tb\n" form. Used by save.
