@@ -28,6 +28,16 @@ bool vocab_file_load(const char* filename, VocabFile& vf,
 bool vocab_file_show(const VocabFile& vf, const char* fallback_buf, int fallback_used,
                      int line_idx, LineBuf& out);
 
+// Host regression instrumentation for the bounded current-card cache. A miss
+// means the source row had to be read and parsed; hits still refresh field.
+void vocab_file_cache_reset_stats_for_tests();
+int vocab_file_cache_misses_for_tests();
+
+// Run the same chunked sequential scanner used by FatFS against a host memory
+// source. This keeps buffer-boundary and call-count regressions testable.
+int vocab_file_scan_buffered_for_tests(const char* data, int data_len, int chunk_size,
+                                       VocabFile& vf, int& bulk_read_calls);
+
 // Save/export current fields as dict.cc-style grouped TXT. On GBA+SD this full
 // rewrites to a temporary file, then replaces the original. On fallback/host it
 // writes grouped text into out_buf for testability.

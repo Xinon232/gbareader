@@ -66,9 +66,15 @@ struct VocabFile {
     int line_count;       // number of valid lines (≤ VOCAB_MAX_LINES)
     bool loaded;          // true after a successful vocab_open
 
+    // Incremented whenever line records are reordered. The bounded
+    // current-card cache uses this to reject stale text even when the
+    // displayed numerical index and source offset happen to stay unchanged.
+    uint32_t array_generation;
+
     void reset() {
         line_count = 0;
         loaded = false;
+        array_generation = 0;
         for (int i = 0; i < VOCAB_MAX_LINES; i++) {
             line_offsets[i] = 0;
             field[i] = 1;

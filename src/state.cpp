@@ -319,10 +319,6 @@ bool State::update(VocabFile& vf, const InputState& in)
             scene_ = SCENE_FEEDBACK;
         }
 
-        if (in.start_pressed) {
-            vocab_clear_dirty(vf);
-        }
-
         if (in.select_pressed) {
             clear_undo();
             scene_ = SCENE_BROWSE;

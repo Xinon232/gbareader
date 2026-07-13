@@ -540,6 +540,7 @@ bool vocab_move_line_to_field_end(VocabFile& vf, int line_idx, int field,
     vf.field[last] = fld;
     set_dirty_value(vf, last, dirty);
     new_idx = last;
+    ++vf.array_generation;
     return true;
 }
 
@@ -575,6 +576,9 @@ bool vocab_shuffle_field(VocabFile& vf, int field, uint32_t seed)
             swap_line_records(vf, idx_k, idx_j);
         }
     }
+    // A shuffle operation changes the identity/order contract of the arrays,
+    // even if this seed happened to swap some entries with themselves.
+    ++vf.array_generation;
     return true;
 }
 
