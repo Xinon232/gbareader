@@ -1,5 +1,5 @@
 // vocab.h — Streaming vocab data layer
-// Step 2b: redesigned for 5000-word scale with bounded RAM (~26KB).
+// Redesigned for 10,000-word scale with bounded RAM (~51KB per index).
 //
 // The full text of the .txt file does NOT live in RAM. We keep:
 //   - line_offsets[N]  : byte offset of each line in the file
@@ -20,10 +20,9 @@
 #include <cstdint>
 #include <cstring>
 
-// Hard cap on lines in a .txt file. 5000 is the design target per
-// user (2026-06-02). At 272B/pair × 5000 = 1.36MB which doesn't fit
-// in EWRAM; we use the streaming layout below instead (~26KB total).
-constexpr int VOCAB_MAX_LINES = 5000;
+// Hard cap on lines in a .txt file. Text remains on the SD card; only
+// offsets, fields, and dirty flags are kept in EWRAM.
+constexpr int VOCAB_MAX_LINES = 10000;
 
 // Max length of a single word (source or target). Real dict.cc samples
 // reached 67/77 bytes per side, so keep 96 bytes per side.
@@ -41,20 +40,20 @@ struct LineBuf {
 };
 
 // The full streaming state for one open .txt file. Sized for the
-// worst case (5000 lines). At 5000 lines this struct is ~26KB, all
+// worst case (10,000 lines). At 10,000 lines this struct is ~51KB, all
 // of which fits in EWRAM.
 //
 // All arrays are static-sized (not heap-allocated) so the size is
 // known at compile time and there's no risk of malloc failure on
 // the GBA.
 struct VocabFile {
-    // 5000 entries × 4 bytes = 20KB
+    // 10,000 entries × 4 bytes = 40KB
     uint32_t line_offsets[VOCAB_MAX_LINES];
 
-    // 5000 entries × 1 byte = 5KB
+    // 10,000 entries × 1 byte = 10KB
     uint8_t field[VOCAB_MAX_LINES];
 
-    // 5000/8 = 625 bytes
+    // 10,000/8 = 1,250 bytes
     uint8_t dirty[VOCAB_MAX_LINES / 8];
 
     // 5 × 2 bytes = 10 bytes
@@ -75,10 +74,9 @@ struct VocabFile {
         line_count = 0;
         loaded = false;
         array_generation = 0;
-        for (int i = 0; i < VOCAB_MAX_LINES; i++) {
-            line_offsets[i] = 0;
-            field[i] = 1;
-        }
+        // line_offsets[] and field[] are initialized as valid rows are indexed.
+        // Avoid clearing unused capacity so small files do not pay for the
+        // 10,000-entry maximum during every open/reload.
         for (int i = 0; i < VOCAB_MAX_LINES / 8; i++) {
             dirty[i] = 0;
         }

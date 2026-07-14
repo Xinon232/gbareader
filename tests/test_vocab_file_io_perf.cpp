@@ -250,10 +250,10 @@ int main()
         return fail("row after overlong row was not indexed correctly");
     }
 
-    // A 150 KiB-class source must use hundreds of 512-byte refills, not one
-    // FatFS call per byte. The 5,000-card cap remains intact.
+    // A 300 KiB-class source must use hundreds of 512-byte refills, not one
+    // FatFS call per byte. The 10,000-card cap remains intact.
     std::string large;
-    large.reserve(150000);
+    large.reserve(300000);
     for (int i = 0; i < VOCAB_MAX_LINES; ++i) {
         char row[40];
         std::snprintf(row, sizeof(row), "word%04d-abcdefgh\ttarget%04d\n", i, i);
@@ -262,17 +262,17 @@ int main()
     scanned_count = vocab_file_scan_buffered_for_tests(
         large.data(), (int)large.size(), 512, scanned, read_calls);
     if (scanned_count != VOCAB_MAX_LINES) {
-        return fail("buffered scan broke the 5,000-card cap");
+        return fail("buffered scan broke the 10,000-card cap");
     }
     int expected_ceiling = ((int)large.size() + 511) / 512 + 1;
     if (read_calls > expected_ceiling) {
-        return fail("150 KiB-class scan used more than chunk-count bulk reads");
+        return fail("300 KiB-class scan used more than chunk-count bulk reads");
     }
-    std::string large_output(160000, '\0');
+    std::string large_output(310000, '\0');
     int large_output_bytes = vocab_export_grouped(
         scanned, large.data(), (int)large.size(), large_output.data(),
         (int)large_output.size());
-    if (large_output_bytes != 150008) {
+    if (large_output_bytes != 300008) {
         return fail("grouped output byte profile changed unexpectedly");
     }
     int buffered_write_calls = (large_output_bytes + 511) / 512;

@@ -4,6 +4,8 @@ A simple 5-box vocabulary trainer for the Game Boy Advance, built with Butano an
 
 The trainer can load vocabulary from `.txt` files compatible with dict.cc-style vocab-trainer exports. Put text files on the SD card and select them from the in-game file browser.
 
+Each vocabulary file can contain up to 10,000 entries. The text is streamed from the SD card, so smaller files retain their normal per-file loading, saving, and training performance.
+
 Current flashcard text support uses SuperFW-derived fonts for broad language compatibility:
 
 - Latin Extended (`U+0080–U+024F`) for Western/Central European languages and phonetic/diacritic-heavy entries

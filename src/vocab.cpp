@@ -1,5 +1,5 @@
 // vocab.cpp — Streaming vocab data layer
-// Step 2b: streaming implementation, scales to 5000 words in ~26KB RAM.
+// Streaming implementation, scales to 10,000 words in ~51KB RAM per index.
 //
 // All the data lives in the .txt on the SD card. We only keep
 // bookkeeping (offsets, fields, dirty bits) in RAM. To render a word,
@@ -695,11 +695,11 @@ int vocab_export_grouped(const VocabFile& vf, const char* data, int data_len,
 //   3. advance/reset move the field correctly and update field_counts
 //   4. field 5 is sticky (advance does nothing on already-5)
 //   5. dirty bits get set on advance/reset, cleared by clear_dirty
-//   6. RAM budget: sizeof(VocabFile) is < 32KB
+//   6. RAM budget: sizeof(VocabFile) is < 64KB
 //   7. round-trip: full rewrite produces byte-identical normalized output
 // --------------------------------------------------------------------
 
-#ifndef __GBA__
+#ifndef __DEVKITARM__
 
 #include <cstdlib>
 
@@ -708,8 +708,8 @@ int vocab_streaming_test(const char* sample_data, int sample_len)
     printf("=== Vocab streaming test ===\n");
     printf("sizeof(VocabFile) = %zu bytes (%.1f KB)\n",
            sizeof(VocabFile), sizeof(VocabFile) / 1024.0f);
-    if (sizeof(VocabFile) > 32 * 1024) {
-        fprintf(stderr, "FAIL: VocabFile > 32KB\n");
+    if (sizeof(VocabFile) > 64 * 1024) {
+        fprintf(stderr, "FAIL: VocabFile > 64KB\n");
         return 1;
     }
 
@@ -864,4 +864,4 @@ int vocab_streaming_test(const char* sample_data, int sample_len)
     return 0;
 }
 
-#endif // !__GBA__
+#endif // !__DEVKITARM__
