@@ -1,5 +1,5 @@
 #---------------------------------------------------------------------------------------------------------------------
-# GBA Vocab Trainer — v1 Makefile
+# GBA Reader v0.1.0
 #
 # Stack: butano + devkitPro devkitARM, C++.
 # Adapted from /home/hlm/butano/examples/text/Makefile (canonical butano template).
@@ -14,12 +14,12 @@
 #   - butano at /home/hlm/butano/butano
 #---------------------------------------------------------------------------------------------------------------------
 
-TARGET      :=  vocab
+TARGET      :=  gbareader
 BUILD       :=  build
 LIBBUTANO   ?=  /path/to/butano/butano
 PYTHON      :=  python3
 SOURCES     :=  src
-INCLUDES    :=  include
+INCLUDES    :=  include references/superfw/src references/superfw/src/fonts
 # butano treats INCLUDES as relative to CURDIR. Symlink the common
 # headers we need into our own include dir so butano finds them.
 DATA        :=
@@ -29,8 +29,8 @@ AUDIOBACKEND :=  null
 AUDIOTOOL   :=
 DMGAUDIO    :=
 DMGAUDIOBACKEND :=  null
-ROMTITLE    :=  VOCAB TRAIN
-ROMCODE     :=  AVTB
+ROMTITLE    :=  GBA READER
+ROMCODE     :=  AGBR
 # Optional Supercard second-ROM-mirror transfers. Default 0 preserves the
 # release-safe path; use `make SC_FAST_ROM_MIRROR=1 ...` only for hardware tests.
 SC_FAST_ROM_MIRROR ?= 0
@@ -63,7 +63,10 @@ include $(LIBBUTANOABS)/butano.mak
 #---------------------------------------------------------------------------------------------------------------------
 ROM := $(TARGET).gba
 
-.PHONY: test
+.PHONY: test host-test
+host-test:
+	@./tests/run_host_tests.sh
+
 test:
 	@test -f $(ROM) || { echo "ERROR: build $(ROM) first"; exit 1; }
 	@command -v mgba >/dev/null 2>&1 || { echo "SKIP: mgba executable is not installed; no emulator claim"; exit 2; }

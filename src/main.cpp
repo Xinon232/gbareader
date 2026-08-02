@@ -1,184 +1,261 @@
-// GBA Vocab Trainer — main entry
-// Step 5c: light blue background, single-word prompt, R reveals
-// answer, D-pad L/R switches boxes, L cycles 3 direction modes.
+// GBA Reader v0.1.0 -- read-only Supercard SD text reader.
 
+#include "bn_bg_palette_item.h"
 #include "bn_core.h"
-#include "bn_bg_palettes.h"
-#include "bn_color.h"
 #include "bn_keypad.h"
-
-#include "vocab.h"
-#include "sav.h"
-#include "render.h"
-#include "state.h"
-#include "vocab_file_io.h"
+#include "bn_palette_bitmap_bg_painter.h"
+#include "bn_palette_bitmap_bg_ptr.h"
+#include "bn_sprite_text_generator.h"
+#include "bn_sprite_items_ui_variable_8x16_font.h"
+#include "bn_sprite_ptr.h"
+#include "bn_string.h"
+#include "bn_vector.h"
 
 #include "common_variable_8x16_sprite_font.h"
+extern "C" {
+#include "font_render.h"
+}
+#include "reader_core.h"
+#include "reader_file.h"
+#include "reader_save.h"
 
-BN_DATA_EWRAM_BSS VocabFile g_vocab_file;
+#include <cstring>
 
-BN_DATA_EWRAM_BSS char g_builtin_vocab[VOCAB_FILE_BUFFER_LEN];
-BN_DATA_EWRAM_BSS char g_export_buffer[VOCAB_EXPORT_BUFFER_LEN];
-BN_DATA_EWRAM_BSS int g_builtin_vocab_used = 0;
-BN_DATA_EWRAM_BSS int g_export_buffer_used = 0;
+namespace {
 
-static void step3_savestate_init()
+enum class Scene { LIBRARY, READER, SETTINGS };
+
+constexpr bn::color palette_colors[16] = {
+    bn::color(31, 31, 31), bn::color(0, 0, 0), bn::color(12, 12, 12), bn::color(20, 20, 20),
+    bn::color(), bn::color(), bn::color(), bn::color(), bn::color(), bn::color(), bn::color(),
+    bn::color(), bn::color(), bn::color(), bn::color(), bn::color()
+};
+constexpr bn::bg_palette_item palette_item(bn::span<const bn::color>(palette_colors), bn::bpp_mode::BPP_8);
+
+BN_DATA_EWRAM_BSS reader::ReaderFile file;
+BN_DATA_EWRAM_BSS reader::Page page;
+BN_DATA_EWRAM_BSS reader::PageHistory history;
+reader::SaveData save_data;
+
+constexpr int UI_SPRITE_CAPACITY = 127;
+constexpr int LIBRARY_VISIBLE_ROWS = 4;
+constexpr int LIBRARY_DISPLAY_CHARACTERS = 15;
+constexpr int LIBRARY_WORST_CASE_SPRITES =
+        int(sizeof("GBA Reader v0.1.0") - 1) +
+        LIBRARY_VISIBLE_ROWS * (2 + LIBRARY_DISPLAY_CHARACTERS) +
+        int(sizeof("UP/DOWN select   A open") - 1);
+static_assert(UI_SPRITE_CAPACITY <= 128);
+static_assert(LIBRARY_WORST_CASE_SPRITES < 128);
+
+int glyph_width(uint32_t cp)
 {
-    Savestate sav;
-    bool sav_valid = sav_load(sav);
-    if (sav_valid) {
-        sav_save(sav);
+    char text[5]{};
+    if(cp < 0x80) text[0] = char(cp);
+    else if(cp < 0x800) {
+        text[0] = char(0xC0 | (cp >> 6)); text[1] = char(0x80 | (cp & 0x3F));
+    } else if(cp < 0x10000) {
+        text[0] = char(0xE0 | (cp >> 12)); text[1] = char(0x80 | ((cp >> 6) & 0x3F));
+        text[2] = char(0x80 | (cp & 0x3F));
     } else {
-        Savestate defaults;
-        memset(&defaults, 0, sizeof(defaults));
-        defaults.last_field = 1;
-        defaults.last_line = 0;
-        const char* default_name = "builtin.txt";
-        for (int i = 0; default_name[i] && i < SAV_FILENAME_MAX - 1; i++) {
-            defaults.filename[i] = (uint8_t)default_name[i];
+        text[0] = char(0xF0 | (cp >> 18)); text[1] = char(0x80 | ((cp >> 12) & 0x3F));
+        text[2] = char(0x80 | ((cp >> 6) & 0x3F)); text[3] = char(0x80 | (cp & 0x3F));
+    }
+    return int(font_width(text));
+}
+
+void draw_page(bn::palette_bitmap_bg_painter& painter)
+{
+    painter.fill(0);
+    uint8_t* pixels = reinterpret_cast<uint8_t*>(painter.page().data());
+    int y = save_data.settings.top_margin;
+    for(int line = 0; line < page.line_count; ++line) {
+        if(page.lines[line].text[0])
+            draw_text_idx8_bus16_range(
+                    page.lines[line].text,
+                    pixels + y * 240 + reader::BODY_SIDE_MARGIN,
+                    0,
+                    reader::SCREEN_WIDTH - reader::BODY_SIDE_MARGIN * 2,
+                    240,
+                    1);
+        y += reader::FONT_HEIGHT + save_data.settings.line_spacing;
+    }
+    painter.flip_page_later();
+}
+
+void persist_position(const char* filename)
+{
+    save_data.byte_offset = page.start_offset;
+    if(filename) {
+        int index = 0;
+        while(filename[index] && index < reader::SAVE_FILENAME_MAX - 1) {
+            save_data.filename[index] = filename[index];
+            ++index;
         }
-        defaults.filename[SAV_FILENAME_MAX - 1] = 0;
-        sav_save(defaults);
+        save_data.filename[index] = 0;
     }
+    reader::store_save(save_data);
 }
 
-static void load_builtin_vocab()
+bool text_equal(const char* first, const char* second)
 {
-    vocab_file_load("builtin.txt", g_vocab_file, g_builtin_vocab,
-                    VOCAB_FILE_BUFFER_LEN, g_builtin_vocab_used);
+    if(! first || ! second) return false;
+    while(*first && *second) {
+        if(*first != *second) return false;
+        ++first;
+        ++second;
+    }
+    return *first == *second;
 }
 
-static bool load_selected_vocab(const char* filename)
+void add_text(bn::sprite_text_generator& generator, int x, int y, const char* text,
+              bn::vector<bn::sprite_ptr, UI_SPRITE_CAPACITY>& sprites)
 {
-    return vocab_file_load(filename, g_vocab_file, g_builtin_vocab,
-                           VOCAB_FILE_BUFFER_LEN, g_builtin_vocab_used);
+    generator.generate(x, y, text, sprites);
 }
 
-static int grouped_save_index_for_line(const VocabFile& vf, int old_idx)
+void library_display_name(const char* name, char* output)
 {
-    if (old_idx < 0 || old_idx >= vf.line_count) {
-        return -1;
+    int input = 0;
+    int out = 0;
+    int characters = 0;
+    while(name[input] && characters < LIBRARY_DISPLAY_CHARACTERS) {
+        unsigned char lead = static_cast<unsigned char>(name[input]);
+        int bytes = lead < 0x80 ? 1 : (lead & 0xE0) == 0xC0 ? 2 :
+                    (lead & 0xF0) == 0xE0 ? 3 : (lead & 0xF8) == 0xF0 ? 4 : 1;
+        int available = 1;
+        while(available < bytes && name[input + available] &&
+              (static_cast<unsigned char>(name[input + available]) & 0xC0) == 0x80) ++available;
+        if(available != bytes) bytes = 1;
+        for(int i = 0; i < bytes; ++i) output[out++] = name[input++];
+        ++characters;
     }
-
-    uint8_t field = vf.field[old_idx];
-    if (field < 1 || field > 5) {
-        return -1;
-    }
-
-    int new_idx = 0;
-    for (int i = 0; i < vf.line_count; ++i) {
-        uint8_t candidate_field = vf.field[i];
-        if (candidate_field < field || (candidate_field == field && i < old_idx)) {
-            ++new_idx;
-        }
-    }
-    return new_idx;
+    output[out] = 0;
 }
 
-static State::InputState read_input()
-{
-    State::InputState in;
-    in.a_pressed       = bn::keypad::a_pressed();
-    in.b_pressed       = bn::keypad::b_pressed();
-    in.a_held          = bn::keypad::a_held();
-    in.b_held          = bn::keypad::b_held();
-    in.r_held          = bn::keypad::r_held();
-    in.l_pressed       = bn::keypad::l_pressed();
-    in.start_pressed   = bn::keypad::start_pressed();
-    in.select_pressed  = bn::keypad::select_pressed();
-    in.left_pressed    = bn::keypad::left_pressed();
-    in.right_pressed   = bn::keypad::right_pressed();
-    in.up_pressed      = bn::keypad::up_pressed();
-    in.down_pressed    = bn::keypad::down_pressed();
-    return in;
-}
-
-static void render_current_frame(Renderer& renderer, State& state)
-{
-    if (state.scene() == 1) {
-        renderer.update_browser(state);
-        return;
-    }
-    if (state.shuffle_confirm_active()) {
-        renderer.update_shuffle_confirm(state.current_field());
-        return;
-    }
-
-    int idx = state.current_line_idx();
-    if (idx < 0 || idx >= g_vocab_file.line_count) idx = 0;
-
-    LineBuf current;
-    bool field_empty = !state.feedback_active() && state.current_field_is_empty(g_vocab_file);
-    if (vocab_file_show(g_vocab_file, g_builtin_vocab, g_builtin_vocab_used,
-                        idx, current) || field_empty) {
-        renderer.update(g_vocab_file, idx, state.current_field(),
-                        current, state.active_side(), state.direction_mode() == 3,
-                        state.show_answer(), field_empty, state.feedback_active());
-    }
 }
 
 int main()
 {
     bn::core::init();
+    bn::palette_bitmap_bg_ptr background = bn::palette_bitmap_bg_ptr::create(palette_item);
+    bn::palette_bitmap_bg_painter painter(background);
+    painter.fill(0);
+    painter.flip_page_later();
 
-    step3_savestate_init();
-    vocab_file_init();
-    load_builtin_vocab();
+    bn::sprite_font ui_font(
+            bn::sprite_items::ui_variable_8x16_font,
+            common::variable_8x16_sprite_font_utf8_characters_map.reference(),
+            common::variable_8x16_sprite_font_character_widths);
+    bn::sprite_text_generator ui(ui_font);
+    ui.set_palette_item(bn::sprite_items::ui_variable_8x16_font.palette_item());
+    bn::vector<bn::sprite_ptr, UI_SPRITE_CAPACITY> sprites;
 
-    Renderer renderer;
-    State state;
-    int last_scene = state.scene();
+    save_data = reader::default_save();
+    reader::load_save(save_data);
+    bool storage_ok = reader::storage_init();
+    Scene scene = Scene::LIBRARY;
+    int selected = 0;
+    int settings_row = 0;
+    bool redraw_ui = true;
+    bool redraw_page = false;
+    const char* open_name = nullptr;
 
-    while(true)
-    {
-        State::InputState in = read_input();
-        state.update(g_vocab_file, in);
+    for(int i = 0; i < reader::library_count(); ++i) {
+        if(text_equal(reader::library_name(i), save_data.filename)) selected = i;
+    }
 
-        if (in.start_pressed && state.scene() == 0) {
-            int grouped_idx_after_save = -1;
-            int idx_before_save = state.current_line_idx();
-            if (vocab_file_loaded_from_sd() &&
-                idx_before_save >= 0 && idx_before_save < g_vocab_file.line_count &&
-                !state.current_field_is_empty(g_vocab_file)) {
-                grouped_idx_after_save = grouped_save_index_for_line(g_vocab_file, idx_before_save);
+    while(true) {
+        if(scene == Scene::LIBRARY) {
+            if(bn::keypad::up_pressed() && selected > 0) { --selected; redraw_ui = true; }
+            if(bn::keypad::down_pressed() && selected + 1 < reader::library_count()) { ++selected; redraw_ui = true; }
+            if(bn::keypad::a_pressed() && reader::library_count() && file.open_read_only(reader::library_name(selected))) {
+                open_name = reader::library_name(selected);
+                uint32_t offset = text_equal(open_name, save_data.filename) ? save_data.byte_offset : 0;
+                bool page_open = reader::open_page_at(
+                        file, offset, save_data.settings, glyph_width, history, page);
+                if(! page_open)
+                    page_open = reader::open_first_page(
+                            file, save_data.settings, glyph_width, history, page);
+                if(page_open) {
+                    persist_position(open_name);
+                    scene = Scene::READER;
+                    sprites.clear();
+                    redraw_page = true;
+                } else {
+                    file.close();
+                    open_name = nullptr;
+                }
             }
-
-            renderer.set_saving(true);
-            render_current_frame(renderer, state);
-            bn::core::update();
-
-            bool saved = vocab_file_save_grouped(g_vocab_file, g_builtin_vocab, g_builtin_vocab_used,
-                                                 g_export_buffer, VOCAB_EXPORT_BUFFER_LEN,
-                                                 g_export_buffer_used);
-            if (saved && grouped_idx_after_save >= 0) {
-                state.restore_current_line_index(g_vocab_file, grouped_idx_after_save);
+        } else if(scene == Scene::READER) {
+            reader::Page next{};
+            if((bn::keypad::right_pressed() || bn::keypad::a_pressed()) &&
+               reader::next_page(file, save_data.settings, glyph_width, history, page, next)) {
+                page = next; redraw_page = true; persist_position(open_name);
+            } else if((bn::keypad::left_pressed() || bn::keypad::b_pressed()) &&
+                      reader::previous_page(file, save_data.settings, glyph_width, history, next)) {
+                page = next; redraw_page = true; persist_position(open_name);
+            } else if(bn::keypad::start_pressed()) {
+                scene = Scene::SETTINGS; redraw_ui = true;
+            } else if(bn::keypad::select_pressed()) {
+                persist_position(open_name); file.close(); open_name = nullptr;
+                scene = Scene::LIBRARY; redraw_ui = true;
             }
-
-            renderer.set_saving(false);
-            renderer.reset();
-        }
-
-        if (state.scene() != last_scene) {
-            renderer.reset();
-            last_scene = state.scene();
-        }
-
-        if (state.load_request_pending()) {
-            const char* filename = state.consume_load_request();
-            if (load_selected_vocab(filename)) {
-                renderer.reset();
+        } else {
+            if(bn::keypad::up_pressed() && settings_row > 0) { --settings_row; redraw_ui = true; }
+            if(bn::keypad::down_pressed() && settings_row < 2) { ++settings_row; redraw_ui = true; }
+            int delta = bn::keypad::left_pressed() ? -1 : bn::keypad::right_pressed() ? 1 : 0;
+            if(delta) {
+                reader::adjust_setting(save_data.settings, reader::SettingField(settings_row), delta);
+                reader::layout_page(file, page.start_offset, save_data.settings, glyph_width, page);
+                save_data.byte_offset = page.start_offset;
+                reader::store_save(save_data);
+                redraw_ui = true;
+            }
+            if(bn::keypad::b_pressed() || bn::keypad::start_pressed()) {
+                uint32_t resume_offset = page.start_offset;
+                reader::open_page_at(file, resume_offset, save_data.settings, glyph_width, history, page);
+                persist_position(open_name);
+                scene = Scene::READER; sprites.clear(); redraw_page = true; redraw_ui = false;
             }
         }
 
-        switch (state.consume_flash()) {
-            case State::FLASH_GREEN: renderer.flash_green(); break;
-            case State::FLASH_RED:   renderer.flash_red(); break;
-            case State::FLASH_NONE:
-            default: break;
+        if(redraw_page) { draw_page(painter); redraw_page = false; }
+        if(redraw_ui) {
+            painter.fill(0); painter.flip_page_later();
+            sprites.clear();
+            ui.set_center_alignment();
+            if(scene == Scene::LIBRARY) {
+                add_text(ui, 0, -68, "GBA Reader v0.1.0", sprites);
+                if(! storage_ok) add_text(ui, 0, -48, "Supercard SD not ready", sprites);
+                else if(! reader::library_count()) add_text(ui, 0, -48, "No .txt files in root", sprites);
+                int first = selected > 1 ? selected - 1 : 0;
+                if(first + LIBRARY_VISIBLE_ROWS > reader::library_count())
+                    first = reader::library_count() > LIBRARY_VISIBLE_ROWS ?
+                            reader::library_count() - LIBRARY_VISIBLE_ROWS : 0;
+                for(int i = first; i < reader::library_count() &&
+                                   i < first + LIBRARY_VISIBLE_ROWS; ++i) {
+                    bn::string<68> label = i == selected ? "> " : "  ";
+                    char display_name[LIBRARY_DISPLAY_CHARACTERS * 4 + 1];
+                    library_display_name(reader::library_name(i), display_name);
+                    label += display_name;
+                    add_text(ui, 0, -44 + (i - first) * 16, label.data(), sprites);
+                }
+                add_text(ui, 0, 68, "UP/DOWN select   A open", sprites);
+            } else if(scene == Scene::SETTINGS) {
+                add_text(ui, 0, -62, "Reader settings", sprites);
+                const char* labels[3] = { "Line spacing", "Top margin", "Bottom margin" };
+                int values[3] = { save_data.settings.line_spacing, save_data.settings.top_margin,
+                                  save_data.settings.bottom_margin };
+                for(int i = 0; i < 3; ++i) {
+                    bn::string<48> row = i == settings_row ? "> " : "  ";
+                    row += labels[i]; row += ": "; row += bn::to_string<4>(values[i]);
+                    add_text(ui, 0, -28 + i * 22, row.data(), sprites);
+                }
+                add_text(ui, 0, 54, "LEFT/RIGHT change", sprites);
+                add_text(ui, 0, 68, "B/START close", sprites);
+            }
+            redraw_ui = false;
         }
-
-        render_current_frame(renderer, state);
-
         bn::core::update();
     }
 }

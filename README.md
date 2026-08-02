@@ -1,77 +1,104 @@
-# GBA Vocab Trainer
+# GBA Reader
 
-A simple 5-box vocabulary trainer for the Game Boy Advance, built with Butano and targeted at SuperFW / Supercard SD-style setups.
+A focused plain-text e-reader for the Game Boy Advance, built from the proven SD/FatFS and font foundation of [`gba-vocab-trainer-CC` v0.2.5](https://github.com/Xinon232/gba-vocab-trainer-CC/releases/tag/v0.2.5).
 
-The trainer can load vocabulary from `.txt` files compatible with dict.cc-style vocab-trainer exports. Put text files on the SD card and select them from the in-game file browser.
+The first release is intentionally small: open UTF-8 `.txt` files from a Supercard SD card, read them page by page, adjust page spacing, and resume where you stopped.
 
-Each vocabulary file can contain up to 10,000 entries. The text is streamed from the SD card, so smaller files retain their normal per-file loading, saving, and training performance.
+## v0.1.0 features
 
-Current flashcard text support uses SuperFW-derived fonts for broad language compatibility:
+- Read-only `.txt` browser for files in the SD-card root
+- Buffered FatFS access; books are streamed instead of loaded into GBA RAM
+- Word wrapping and CRLF/LF handling
+- Fixed native 16-pixel SuperFW body-font size
+- SuperFW font coverage for supported Latin, Greek, Cyrillic, Japanese, CJK and Hangul text
+- Dedicated `gba-vocab-trainer-CC` UI font for menus
+- Adjustable line spacing, top margin and bottom margin
+- Page-forward and page-back history
+- SRAM persistence for settings, last book and source byte offset
+- UTF-8 BOM handling and safe replacement of malformed or unsupported input
+- White reading page with black text
 
-- Latin Extended (`U+0080–U+024F`) for Western/Central European languages and phonetic/diacritic-heavy entries
-- Greek and Cyrillic (`U+0370–U+04FF`) including Russian, Ukrainian, Bulgarian, Serbian/Macedonian-style Cyrillic extensions, and Greek
-- Japanese punctuation, Hiragana, and Katakana (`U+3000–U+30FF`)
-- CJK Unified Ideographs (`U+4E00–U+9FEF`) plus SuperFW's included CJK Extension-B subset (`U+20000–U+200CC`) for Chinese/Japanese/Korean Han characters
-- Korean Hangul syllables (`U+AC00–U+D7A3`)
-- Arabic is still rendered with the existing experimental Arabic font path and is not considered fully supported yet because shaping/joining is incomplete
+## Explicit scope
+
+- **Arabic is not supported.** Arabic code points are rendered as `?`; no shaping or bidirectional path is included.
+- **Text size is fixed.** v0.1.0 deliberately keeps the native SuperFW font size.
+- EPUB is not supported yet.
+- Books are read-only; the application never rewrites source `.txt` files.
 
 ## Controls
 
-Training screen:
+### Library
 
-- R: hold to reveal the answer
-- A: mark the current word correct and move it to the next box; shows a green feedback flash with word + answer before advancing, and holding A keeps that feedback visible until release
-- B: reset the current word back to box 1; shows a red feedback flash with word + answer before advancing, and holding B keeps that feedback visible until release
-- D-pad Left / Right: switch between boxes 1-5
-- D-pad Up: undo the most recent A/B decision, if you stayed in the same box
-- D-pad Down: ask to shuffle only the current box
-- L: cycle direction mode: front-to-back, back-to-front, alternating
-- Start: save/export the current progress
-- Select: open the file browser
+- `Up` / `Down`: select a `.txt` file
+- `A`: open selected file
 
-File browser:
+### Reader
 
-- D-pad Up / Down: move through files
-- D-pad Left / Right: jump by 5 files
-- A: load selected `.txt` file
-- B: return to training
+- `Right` or `A`: next page
+- `Left` or `B`: previous page
+- `Start`: settings
+- `Select`: return to library
 
-## File format
+### Settings
 
-The project is intended for dict.cc-style tab-separated vocabulary text files, for example:
+- `Up` / `Down`: select setting
+- `Left` / `Right`: change value
+- `B` or `Start`: save and return to reading
 
-```text
-Haus	house
-Hund	dog
-дом	house
-```
+## Hardware and files
 
-The importer keeps 5-box progress when reopening files saved/exported by the trainer.
+v0.1.0 uses the Supercard SD access path inherited from the base engine. Copy UTF-8 `.txt` files to the **root** of the SD card. The browser currently indexes up to 32 files and stores filenames up to 63 bytes for display/opening.
 
-If no SD-card vocabulary file is loaded yet, the built-in starter list shows one language-name sample for each main supported font group/language family, including English, French, German, Spanish, Portuguese, Italian, Dutch, Polish, Czech, Turkish, Greek, Russian, Ukrainian, Japanese, Chinese, and Korean.
+An emulator without the expected Supercard storage interface can validate the ROM header and execute the UI path, but it cannot prove SD/FatFS behavior. Real-hardware verification remains important.
 
-## Build
+## Building
 
 Requirements:
 
-- devkitPro / devkitARM
+- devkitPro/devkitARM
 - Butano
-- Python 3
+- GNU Make
+- A Python 3 interpreter used by Butano's asset tools
 
-Build:
-
-```bash
-make LIBBUTANO=/path/to/butano/butano
+```sh
+make clean LIBBUTANO=/absolute/path/to/butano/butano
+make -j2 LIBBUTANO=/absolute/path/to/butano/butano
 ```
 
-The ROM output is `vocab.gba`.
+The ROM is written to `gbareader.gba`.
 
-## Notes
+### Host tests
 
-This is an early public source snapshot. It is useful for experimentation and for testing dict.cc vocabulary files on GBA hardware, but it is not a polished release yet.
+```sh
+make host-test LIBBUTANO=/absolute/path/to/butano/butano
+```
 
-### Credits
+### Optional emulator smoke test
 
-- [SuperFW](https://github.com/davidgfnet/superfw) by David Guillen Fandos: source of the matching flashcard font packs used for Latin Extended, Greek/Cyrillic, Japanese kana, CJK ideographs, and Korean Hangul coverage.
-- Butano common sprite fonts: used for the small UI text.
-- [dict.cc](https://www.dict.cc/): target vocabulary-export format and language-data workflow this trainer is designed around.
+```sh
+make test LIBBUTANO=/absolute/path/to/butano/butano
+```
+
+The emulator target only checks for immediate ROM/header or illegal-opcode rejection; it does not claim successful Supercard SD behavior.
+
+## Architecture
+
+- `reader_core`: host-testable UTF-8 decoding, wrapping, pagination and page history
+- `reader_file`: read-only FatFS library scan and 512-byte cached book stream
+- `reader_save`: checksummed, versioned SRAM state
+- `main`: Butano UI, controls and page presentation
+- `superfw_font`: SuperFW software glyph renderer targeting a double-buffered 8-bit bitmap background
+
+Body text is rendered into a bitmap page rather than creating one GBA sprite per glyph. This avoids the 128-object OAM limit that makes a full-page sprite-text reader impractical. The menu UI remains sprite-based.
+
+## Provenance and licensing
+
+The project was derived from the exact `gba-vocab-trainer-CC` `v0.2.5` tagged source. Its Supercard/FatFS integration and customized UI-font foundation are retained. SuperFW font-rendering sources and `fonts.pack` are included under `references/superfw/` with their upstream notices.
+
+The inherited project and SuperFW components are distributed under the GNU General Public License, version 3 or later. See [`LICENSE`](LICENSE).
+
+## Planned later work
+
+- Directory navigation and larger libraries
+- Bookmarks and per-book position records
+- EPUB ingestion after the TXT reader is stable
