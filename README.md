@@ -20,8 +20,8 @@ Current flashcard text support uses SuperFW-derived fonts for broad language com
 Training screen:
 
 - R: hold to reveal the answer
-- A: mark the current word correct and move it to the next box; shows a green feedback flash with word + answer before advancing
-- B: reset the current word back to box 1; shows a red feedback flash with word + answer before advancing
+- A: mark the current word correct and move it to the next box; shows a green feedback flash with word + answer before advancing, and holding A keeps that feedback visible until release
+- B: reset the current word back to box 1; shows a red feedback flash with word + answer before advancing, and holding B keeps that feedback visible until release
 - D-pad Left / Right: switch between boxes 1-5
 - D-pad Up: undo the most recent A/B decision, if you stayed in the same box
 - D-pad Down: ask to shuffle only the current box

@@ -22,7 +22,8 @@ public:
                 State::Side active_side,    // which side of the pair to show
                 bool alternate_mode,        // direction mode 3 indicator
                 bool show_answer,          // R held → also show the other side
-                bool field_is_empty);      // current box has no words
+                bool field_is_empty,       // current box has no words
+                bool feedback_active);     // held A/B keeps flash active
 
     void update_browser(const State& state);
     void update_shuffle_confirm(int current_field);

@@ -28,6 +28,7 @@ State::State()
       shuffle_seed_(0x13579BDFu),
       feedback_frames_left_(0),
       feedback_line_idx_(-1),
+      feedback_judgment_(FLASH_NONE),
       feedback_toggle_alternation_(false),
       undo_pending_(false),
       undo_line_idx_(0),
@@ -193,6 +194,7 @@ void State::finish_feedback(VocabFile& vf)
     }
     feedback_frames_left_ = 0;
     feedback_line_idx_ = -1;
+    feedback_judgment_ = FLASH_NONE;
     feedback_toggle_alternation_ = false;
     show_answer_ = false;
     scene_ = SCENE_TRAIN;
@@ -205,7 +207,10 @@ bool State::update(VocabFile& vf, const InputState& in)
         if (feedback_frames_left_ > 0) {
             --feedback_frames_left_;
         }
-        if (feedback_frames_left_ <= 0) {
+        bool judgment_held =
+            (feedback_judgment_ == FLASH_GREEN && in.a_held) ||
+            (feedback_judgment_ == FLASH_RED && in.b_held);
+        if (feedback_frames_left_ <= 0 && ! judgment_held) {
             finish_feedback(vf);
         }
     } else if (scene_ == SCENE_SHUFFLE_CONFIRM) {
@@ -286,6 +291,7 @@ bool State::update(VocabFile& vf, const InputState& in)
             }
             flash_request_ = FLASH_GREEN;
             feedback_line_idx_ = line;
+            feedback_judgment_ = FLASH_GREEN;
             feedback_frames_left_ = FEEDBACK_FRAMES;
             feedback_toggle_alternation_ = (direction_mode_ == 3);
             show_answer_ = true;
@@ -311,6 +317,7 @@ bool State::update(VocabFile& vf, const InputState& in)
             undo_alternation_phase_ = alternation_phase_;
             flash_request_ = FLASH_RED;
             feedback_line_idx_ = line;
+            feedback_judgment_ = FLASH_RED;
             feedback_frames_left_ = FEEDBACK_FRAMES;
             feedback_toggle_alternation_ = (direction_mode_ == 3);
             show_answer_ = true;

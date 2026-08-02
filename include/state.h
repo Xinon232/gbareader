@@ -60,6 +60,8 @@ public:
     struct InputState {
         bool a_pressed = false;
         bool b_pressed = false;
+        bool a_held = false;
+        bool b_held = false;
         bool r_held = false;
         bool l_pressed = false;
         bool start_pressed = false;
@@ -132,6 +134,7 @@ private:
     // answer shown during the green/red flash. Only after the flash
     // expires do we advance to the next word and toggle alternation.
     int feedback_line_idx_;
+    FlashRequest feedback_judgment_;
     bool feedback_toggle_alternation_;
 
     // Undo state. Single-shot. Stored only if the most recent A/B

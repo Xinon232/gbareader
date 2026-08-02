@@ -8,8 +8,9 @@
 //   y=+12:   <answer word>                   (16x16, only when R is held)
 //   y=+64:   "F1:X F2:X F3:X F4:X F5:X"       (8x16, footer, centered)
 //
-// Background: very light blue (24, 30, 31).
-// Text: white.
+// Background: white (31, 31, 31).
+// Small UI font: former light-blue background color replaces white;
+// black and all other palette colors are preserved.
 // Flash on A press: green tint for ~150ms.
 // Flash on B press: red   tint for ~150ms.
 
@@ -30,6 +31,7 @@
 #include "vocab_superfw_hangul_font_sprite_font.h"
 #include "vocab_dejavu_arabic_font_sprite_font.h"
 #include "bn_sprite_items_field_underline.h"
+#include "bn_sprite_items_ui_variable_8x16_font.h"
 
 namespace {
 
@@ -47,9 +49,9 @@ constexpr int WRAP_LINE_STEP = 12;
 
 constexpr int FLASH_FRAMES = 60;  // at least one second at 60fps
 
-// Very light blue background. 5-bit RGB: (24, 30, 31).
-constexpr int BG_R = 24;
-constexpr int BG_G = 30;
+// White background. 5-bit RGB: (31, 31, 31).
+constexpr int BG_R = 31;
+constexpr int BG_G = 31;
 constexpr int BG_B = 31;
 
 struct WrappedText {
@@ -247,6 +249,7 @@ Renderer::Renderer()
       flash_timer_frames(0),
       flash_color(0)
 {
+    small_gen.set_palette_item(bn::sprite_items::ui_variable_8x16_font.palette_item());
     small_gen.set_center_alignment();
     latin_gen.set_center_alignment();
     greek_cyrillic_gen.set_center_alignment();
@@ -282,11 +285,14 @@ void Renderer::set_saving(bool saving) {
 void Renderer::update(const VocabFile& vf, int current_line_idx, int current_field,
                       const LineBuf& current,
                       State::Side active_side, bool alternate_mode, bool show_answer,
-                      bool field_is_empty)
+                      bool field_is_empty, bool feedback_active)
 {
-    // Background: light blue, or flash color if active.
-    if (flash_timer_frames > 0) {
-        flash_timer_frames--;
+    // Background: white, or the existing feedback color. The normal timer is
+    // unchanged; feedback_active extends it while A/B remains held.
+    if (flash_timer_frames > 0 || feedback_active) {
+        if (flash_timer_frames > 0) {
+            flash_timer_frames--;
+        }
         if (flash_color == 1) {
             bn::bg_palettes::set_transparent_color(bn::color(0, 31, 0));  // green
         } else if (flash_color == 2) {

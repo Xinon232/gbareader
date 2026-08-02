@@ -80,6 +80,8 @@ static State::InputState read_input()
     State::InputState in;
     in.a_pressed       = bn::keypad::a_pressed();
     in.b_pressed       = bn::keypad::b_pressed();
+    in.a_held          = bn::keypad::a_held();
+    in.b_held          = bn::keypad::b_held();
     in.r_held          = bn::keypad::r_held();
     in.l_pressed       = bn::keypad::l_pressed();
     in.start_pressed   = bn::keypad::start_pressed();
@@ -111,7 +113,7 @@ static void render_current_frame(Renderer& renderer, State& state)
                         idx, current) || field_empty) {
         renderer.update(g_vocab_file, idx, state.current_field(),
                         current, state.active_side(), state.direction_mode() == 3,
-                        state.show_answer(), field_empty);
+                        state.show_answer(), field_empty, state.feedback_active());
     }
 }
 
