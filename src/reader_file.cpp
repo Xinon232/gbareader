@@ -18,15 +18,24 @@ int name_count;
 FATFS fatfs;
 #endif
 
-bool txt_name(const char* name)
+bool extension_equal(const char* value, const char* extension)
+{
+    while(*value && *extension) {
+        char a = *value++, b = *extension++;
+        if(a >= 'A' && a <= 'Z') a = char(a + ('a' - 'A'));
+        if(a != b) return false;
+    }
+    return ! *value && ! *extension;
+}
+}
+
+bool supported_book_name(const char* name)
 {
     int length = 0;
     while(name && name[length] && length < LIBRARY_NAME_MAX) ++length;
-    if(length < 5 || length >= LIBRARY_NAME_MAX) return false;
-    const char* ext = name + length - 4;
-    return ext[0] == '.' && (ext[1] == 't' || ext[1] == 'T') &&
-           (ext[2] == 'x' || ext[2] == 'X') && (ext[3] == 't' || ext[3] == 'T');
-}
+    if(length >= LIBRARY_NAME_MAX) return false;
+    return (length > 4 && extension_equal(name + length - 4, ".txt")) ||
+           (length > 5 && extension_equal(name + length - 5, ".epub"));
 }
 
 bool storage_init()
@@ -41,7 +50,7 @@ bool storage_init()
     FILINFO entry;
     if(f_opendir(&directory, "/") != FR_OK) return false;
     while(name_count < LIBRARY_MAX_FILES && f_readdir(&directory, &entry) == FR_OK && entry.fname[0]) {
-        if(! (entry.fattrib & AM_DIR) && txt_name(entry.fname)) {
+        if(! (entry.fattrib & AM_DIR) && supported_book_name(entry.fname)) {
             int i = 0;
             while(entry.fname[i] && i < LIBRARY_NAME_MAX - 1) {
                 names[name_count][i] = entry.fname[i];
@@ -68,7 +77,7 @@ bool ReaderFile::open_read_only(const char* filename)
 {
     close();
 #ifdef __DEVKITARM__
-    if(! txt_name(filename) || f_open(&_file, filename, FA_READ | FA_OPEN_EXISTING) != FR_OK) return false;
+    if(! supported_book_name(filename) || f_open(&_file, filename, FA_READ | FA_OPEN_EXISTING) != FR_OK) return false;
     _size = uint32_t(f_size(&_file));
     _open = true;
     return true;

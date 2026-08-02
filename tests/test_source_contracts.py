@@ -7,6 +7,7 @@ core = (root / "src/reader_core.cpp").read_text(encoding="utf-8")
 header = (root / "include/reader_core.h").read_text(encoding="utf-8")
 file_source = (root / "src/reader_file.cpp").read_text(encoding="utf-8")
 ffconf = (root / "include/ffconf.h").read_text(encoding="utf-8")
+epub_header = (root / "include/epub_document.h").read_text(encoding="utf-8")
 
 assert "draw_text_idx8_bus16_range" in main
 assert "bn::sprite_font ui_font(" in main
@@ -22,4 +23,10 @@ assert "LIBRARY_WORST_CASE_SPRITES < 128" in main
 assert "offset - _cache_start >= uint32_t(_cache_size)" in file_source
 assert file_source.index("_cache_size = 0;") < file_source.index("f_lseek(&_file, _cache_start)")
 assert "#define FF_FS_READONLY\t1" in ffconf
+assert "BN_DATA_EWRAM_BSS reader::EpubDocument epub;" in main
+assert "GBA Reader v0.2.0" in main
+assert "EPUB_MAX_ZIP_ENTRIES = 128" in epub_header
+assert "EPUB_MAX_SPINE_ITEMS = 64" in epub_header
+assert "EPUB_MAX_CHAPTER_BYTES = 64 * 1024" in epub_header
+assert "idrefs[EPUB_MAX_SPINE_ITEMS]" not in (root / "src/epub_document.cpp").read_text()
 print("PASS: source contracts")

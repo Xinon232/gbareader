@@ -16,6 +16,7 @@ constexpr int LIBRARY_NAME_MAX = 64;
 bool storage_init();
 int library_count();
 const char* library_name(int index);
+bool supported_book_name(const char* name);
 
 class ReaderFile final : public ByteSource {
 public:

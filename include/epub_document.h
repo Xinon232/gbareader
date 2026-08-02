@@ -1,0 +1,70 @@
+#pragma once
+
+#include "reader_core.h"
+#include "miniz.h"
+
+#include <cstdint>
+
+namespace reader {
+
+constexpr int EPUB_MAX_ZIP_ENTRIES = 128;
+constexpr int EPUB_MAX_SPINE_ITEMS = 64;
+constexpr int EPUB_MAX_PATH = 192;
+constexpr uint32_t EPUB_MAX_CHAPTER_BYTES = 64 * 1024;
+constexpr uint32_t EPUB_MAX_METADATA_BYTES = 64 * 1024;
+constexpr uint32_t EPUB_MAX_COMPRESSED_BYTES = 4 * 1024 * 1024;
+constexpr uint32_t EPUB_MAX_ARCHIVE_BYTES = 64 * 1024 * 1024;
+
+enum class EpubError : uint8_t {
+    NONE, READ_FAILED, NOT_ZIP, MULTI_DISK, ZIP64, ENCRYPTED,
+    UNSUPPORTED_COMPRESSION, MALFORMED_ZIP, TOO_MANY_ENTRIES, TOO_LARGE,
+    MISSING_CONTAINER, MISSING_ROOTFILE, MISSING_MANIFEST_ITEM, MISSING_SPINE,
+    UNSAFE_PATH, INVALID_XHTML
+};
+
+const char* epub_error_string(EpubError error);
+
+class EpubDocument final : public ByteSource {
+public:
+    EpubDocument();
+    bool open(const ByteSource& archive);
+    void close();
+    uint32_t size() const override { return _virtual_size; }
+    bool byte_at(uint32_t offset, unsigned char& value) const override;
+    EpubError error() const { return _error; }
+
+private:
+    struct ZipEntry {
+        char name[EPUB_MAX_PATH];
+        uint32_t compressed_size;
+        uint32_t uncompressed_size;
+        uint32_t local_offset;
+        uint32_t crc32;
+        uint16_t method;
+        uint16_t flags;
+        uint16_t name_length;
+    };
+    struct SpineItem { uint16_t entry; uint32_t start; uint32_t size; };
+
+    bool parse_zip();
+    bool build_spine();
+    bool load_entry(int index, uint32_t uncompressed_limit) const;
+    bool load_chapter(int spine_index) const;
+    int find_entry(const char* name) const;
+    bool fail(EpubError error) const;
+
+    const ByteSource* _archive;
+    ZipEntry _entries[EPUB_MAX_ZIP_ENTRIES];
+    SpineItem _spine[EPUB_MAX_SPINE_ITEMS];
+    int _entry_count;
+    int _spine_count;
+    uint32_t _virtual_size;
+    mutable EpubError _error;
+    mutable int _cached_spine;
+    mutable uint32_t _buffer_size;
+    mutable tinfl_decompressor _inflator;
+    mutable unsigned char _input[512];
+    mutable unsigned char _chapter[EPUB_MAX_CHAPTER_BYTES];
+};
+
+}

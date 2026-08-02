@@ -2,12 +2,15 @@
 
 A focused plain-text e-reader for the Game Boy Advance, built from the proven SD/FatFS and font foundation of [`gba-vocab-trainer-CC` v0.2.5](https://github.com/Xinon232/gba-vocab-trainer-CC/releases/tag/v0.2.5).
 
-The first release is intentionally small: open UTF-8 `.txt` files from a Supercard SD card, read them page by page, adjust page spacing, and resume where you stopped.
+Version 0.2.0 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of `.epub` files directly from a Supercard SD card.
 
-## v0.1.0 features
+## v0.2.0 features
 
-- Read-only `.txt` browser for files in the SD-card root
+- Read-only, case-insensitive `.txt` and `.epub` browser for files in the SD-card root
 - Buffered FatFS access; books are streamed instead of loaded into GBA RAM
+- Direct EPUB ZIP reading with stored and raw-DEFLATE entries and required-entry CRC-32 verification; nothing is extracted to SD
+- EPUB container, OPF manifest and declared spine-order handling
+- XHTML visible-text conversion with block breaks and common XML/HTML entities
 - Word wrapping and CRLF/LF handling
 - Fixed native 16-pixel SuperFW body-font size
 - SuperFW font coverage for supported Latin, Greek, Cyrillic, Japanese, CJK and Hangul text
@@ -21,15 +24,17 @@ The first release is intentionally small: open UTF-8 `.txt` files from a Superca
 ## Explicit scope
 
 - **Arabic is not supported.** Arabic code points are rendered as `?`; no shaping or bidirectional path is included.
-- **Text size is fixed.** v0.1.0 deliberately keeps the native SuperFW font size.
-- EPUB is not supported yet.
-- Books are read-only; the application never rewrites source `.txt` files.
+- **Text size is fixed.** v0.2.0 keeps the native 16-pixel SuperFW bitmap body font.
+- **This is not full EPUB compliance.** Images, CSS presentation, JavaScript, embedded fonts, audio, video, SVG and DRM are unsupported and ignored or rejected as appropriate. Arabic is unsupported.
+- Books are read-only; the application never rewrites source files or extracts archive members to SD.
+- ZIP64, multi-disk and encrypted archives are rejected. Required metadata and spine text must use stored (0) or DEFLATE (8) compression; unsupported methods on ignored assets do not prevent reading.
+- Compile-time limits: 128 ZIP entries, 64 spine documents, 192-byte archive paths, 64 KiB uncompressed input/visible text per required chapter or metadata file, 4 MiB compressed required entry and 64 MiB archive. Ignored images, fonts and other non-spine assets are not subject to the 64 KiB text-buffer limit. Exceeding an applicable limit is an error; text is never silently truncated.
 
 ## Controls
 
 ### Library
 
-- `Up` / `Down`: select a `.txt` file
+- `Up` / `Down`: select a `.txt` or `.epub` file
 - `A`: open selected file
 
 ### Reader
@@ -47,7 +52,7 @@ The first release is intentionally small: open UTF-8 `.txt` files from a Superca
 
 ## Hardware and files
 
-v0.1.0 uses the Supercard SD access path inherited from the base engine. Copy UTF-8 `.txt` files to the **root** of the SD card. The browser currently indexes up to 32 files and stores filenames up to 63 bytes for display/opening.
+v0.2.0 uses the Supercard SD access path inherited from the base engine. Copy UTF-8 `.txt` or supported `.epub` files to the **root** of the SD card. The browser indexes up to 32 files and retains filenames up to 63 bytes for opening and SRAM resume.
 
 An emulator without the expected Supercard storage interface can validate the ROM header and execute the UI path, but it cannot prove SD/FatFS behavior. Real-hardware verification remains important.
 
@@ -85,6 +90,7 @@ The emulator target only checks for immediate ROM/header or illegal-opcode rejec
 
 - `reader_core`: host-testable UTF-8 decoding, wrapping, pagination and page history
 - `reader_file`: read-only FatFS library scan and 512-byte cached book stream
+- `epub_document`: bounded ZIP/container/OPF/XHTML parser exposed as a virtual concatenated `ByteSource`; one chapter is cached at a time
 - `reader_save`: checksummed, versioned SRAM state
 - `main`: Butano UI, controls and page presentation
 - `superfw_font`: SuperFW software glyph renderer targeting a double-buffered 8-bit bitmap background
@@ -95,10 +101,12 @@ Body text is rendered into a bitmap page rather than creating one GBA sprite per
 
 The project was derived from the exact `gba-vocab-trainer-CC` `v0.2.5` tagged source. Its Supercard/FatFS integration and customized UI-font foundation are retained. SuperFW font-rendering sources and `fonts.pack` are included under `references/superfw/` with their upstream notices.
 
+The tinfl-only miniz files are vendored from commit `77d0dce8627735138c51770d1799a1ef48f2117d`, configured without allocation, compression, zlib, stdio, time or miniz archive APIs. Provenance and its MIT license are in `third_party/miniz/`.
+
 The inherited project and SuperFW components are distributed under the GNU General Public License, version 3 or later. See [`LICENSE`](LICENSE).
 
-## Planned later work
+## Possible later work
 
 - Directory navigation and larger libraries
 - Bookmarks and per-book position records
-- EPUB ingestion after the TXT reader is stable
+- Broader EPUB compatibility within the GBA memory budget
