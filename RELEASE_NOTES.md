@@ -22,7 +22,7 @@ GBA Reader v0.3.0 substantially improves compatibility with real-world UTF-8 EPU
 ## Validation
 
 - Expanded host regression coverage to 61 EPUB test cases across 60 distinct generated fixture files.
-- Tested the parser against five Project Gutenberg EPUBs and 45 packaged EPUB 3 sample books. Of those EPUB 3 samples, 39 text-capable books open successfully; the remaining six are intentionally outside the reader's scope (four image/SVG-only spines, one chapter above the documented 4 MiB limit, and one empty-text sample).
+- Tested the parser against five Project Gutenberg EPUBs and 45 packaged EPUB 3 sample books. Of those EPUB 3 samples, 40 open successfully: 39 yield readable text and one valid empty-text sample yields no output. The remaining five are intentionally outside the reader's scope (four image/SVG-only spines and one chapter above the documented 4 MiB limit).
 
 ## Scope retained
 
