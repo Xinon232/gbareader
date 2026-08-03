@@ -20,6 +20,12 @@ int strcmp(const char* first, const char* second) {
   return (unsigned char)*first - (unsigned char)*second;
 }
 
+char* strcpy(char* destination, const char* source) {
+  char* result = destination;
+  while ((*destination++ = *source++)) {}
+  return result;
+}
+
 void* memchr(const void* data, int c, size_t count) {
   const unsigned char* p = (const unsigned char*)data;
   const unsigned char value = (unsigned char)c;

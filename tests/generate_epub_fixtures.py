@@ -2,6 +2,8 @@
 import sys
 import zipfile
 import struct
+import zlib
+import warnings
 from pathlib import Path
 
 out = Path(sys.argv[1])
@@ -67,6 +69,30 @@ custom("self-closing-suppressed.epub", '<package><manifest><item id="c" href="ch
 custom("entities.epub", '<package><manifest><item id="c" href="chapter.xhtml"/></manifest><spine><itemref idref="c"/></spine></package>', [("OEBPS/chapter.xhtml", "<p>&mdash;&ndash;&hellip;&copy;&lsquo;&rsquo;&ldquo;&rdquo;&reg;&trade;</p>")])
 custom("ignored-asset.epub", '<package><manifest><item id="c" href="chapter.xhtml" media-type="application/xhtml+xml"/><item id="cover" href="cover.bin" media-type="application/octet-stream"/></manifest><spine><itemref idref="c"/></spine></package>', [("OEBPS/chapter.xhtml", "<p>Readable chapter.</p>"), ("OEBPS/cover.bin", bytes(range(256)) * 300)])
 custom("ignored-corrupt-image.epub", '<package><manifest><item id="c" href="chapter.xhtml" media-type="application/xhtml+xml"/><item id="cover" href="cover.JpG" media-type="image/jpeg"/></manifest><spine><itemref idref="cover"/><itemref idref="c"/></spine></package>', [("OEBPS/chapter.xhtml", "<p>Image skipped, text readable.</p>"), ("OEBPS/cover.JpG", b"not displayed")])
+custom("percent-encoded-href.epub", '<package><manifest><item id="c" href="Text/My%20Chapter.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c"/></spine></package>', [("OEBPS/Text/My Chapter.xhtml", "<p>Encoded path readable.</p>")])
+custom("entity-encoded-href.epub", '<package><manifest><item id="c" href="Text/A&amp;B.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c"/></spine></package>', [("OEBPS/Text/A&B.xhtml", "<p>Entity path readable.</p>")])
+
+many_spine_manifest = ''.join(f'<item id="c{index}" href="Text/c{index:03d}.xhtml" media-type="application/xhtml+xml"/>' for index in range(100))
+many_spine_refs = ''.join(f'<itemref idref="c{index}"/>' for index in range(100))
+many_spine_chapters = [(f"OEBPS/Text/c{index:03d}.xhtml", f"<p>Chapter {index:03d}.</p>") for index in range(100)]
+custom("hundred-spine-items.epub", f'<package><manifest>{many_spine_manifest}</manifest><spine>{many_spine_refs}</spine></package>', many_spine_chapters, zipfile.ZIP_DEFLATED)
+multiple_rootfiles = '<container><rootfiles><rootfile full-path="alternate.pdf" media-type="application/pdf"/><rootfile full-path="OEBPS/book.opf" media-type="application/oebps-package+xml"/></rootfiles></container>'
+custom("multiple-rootfiles.epub", '<package><manifest><item id="c" href="chapter.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c"/></spine></package>', [("OEBPS/chapter.xhtml", "<p>Preferred package readable.</p>")], container_xml=multiple_rootfiles)
+custom("required-image-suffix.epub", '<package><manifest><item id="c" href="chapter.svg" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c"/></spine></package>', [("OEBPS/chapter.svg", "<html><body><p>Required suffix text.</p></body></html>")])
+custom("mixed-case-media.epub", '<package><manifest><item id="c" href="chapter.xhtml" media-type="Application/XHTML+XML"/></manifest><spine><itemref idref="c"/></spine></package>', [("OEBPS/chapter.xhtml", "<p>Mixed media readable.</p>")])
+custom("percent-traversal.epub", '<package><manifest><item id="c" href="%2e%2e/%2e%2e/evil.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c"/></spine></package>', [("evil.xhtml", "<p>Unsafe.</p>")])
+long_component = 'a' * 220
+custom("long-internal-path.epub", f'<package><manifest><item id="c" href="{long_component}.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c"/></spine></package>', [(f"OEBPS/{long_component}.xhtml", "<p>Long path readable.</p>")])
+custom("visible-cdata.epub", '<package><manifest><item id="c" href="chapter.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c"/></spine></package>', [("OEBPS/chapter.xhtml", "<html><body><p>Before <![CDATA[A < B & C]]> after</p></body></html>")])
+custom("semantic-blocks.epub", '<package><manifest><item id="c" href="chapter.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c"/></spine></package>', [("OEBPS/chapter.xhtml", "<section>One</section><section>Two</section><dl><dt>Term</dt><dd>Def</dd></dl><table><tr><td>A</td><td>B</td></tr></table><figure>Pic<figcaption>Caption</figcaption></figure>")])
+duplicate_opf = '<package><manifest><item id="c" href="chapter.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c"/></spine></package>'
+with zipfile.ZipFile(out / "duplicate-required-name.epub", "w", compression=zipfile.ZIP_STORED) as z:
+    add(z, "META-INF/container.xml", container)
+    add(z, "OEBPS/book.opf", duplicate_opf)
+    add(z, "OEBPS/chapter.xhtml", "<p>First duplicate.</p>")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        add(z, "OEBPS/chapter.xhtml", "<p>Second duplicate.</p>")
 
 many_opf = '<package><manifest><item id="c" href="chapter.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c"/></spine></package>'
 with zipfile.ZipFile(out / "many-entries.epub", "w", compression=zipfile.ZIP_DEFLATED) as z:
@@ -142,6 +168,28 @@ def local_record(data, central):
     assert data[pos:pos + 4] == b"PK\x03\x04"
     return pos
 
+# Redirect required XHTML to a valid-looking stored local record whose two-byte
+# payload starts one byte before the central directory and overlaps its first
+# signature byte. All redundant sizes and CRCs agree; only the layout is invalid.
+overlap_opf = '<package><manifest><item id="c" href="chapter.xhtml" media-type="application/xhtml+xml"/><item id="cover" href="cover.jpg" media-type="image/jpeg"/></manifest><spine><itemref idref="c"/></spine></package>'
+custom("payload-overlap-base.epub", overlap_opf, [("OEBPS/chapter.xhtml", "old"), ("OEBPS/cover.jpg", b"z" * 256)])
+overlap = bytearray((out / "payload-overlap-base.epub").read_bytes())
+overlap_eocd = overlap.rfind(b"PK\x05\x06")
+overlap_cd = struct.unpack_from("<I", overlap, overlap_eocd + 16)[0]
+overlap_central = central_record(overlap, b"OEBPS/chapter.xhtml")
+overlap_name = b"OEBPS/chapter.xhtml"
+overlap_local = overlap_cd - (30 + len(overlap_name) + 1)
+overlap_payload = b"xP"
+overlap_crc = zlib.crc32(overlap_payload) & 0xFFFFFFFF
+struct.pack_into("<IHHHHHIIIHH", overlap, overlap_local, 0x04034B50, 20, 0, 0, 0, 0, overlap_crc, 2, 2, len(overlap_name), 0)
+overlap[overlap_local + 30:overlap_local + 30 + len(overlap_name)] = overlap_name
+overlap[overlap_cd - 1] = ord("x")
+assert overlap[overlap_cd] == ord("P")
+struct.pack_into("<III", overlap, overlap_central + 16, overlap_crc, 2, 2)
+struct.pack_into("<I", overlap, overlap_central + 42, overlap_local)
+assert overlap[overlap_local + 30 + len(overlap_name):overlap_local + 30 + len(overlap_name) + 2] == overlap_payload
+(out / "payload-overlap.epub").write_bytes(overlap)
+
 ignored_image = bytearray((out / "ignored-corrupt-image.epub").read_bytes())
 ignored_image_central = central_record(ignored_image, b"OEBPS/cover.JpG")
 ignored_image_local = local_record(ignored_image, ignored_image_central)
@@ -179,6 +227,7 @@ def add_last_local_extra(src, dst, target, extra):
 zip64_extra = struct.pack("<HHQ", 0x0001, 8, 0x123456789ABCDEF0)
 add_central_extra("stored.epub", "zip64-central-extra.epub", b"OEBPS/chapter.xhtml", zip64_extra)
 add_last_local_extra("stored.epub", "zip64-local-extra.epub", b"OEBPS/chapter.xhtml", zip64_extra)
+add_last_local_extra("required-image-suffix.epub", "required-image-suffix-zip64.epub", b"OEBPS/chapter.svg", zip64_extra)
 
 for fixture, where in (("zip64-central-extra.epub", "central"), ("zip64-local-extra.epub", "local")):
     check = bytearray((out / fixture).read_bytes())
@@ -256,6 +305,7 @@ def patch_local_u32(src, dst, target, field, transform):
 patch_local_u32("stored.epub", "local-crc-mismatch.epub", b"OEBPS/chapter.xhtml", 14, lambda value: value ^ 0x80000000)
 patch_local_u32("stored.epub", "local-compressed-size-mismatch.epub", b"OEBPS/chapter.xhtml", 18, lambda value: value + 1)
 patch_local_u32("stored.epub", "local-uncompressed-size-mismatch.epub", b"OEBPS/chapter.xhtml", 22, lambda value: value + 1)
+patch_local_u32("required-image-suffix.epub", "required-image-suffix-local-crc.epub", b"OEBPS/chapter.svg", 14, lambda value: value ^ 0x80000000)
 
 def make_descriptor(dst, descriptor_kind):
     data = bytearray((out / "stored.epub").read_bytes())

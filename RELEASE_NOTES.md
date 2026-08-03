@@ -1,33 +1,31 @@
-# GBA Reader v0.2.2 release notes
+# GBA Reader v0.3.0 release notes
 
-GBA Reader v0.2.2 improves compatibility and opening speed for image-heavy,
-text-readable EPUB books.
+GBA Reader v0.3.0 substantially improves compatibility with real-world UTF-8 EPUB 2/3 books while keeping parsing bounded for Game Boy Advance hardware.
 
-## Fixed
+## EPUB compatibility
 
-- Removed the old 128-ZIP-entry rejection that caused valid EPUBs with many
-  images and other assets to fail with “EPUB has too many files”.
-- The ZIP central directory is now validated as a bounded stream. Only the
-  container, package document and readable spine entries are retained for use.
-- Required EPUB files can occur anywhere in central-directory order.
+- Decodes percent-encoded manifest paths such as `My%20Chapter.xhtml` without treating `+` as a space.
+- Decodes XML's predefined entities and numeric character references in `full-path`, `href`, `id`, `idref`, and media-type attributes.
+- Prefers the standard EPUB package rootfile when a container declares multiple renditions.
+- Supports CDATA visible text and adds readable breaks for common semantic XHTML and table elements.
+- Accepts case-insensitive XHTML media types.
+- Raises the readable spine limit from 64 to 256 documents and the internal archive-path limit from 191 to 255 bytes.
+- Stores compact central-directory offsets for spine items instead of full path and ZIP metadata copies, reducing retained spine-index memory while increasing capacity.
 
-## Improved image handling
+## ZIP correctness and safety
 
-- Common image archive members are recognized case-insensitively by extension
-  and skipped before their local headers or compressed payloads are processed.
-- OPF spine entries declared as `image/*` are omitted from the text stream, so
-  an image-only cover or page no longer blocks later readable chapters.
-- Supported skipped extensions include JPG/JPEG, PNG, GIF, WebP, SVG/SVGZ,
-  BMP, AVIF, TIFF, ICO, JXL, HEIC and HEIF.
+- Revalidates local headers, extra fields, redundant CRC/size fields, and data descriptors for every required metadata and spine entry, including entries whose filenames look like image assets.
+- Rejects required payloads that overlap the central directory.
+- Rejects duplicate required ZIP member names instead of selecting an order-dependent copy.
+- Rejects malformed URI escapes, encoded NULs, encoded separators, and traversal introduced through percent decoding.
 
-## Preserved behavior
+## Validation
 
-- TXT and direct text-only EPUB reading remains read-only.
-- Per-book filename-based resume, automatic page saves and manual `R` saves
-  from v0.2.1 remain available.
-- Line spacing and top/bottom margins remain adjustable from 1 through 4.
-- The fixed native 16-pixel SuperFW body font remains unchanged.
-- Arabic, CSS presentation, JavaScript, embedded fonts, audio, video, DRM,
-  ZIP64 and fixed-layout rendering remain unsupported.
+- Expanded host regression coverage to 61 EPUB test cases across 60 distinct generated fixture files.
+- Tested the parser against five Project Gutenberg EPUBs and 45 packaged EPUB 3 sample books. Of those EPUB 3 samples, 39 text-capable books open successfully; the remaining six are intentionally outside the reader's scope (four image/SVG-only spines, one chapter above the documented 4 MiB limit, and one empty-text sample).
 
-The release archive contains only `gbareader.gba`.
+## Scope retained
+
+- EPUB package metadata and XHTML must be UTF-8.
+- Images, SVG presentation, CSS presentation, JavaScript, fonts, media, DRM, ZIP64, and Arabic shaping/bidirectional rendering remain unsupported.
+- Text size remains fixed at the native 16-pixel SuperFW size.

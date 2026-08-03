@@ -2,17 +2,20 @@
 
 A focused plain-text e-reader for the Game Boy Advance, built from the proven SD/FatFS and font foundation of [`gba-vocab-trainer-CC` v0.2.5](https://github.com/Xinon232/gba-vocab-trainer-CC/releases/tag/v0.2.5).
 
-Version 0.2.2 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of `.epub` files directly from a Supercard SD card.
+Version 0.3.0 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of UTF-8 EPUB 2/3 files directly from a Supercard SD card.
 
-## v0.2.2 features
+## v0.3.0 features
 
 - Read-only, case-insensitive `.txt` and `.epub` browser for files in the SD-card root
 - EPUB discovery uses FAT long filenames up to 255 bytes and indexes up to 64 books
 - Buffered FatFS access; books are streamed instead of loaded into GBA RAM
 - Direct EPUB ZIP reading with stored and raw-DEFLATE entries and required-entry CRC-32 verification; nothing is extracted to SD
 - EPUB container, OPF manifest and declared spine-order handling
+- URI percent-decoding and XML entity decoding for container, manifest and spine references
+- Preferred EPUB package selection when `container.xml` declares multiple rootfiles
+- Compact indexing for up to 256 readable spine documents and 255-byte internal archive paths
 - Recognized image archive members are skipped before local-header or payload processing; image-only spine entries are omitted from the text stream
-- XHTML visible-text conversion with block breaks and common XML/HTML entities
+- XHTML visible-text conversion with CDATA, semantic block/table breaks and common XML/HTML entities
 - Word wrapping and CRLF/LF handling
 - Fixed native 16-pixel SuperFW body-font size
 - SuperFW font coverage for supported Latin, Greek, Cyrillic, Japanese, CJK and Hangul text
@@ -28,11 +31,12 @@ Version 0.2.2 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of
 ## Explicit scope
 
 - **Arabic is not supported.** Arabic code points are rendered as `?`; no shaping or bidirectional path is included.
-- **Text size is fixed.** v0.2.2 keeps the native 16-pixel SuperFW bitmap body font.
+- **Text size is fixed.** v0.3.0 keeps the native 16-pixel SuperFW bitmap body font.
 - **This is not full EPUB compliance.** Images are skipped completely, including image-only spine pages. CSS presentation, JavaScript, embedded fonts, audio, video, SVG presentation and DRM are unsupported and ignored or rejected as appropriate. Arabic is unsupported.
 - Books are read-only; the application never rewrites source files or extracts archive members to SD.
 - ZIP64 and multi-disk archives are rejected. Required metadata and spine text must be unencrypted and use stored (0) or DEFLATE (8) compression; unsupported methods or encryption on recognized, ignored image assets do not prevent reading.
-- The ZIP central directory is validated as a stream, so image-heavy EPUBs are not rejected merely for containing more than 128 archive members. Remaining compile-time limits are 64 spine documents, 192-byte archive paths, 64 KiB uncompressed metadata, 4 MiB uncompressed XHTML per spine document, 4 MiB compressed required entry and 64 MiB archive. XHTML text is exposed through a 16 KiB visible-text window rather than a whole-chapter buffer. Ignored images, fonts and other non-spine assets are not subject to the XHTML limit. Exceeding an applicable limit is an error; text is never silently truncated.
+- The ZIP central directory is validated as a stream, so image-heavy EPUBs are not rejected merely for containing more than 128 archive members. Remaining compile-time limits are 256 readable spine documents, 255-byte archive paths, 64 KiB uncompressed metadata, 4 MiB uncompressed XHTML per spine document, 4 MiB compressed required entry and 64 MiB archive. XHTML text is exposed through a 16 KiB visible-text window rather than a whole-chapter buffer. Ignored images, fonts and other non-spine assets are not subject to the XHTML limit. Exceeding an applicable limit is an error; text is never silently truncated.
+- EPUB package metadata and XHTML must be UTF-8. UTF-16 XML/XHTML is outside this release's bounded parser scope.
 
 ## Controls
 
@@ -57,7 +61,7 @@ Version 0.2.2 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of
 
 ## Hardware and files
 
-v0.2.2 uses the Supercard SD access path inherited from the base engine. Copy UTF-8 `.txt` or supported `.epub` files to the **root** of the SD card. The browser indexes up to 64 files and retains filenames up to 255 bytes for opening. SRAM retains independent positions for up to 32 filenames; older v0.1.0/v0.2.0/v0.2.1 saves migrate automatically.
+v0.3.0 uses the Supercard SD access path inherited from the base engine. Copy UTF-8 `.txt` or supported `.epub` files to the **root** of the SD card. The browser indexes up to 64 files and retains filenames up to 255 bytes for opening. SRAM retains independent positions for up to 32 filenames; saves from v0.1.0 through v0.2.2 migrate automatically.
 
 An emulator without the expected Supercard storage interface can validate the ROM header and execute the UI path, but it cannot prove SD/FatFS behavior. Real-hardware verification remains important.
 

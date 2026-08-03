@@ -76,7 +76,7 @@ static void expect_repeated_text(const char* path, unsigned char repeated, uint3
 
 int main(int argc, char** argv)
 {
-    assert(argc == 49);
+    assert(argc == 62);
     expect_text(argv[1], "Stored chapter.\n");
     expect_text(argv[2], "Deflated chapter.\n");
     expect_text(argv[3], "Second\nA & < > \" '  A A ?\nItem\nFirst file.\n");
@@ -151,6 +151,31 @@ int main(int argc, char** argv)
     assert(boundary_book.byte_at(16370, value) && value == 't');
     assert(boundary_book.byte_at(16374, value) && value == '\n');
     expect_error(argv[48], EpubError::MALFORMED_ZIP);
+    expect_text(argv[49], "Encoded path readable.\n");
+    expect_text(argv[50], "Entity path readable.\n");
+    FileSource many_spine_archive(argv[51]); EpubDocument many_spine_book;
+    assert(many_spine_book.open(many_spine_archive));
+    assert(many_spine_book.size() == 1300);
+    for(uint32_t chapter = 0; chapter < 100; ++chapter) {
+        unsigned char digit = 0;
+        assert(many_spine_book.byte_at(chapter * 13 + 8, digit));
+        assert(digit == static_cast<unsigned char>('0' + chapter / 100));
+        assert(many_spine_book.byte_at(chapter * 13 + 9, digit));
+        assert(digit == static_cast<unsigned char>('0' + (chapter / 10) % 10));
+        assert(many_spine_book.byte_at(chapter * 13 + 10, digit));
+        assert(digit == static_cast<unsigned char>('0' + chapter % 10));
+        assert(many_spine_book.byte_at(chapter * 13 + 12, digit) && digit == '\n');
+    }
+    expect_text(argv[52], "Preferred package readable.\n");
+    expect_error(argv[53], EpubError::ZIP64);
+    expect_error(argv[54], EpubError::MALFORMED_ZIP);
+    expect_text(argv[55], "Mixed media readable.\n");
+    expect_error(argv[56], EpubError::UNSAFE_PATH);
+    expect_text(argv[57], "Long path readable.\n");
+    expect_text(argv[58], "Before A < B & C after\n");
+    expect_text(argv[59], "One\nTwo\nTerm\nDef\nA B\nPic\nCaption\n");
+    expect_error(argv[60], EpubError::MALFORMED_ZIP);
+    expect_error(argv[61], EpubError::MALFORMED_ZIP);
 
     FailingSource failed(ordered, ordered.size() - 10); EpubDocument failed_book;
     assert(! failed_book.open(failed)); assert(failed_book.error() == EpubError::READ_FAILED);

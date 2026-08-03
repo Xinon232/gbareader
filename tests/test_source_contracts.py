@@ -6,6 +6,7 @@ main = (root / "src/main.cpp").read_text(encoding="utf-8")
 core = (root / "src/reader_core.cpp").read_text(encoding="utf-8")
 header = (root / "include/reader_core.h").read_text(encoding="utf-8")
 file_source = (root / "src/reader_file.cpp").read_text(encoding="utf-8")
+string_shims = (root / "src/string_shims.c").read_text(encoding="utf-8")
 ffconf = (root / "include/ffconf.h").read_text(encoding="utf-8")
 epub_header = (root / "include/epub_document.h").read_text(encoding="utf-8")
 makefile = (root / "Makefile").read_text(encoding="utf-8")
@@ -22,6 +23,7 @@ assert "LIBRARY_VISIBLE_ROWS" in main
 assert "LIBRARY_DISPLAY_CHARACTERS" in main
 assert "LIBRARY_WORST_CASE_SPRITES < 128" in main
 assert "offset - _cache_start >= uint32_t(_cache_size)" in file_source
+assert "char* strcpy(char* destination, const char* source)" in string_shims
 assert file_source.index("_cache_size = 0;") < file_source.index("f_lseek(&_file, _cache_start)")
 assert "#define FF_FS_READONLY\t1" in ffconf
 assert "#define FF_MAX_LFN\t\t255" in ffconf
@@ -31,12 +33,13 @@ assert "BN_DATA_EWRAM_BSS reader::SaveData save_data;" in main
 assert "bn::keypad::r_pressed()" in main
 assert "find_saved_position(save_data, open_name, offset)" in main
 assert "update_saved_position(save_data, filename, page.start_offset)" in main
-assert "GBA Reader v0.2.2" in main
-assert "GBA Reader v0.2.2" in makefile
+assert "GBA Reader v0.3.0" in main
+assert "GBA Reader v0.3.0" in makefile
 assert "EPUB_MAX_ZIP_ENTRIES" not in epub_header
 assert "TOO_MANY_ENTRIES" not in epub_header
 assert "uint32_t _central_offset" in epub_header
-assert "EPUB_MAX_SPINE_ITEMS = 64" in epub_header
+assert "EPUB_MAX_SPINE_ITEMS = 256" in epub_header
+assert "struct SpineItem { uint32_t central_offset;" in epub_header
 assert "EPUB_TEXT_WINDOW_BYTES = 16 * 1024" in epub_header
 assert "EPUB_MAX_XHTML_BYTES = 4 * 1024 * 1024" in epub_header
 assert "idrefs[EPUB_MAX_SPINE_ITEMS]" not in (root / "src/epub_document.cpp").read_text()

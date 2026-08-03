@@ -6,6 +6,10 @@ OUT="$(mktemp -d "${TMPDIR:-/tmp}/gbareader-tests-XXXXXX")"
 trap 'rm -rf "$OUT"' EXIT
 
 CXXFLAGS=(-std=c++17 -Wall -Wextra -Werror -I"$ROOT/include")
+if [[ -n "${EXTRA_CXXFLAGS:-}" ]]; then
+    read -r -a EXTRA_CXXFLAGS_ARRAY <<< "$EXTRA_CXXFLAGS"
+    CXXFLAGS+=("${EXTRA_CXXFLAGS_ARRAY[@]}")
+fi
 
 g++ "${CXXFLAGS[@]}" \
     "$ROOT/tests/test_reader_core.cpp" "$ROOT/src/reader_core.cpp" \
@@ -52,6 +56,16 @@ g++ "${CXXFLAGS[@]}" \
     "$OUT/fixtures/descriptor-bad-compressed-size.epub" "$OUT/fixtures/descriptor-truncated.epub" \
     "$OUT/fixtures/many-entries.epub" "$OUT/fixtures/ignored-corrupt-image.epub" \
     "$OUT/fixtures/window-cross.epub" "$OUT/fixtures/stream-boundaries.epub" \
-    "$OUT/fixtures/window-crc-mismatch.epub"
+    "$OUT/fixtures/window-crc-mismatch.epub" \
+    "$OUT/fixtures/percent-encoded-href.epub" \
+    "$OUT/fixtures/entity-encoded-href.epub" \
+    "$OUT/fixtures/hundred-spine-items.epub" \
+    "$OUT/fixtures/multiple-rootfiles.epub" \
+    "$OUT/fixtures/required-image-suffix-zip64.epub" \
+    "$OUT/fixtures/required-image-suffix-local-crc.epub" \
+    "$OUT/fixtures/mixed-case-media.epub" "$OUT/fixtures/percent-traversal.epub" \
+    "$OUT/fixtures/long-internal-path.epub" "$OUT/fixtures/visible-cdata.epub" \
+    "$OUT/fixtures/semantic-blocks.epub" "$OUT/fixtures/payload-overlap.epub" \
+    "$OUT/fixtures/duplicate-required-name.epub"
 
 python3 "$ROOT/tests/test_source_contracts.py"

@@ -7,8 +7,8 @@
 
 namespace reader {
 
-constexpr int EPUB_MAX_SPINE_ITEMS = 64;
-constexpr int EPUB_MAX_PATH = 192;
+constexpr int EPUB_MAX_SPINE_ITEMS = 256;
+constexpr int EPUB_MAX_PATH = 256;
 constexpr uint32_t EPUB_TEXT_WINDOW_BYTES = 16 * 1024;
 constexpr uint32_t EPUB_INFLATE_DICTIONARY_BYTES = 32 * 1024;
 constexpr uint32_t EPUB_MAX_XHTML_BYTES = 4 * 1024 * 1024;
@@ -40,18 +40,21 @@ private:
         uint32_t compressed_size;
         uint32_t uncompressed_size;
         uint32_t local_offset;
+        uint32_t central_offset;
         uint32_t crc32;
         uint16_t method;
         uint16_t flags;
         uint16_t name_length;
     };
-    struct SpineItem { ZipEntry entry; uint32_t start; uint32_t size; };
+    struct SpineItem { uint32_t central_offset; uint32_t start; uint32_t size; };
 
     bool parse_zip();
     bool build_spine();
     bool load_entry(const ZipEntry& entry, uint32_t uncompressed_limit) const;
     bool stream_chapter(int spine_index, uint32_t window_start, bool count_only) const;
     int find_entry(const char* name, ZipEntry& entry) const;
+    bool read_entry(uint32_t central_offset, ZipEntry& entry) const;
+    bool validate_local_entry(const ZipEntry& entry, uint32_t& data_offset) const;
     bool fail(EpubError error) const;
 
     const ByteSource* _archive;
