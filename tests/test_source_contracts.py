@@ -23,8 +23,14 @@ assert "LIBRARY_WORST_CASE_SPRITES < 128" in main
 assert "offset - _cache_start >= uint32_t(_cache_size)" in file_source
 assert file_source.index("_cache_size = 0;") < file_source.index("f_lseek(&_file, _cache_start)")
 assert "#define FF_FS_READONLY\t1" in ffconf
+assert "#define FF_MAX_LFN\t\t255" in ffconf
+assert "#define FF_LFN_BUF\t\t255" in ffconf
 assert "BN_DATA_EWRAM_BSS reader::EpubDocument epub;" in main
-assert "GBA Reader v0.2.0" in main
+assert "BN_DATA_EWRAM_BSS reader::SaveData save_data;" in main
+assert "bn::keypad::r_pressed()" in main
+assert "find_saved_position(save_data, open_name, offset)" in main
+assert "update_saved_position(save_data, filename, page.start_offset)" in main
+assert "GBA Reader v0.2.1" in main
 assert "EPUB_MAX_ZIP_ENTRIES = 128" in epub_header
 assert "EPUB_MAX_SPINE_ITEMS = 64" in epub_header
 assert "EPUB_MAX_CHAPTER_BYTES = 64 * 1024" in epub_header

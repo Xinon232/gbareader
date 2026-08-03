@@ -8,10 +8,10 @@ namespace reader {
 constexpr int SCREEN_WIDTH = 240;
 constexpr int BODY_SIDE_MARGIN = 8;
 constexpr int FONT_HEIGHT = 16;
-constexpr int MIN_LINE_SPACING = 0;
-constexpr int MAX_LINE_SPACING = 6;
-constexpr int MIN_MARGIN = 0;
-constexpr int MAX_MARGIN = 32;
+constexpr int MIN_LINE_SPACING = 1;
+constexpr int MAX_LINE_SPACING = 4;
+constexpr int MIN_MARGIN = 1;
+constexpr int MAX_MARGIN = 4;
 constexpr int PAGE_MAX_LINES = 10;
 constexpr int PAGE_LINE_BYTES = 256;
 constexpr int PAGE_HISTORY_MAX = 64;

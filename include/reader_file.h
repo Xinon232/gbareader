@@ -10,8 +10,8 @@
 
 namespace reader {
 
-constexpr int LIBRARY_MAX_FILES = 32;
-constexpr int LIBRARY_NAME_MAX = 64;
+constexpr int LIBRARY_MAX_FILES = 64;
+constexpr int LIBRARY_NAME_MAX = 256;
 
 bool storage_init();
 int library_count();

@@ -1,16 +1,20 @@
-# GBA Reader v0.2.0 release notes
+# GBA Reader v0.2.1 release notes
 
-GBA Reader v0.2.0 adds direct, read-only, text-only EPUB reading from the
-Supercard SD root while preserving v0.1.0 TXT reading, pagination, controls,
-font/settings and SRAM byte-offset resume.
+GBA Reader v0.2.1 fixes EPUB discovery in the SD-root library and expands FAT
+long-filename handling to 255 bytes. The library now indexes up to 64 `.txt` and
+`.epub` books while keeping only four rows visible at once to remain within the
+GBA sprite limit.
 
-Supported EPUBs are ZIP files using stored or raw-DEFLATE members with CRC-32
-integrity checks for required metadata and spine members, and a
-`META-INF/container.xml`, an OPF manifest/spine, and bounded XHTML/HTML spine
-documents. Reading order follows the OPF spine. Common block elements and
-entities are converted to visible UTF-8 text.
+Reading positions are now stored independently for up to 32 filenames. Position
+changes are saved automatically when a book opens, a page changes, settings
+change or the reader closes. Pressing `R` performs a manual save. Existing
+v0.1.0/v0.2.0 SRAM state migrates automatically.
 
-This release does not claim full EPUB compliance. ZIP64, multi-disk archives,
-encryption/DRM, other compression methods, Arabic, images, CSS presentation,
-JavaScript, embedded fonts, audio, video and SVG are unsupported. See README
-for the compile-time limits.
+Line spacing, top margin and bottom margin now each use a clear 1–4 range. Runs
+of three or more ordinary spaces collapse to one space, and repeated CR/LF line
+breaks collapse to a single line break.
+
+Direct text-only EPUB support from v0.2.0 remains bounded and read-only. ZIP64,
+multi-disk archives, encryption/DRM, unsupported compression, Arabic, images,
+CSS presentation, JavaScript, embedded fonts, audio, video and SVG remain
+unsupported. See README for complete limits and compatibility details.

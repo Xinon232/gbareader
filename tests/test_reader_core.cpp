@@ -39,10 +39,11 @@ static void test_bom_crlf_paragraphs_and_wrap()
     Page page{};
     assert(layout_page(source, 0, settings, mono_width, page));
     assert(page.start_offset == 3);                 // BOM is not rendered.
-    assert(page.line_count >= 4);
+    assert(page.line_count >= 3);
     assert(std::strcmp(page.lines[0].text, "One two three") == 0);
-    assert(page.lines[1].paragraph_break);          // empty physical line preserved.
-    assert(std::strcmp(page.lines[2].text, "pneumonoultramicroscopicsilicovolcanoconiosis") != 0);
+    assert(! page.lines[1].paragraph_break);         // repeated newlines are collapsed.
+    assert(std::strncmp(page.lines[1].text, "pneumono", 8) == 0);
+    assert(std::strcmp(page.lines[1].text, "pneumonoultramicroscopicsilicovolcanoconiosis") != 0);
     assert(page.next_offset > page.start_offset);
 }
 
@@ -66,6 +67,18 @@ static void test_arabic_is_not_supported()
 
 static void test_settings_bounds_and_pagination_checkpoints()
 {
+    static_assert(MIN_LINE_SPACING == 1 && MAX_LINE_SPACING == 4);
+    static_assert(MIN_MARGIN == 1 && MAX_MARGIN == 4);
+    Settings defaults = default_settings();
+    assert(defaults.line_spacing >= 1 && defaults.line_spacing <= 4);
+    assert(defaults.top_margin >= 1 && defaults.top_margin <= 4);
+    assert(defaults.bottom_margin >= 1 && defaults.bottom_margin <= 4);
+    Settings invalid = { 0, 255, 0 };
+    clamp_settings(invalid);
+    assert(invalid.line_spacing == 1);
+    assert(invalid.top_margin == 4);
+    assert(invalid.bottom_margin == 1);
+
     Settings s = default_settings();
     for(int i = 0; i < 100; ++i) adjust_setting(s, SettingField::LINE_SPACING, -1);
     assert(s.line_spacing == MIN_LINE_SPACING);
@@ -94,6 +107,21 @@ static void test_settings_bounds_and_pagination_checkpoints()
 
     assert(previous_page(source, s, mono_width, history, back));
     assert(back.start_offset == first.start_offset);
+}
+
+static void test_excess_whitespace_is_collapsed()
+{
+    const unsigned char text[] = "One  two   three      four\n\n\nFive\r\n\r\nSix";
+    MemorySource source(text, sizeof(text) - 1);
+    Page page{};
+    assert(layout_page(source, 0, default_settings(), mono_width, page));
+    assert(page.line_count == 3);
+    assert(std::strcmp(page.lines[0].text, "One  two three four") == 0);
+    assert(std::strcmp(page.lines[1].text, "Five") == 0);
+    assert(std::strcmp(page.lines[2].text, "Six") == 0);
+    assert(! page.lines[0].paragraph_break);
+    assert(! page.lines[1].paragraph_break);
+    assert(! page.lines[2].paragraph_break);
 }
 
 static void test_source_read_failures_are_reported()
@@ -142,6 +170,7 @@ int main()
     test_invalid_utf8_fallback();
     test_arabic_is_not_supported();
     test_settings_bounds_and_pagination_checkpoints();
+    test_excess_whitespace_is_collapsed();
     test_source_read_failures_are_reported();
     std::puts("PASS: reader core");
 }

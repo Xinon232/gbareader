@@ -1,4 +1,4 @@
-// GBA Reader v0.2.0 -- read-only Supercard SD TXT/EPUB reader.
+// GBA Reader v0.2.1 -- read-only Supercard SD TXT/EPUB reader.
 
 #include "bn_bg_palette_item.h"
 #include "bn_core.h"
@@ -37,13 +37,13 @@ BN_DATA_EWRAM_BSS reader::ReaderFile file;
 BN_DATA_EWRAM_BSS reader::EpubDocument epub;
 BN_DATA_EWRAM_BSS reader::Page page;
 BN_DATA_EWRAM_BSS reader::PageHistory history;
-reader::SaveData save_data;
+BN_DATA_EWRAM_BSS reader::SaveData save_data;
 
 constexpr int UI_SPRITE_CAPACITY = 127;
 constexpr int LIBRARY_VISIBLE_ROWS = 4;
 constexpr int LIBRARY_DISPLAY_CHARACTERS = 15;
 constexpr int LIBRARY_WORST_CASE_SPRITES =
-        int(sizeof("GBA Reader v0.2.0") - 1) +
+        int(sizeof("GBA Reader v0.2.1") - 1) +
         LIBRARY_VISIBLE_ROWS * (2 + LIBRARY_DISPLAY_CHARACTERS) +
         int(sizeof("UP/DOWN select   A open") - 1);
 static_assert(UI_SPRITE_CAPACITY <= 128);
@@ -86,14 +86,14 @@ void draw_page(bn::palette_bitmap_bg_painter& painter)
 
 void persist_position(const char* filename)
 {
-    save_data.byte_offset = page.start_offset;
+    reader::update_saved_position(save_data, filename, page.start_offset);
     if(filename) {
         int index = 0;
         while(filename[index] && index < reader::SAVE_FILENAME_MAX - 1) {
-            save_data.filename[index] = filename[index];
+            save_data.last_filename[index] = filename[index];
             ++index;
         }
-        save_data.filename[index] = 0;
+        save_data.last_filename[index] = 0;
     }
     reader::store_save(save_data);
 }
@@ -180,7 +180,7 @@ int main()
     const char* library_status = nullptr;
 
     for(int i = 0; i < reader::library_count(); ++i) {
-        if(text_equal(reader::library_name(i), save_data.filename)) selected = i;
+        if(text_equal(reader::library_name(i), save_data.last_filename)) selected = i;
     }
 
     while(true) {
@@ -199,7 +199,8 @@ int main()
                     if(epub.open(file)) active_source = &epub;
                     else library_status = reader::epub_error_string(epub.error());
                 }
-                uint32_t offset = text_equal(open_name, save_data.filename) ? save_data.byte_offset : 0;
+                uint32_t offset = 0;
+                reader::find_saved_position(save_data, open_name, offset);
                 bool page_open = ! library_status && reader::open_page_at(
                         *active_source, offset, save_data.settings, glyph_width, history, page);
                 if(! page_open && ! library_status)
@@ -230,6 +231,8 @@ int main()
                 page = next; redraw_page = true; persist_position(open_name);
             } else if(bn::keypad::start_pressed()) {
                 scene = Scene::SETTINGS; redraw_ui = true;
+            } else if(bn::keypad::r_pressed()) {
+                persist_position(open_name);
             } else if(bn::keypad::select_pressed()) {
                 persist_position(open_name); epub.close(); file.close(); open_name = nullptr;
                 scene = Scene::LIBRARY; redraw_ui = true;
@@ -246,8 +249,7 @@ int main()
             if(delta) {
                 reader::adjust_setting(save_data.settings, reader::SettingField(settings_row), delta);
                 reader::layout_page(*active_source, page.start_offset, save_data.settings, glyph_width, page);
-                save_data.byte_offset = page.start_offset;
-                reader::store_save(save_data);
+                persist_position(open_name);
                 redraw_ui = true;
             }
             if(bn::keypad::b_pressed() || bn::keypad::start_pressed()) {
@@ -264,7 +266,7 @@ int main()
             sprites.clear();
             ui.set_center_alignment();
             if(scene == Scene::LIBRARY) {
-                add_text(ui, 0, -68, "GBA Reader v0.2.0", sprites);
+                add_text(ui, 0, -68, "GBA Reader v0.2.1", sprites);
                 if(! storage_ok) add_text(ui, 0, -48, "Supercard SD not ready", sprites);
                 else if(! reader::library_count()) add_text(ui, 0, -48, "No TXT/EPUB in root", sprites);
                 else if(library_status) add_text(ui, 0, -48, library_status, sprites);

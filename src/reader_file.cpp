@@ -12,6 +12,9 @@ extern "C" {
 
 namespace reader {
 namespace {
+#ifdef __DEVKITARM__
+__attribute__((section(".sbss")))
+#endif
 char names[LIBRARY_MAX_FILES][LIBRARY_NAME_MAX];
 int name_count;
 #ifdef __DEVKITARM__

@@ -4,24 +4,26 @@
 
 namespace reader {
 
-Settings default_settings() { return { 2, 8, 8 }; }
+Settings default_settings() { return { 2, 2, 2 }; }
 
 void clamp_settings(Settings& s)
 {
+    if(s.line_spacing < MIN_LINE_SPACING) s.line_spacing = MIN_LINE_SPACING;
     if(s.line_spacing > MAX_LINE_SPACING) s.line_spacing = MAX_LINE_SPACING;
+    if(s.top_margin < MIN_MARGIN) s.top_margin = MIN_MARGIN;
     if(s.top_margin > MAX_MARGIN) s.top_margin = MAX_MARGIN;
+    if(s.bottom_margin < MIN_MARGIN) s.bottom_margin = MIN_MARGIN;
     if(s.bottom_margin > MAX_MARGIN) s.bottom_margin = MAX_MARGIN;
 }
 
 void adjust_setting(Settings& s, SettingField field, int delta)
 {
-    int* unused = nullptr;
-    (void) unused;
     uint8_t* value = field == SettingField::LINE_SPACING ? &s.line_spacing :
                      field == SettingField::TOP_MARGIN ? &s.top_margin : &s.bottom_margin;
-    int maximum = field == SettingField::LINE_SPACING ? MAX_LINE_SPACING : MAX_MARGIN;
+    int maximum = MAX_LINE_SPACING;
+    int minimum = MIN_LINE_SPACING;
     int result = int(*value) + delta;
-    if(result < 0) result = 0;
+    if(result < minimum) result = minimum;
     if(result > maximum) result = maximum;
     *value = uint8_t(result);
 }
@@ -98,17 +100,41 @@ static bool make_line(const ByteSource& source, uint32_t& cursor, GlyphWidth wid
         unsigned char raw = 0;
         if(! source.byte_at(cursor, raw)) { source_ok = false; return false; }
         if(raw == '\r' || raw == '\n') {
-            cursor++;
-            if(raw == '\r') {
-                unsigned char lf = 0;
-                if(cursor < source.size() && ! source.byte_at(cursor, lf)) {
-                    source_ok = false;
-                    return false;
+            do {
+                const unsigned char newline = raw;
+                ++cursor;
+                if(newline == '\r' && cursor < source.size()) {
+                    unsigned char lf = 0;
+                    if(! source.byte_at(cursor, lf)) { source_ok = false; return false; }
+                    if(lf == '\n') ++cursor;
                 }
-                if(cursor < source.size() && lf == '\n') cursor++;
-            }
-            line.paragraph_break = out == 0;
+                if(cursor >= source.size()) break;
+                if(! source.byte_at(cursor, raw)) { source_ok = false; return false; }
+            } while(raw == '\r' || raw == '\n');
+            line.paragraph_break = false;
             break;
+        }
+        if(raw == ' ') {
+            uint32_t run_end = cursor + 1;
+            unsigned char next = 0;
+            while(run_end < source.size()) {
+                if(! source.byte_at(run_end, next)) { source_ok = false; return false; }
+                if(next != ' ') break;
+                ++run_end;
+            }
+            if(run_end - cursor >= 3) {
+                cursor = run_end;
+                if(out == 0 || line.text[out - 1] == ' ') continue;
+                int space_width = width_fn ? width_fn(' ') : 8;
+                if(space_width < 1) space_width = 8;
+                if(width + space_width > max_width) break;
+                if(out + 1 >= PAGE_LINE_BYTES) break;
+                line.text[out++] = ' ';
+                width += space_width;
+                last_space_out = out - 1;
+                last_space_next = cursor;
+                continue;
+            }
         }
         Decoded d = decode(source, cursor);
         if(! d.source_ok) { source_ok = false; return false; }

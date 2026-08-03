@@ -2,11 +2,12 @@
 
 A focused plain-text e-reader for the Game Boy Advance, built from the proven SD/FatFS and font foundation of [`gba-vocab-trainer-CC` v0.2.5](https://github.com/Xinon232/gba-vocab-trainer-CC/releases/tag/v0.2.5).
 
-Version 0.2.0 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of `.epub` files directly from a Supercard SD card.
+Version 0.2.1 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of `.epub` files directly from a Supercard SD card.
 
-## v0.2.0 features
+## v0.2.1 features
 
 - Read-only, case-insensitive `.txt` and `.epub` browser for files in the SD-card root
+- EPUB discovery uses FAT long filenames up to 255 bytes and indexes up to 64 books
 - Buffered FatFS access; books are streamed instead of loaded into GBA RAM
 - Direct EPUB ZIP reading with stored and raw-DEFLATE entries and required-entry CRC-32 verification; nothing is extracted to SD
 - EPUB container, OPF manifest and declared spine-order handling
@@ -15,16 +16,18 @@ Version 0.2.0 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of
 - Fixed native 16-pixel SuperFW body-font size
 - SuperFW font coverage for supported Latin, Greek, Cyrillic, Japanese, CJK and Hangul text
 - Dedicated `gba-vocab-trainer-CC` UI font for menus
-- Adjustable line spacing, top margin and bottom margin
+- Line spacing, top margin and bottom margin settings, each adjustable from 1 through 4
 - Page-forward and page-back history
-- SRAM persistence for settings, last book and source byte offset
+- Checksummed SRAM persistence for settings and independent positions for up to 32 filenames
+- Automatic position saves when a book opens, a page changes, settings change or the reader closes; `R` saves manually
+- Runs of three or more spaces collapse to one space, and repeated newlines collapse to one line break
 - UTF-8 BOM handling and safe replacement of malformed or unsupported input
 - White reading page with black text
 
 ## Explicit scope
 
 - **Arabic is not supported.** Arabic code points are rendered as `?`; no shaping or bidirectional path is included.
-- **Text size is fixed.** v0.2.0 keeps the native 16-pixel SuperFW bitmap body font.
+- **Text size is fixed.** v0.2.1 keeps the native 16-pixel SuperFW bitmap body font.
 - **This is not full EPUB compliance.** Images, CSS presentation, JavaScript, embedded fonts, audio, video, SVG and DRM are unsupported and ignored or rejected as appropriate. Arabic is unsupported.
 - Books are read-only; the application never rewrites source files or extracts archive members to SD.
 - ZIP64, multi-disk and encrypted archives are rejected. Required metadata and spine text must use stored (0) or DEFLATE (8) compression; unsupported methods on ignored assets do not prevent reading.
@@ -42,6 +45,7 @@ Version 0.2.0 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of
 - `Right` or `A`: next page
 - `Left` or `B`: previous page
 - `Start`: settings
+- `R`: save the current position manually
 - `Select`: return to library
 
 ### Settings
@@ -52,7 +56,7 @@ Version 0.2.0 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of
 
 ## Hardware and files
 
-v0.2.0 uses the Supercard SD access path inherited from the base engine. Copy UTF-8 `.txt` or supported `.epub` files to the **root** of the SD card. The browser indexes up to 32 files and retains filenames up to 63 bytes for opening and SRAM resume.
+v0.2.1 uses the Supercard SD access path inherited from the base engine. Copy UTF-8 `.txt` or supported `.epub` files to the **root** of the SD card. The browser indexes up to 64 files and retains filenames up to 255 bytes for opening. SRAM retains independent positions for up to 32 filenames; older v0.1.0/v0.2.0 saves migrate automatically.
 
 An emulator without the expected Supercard storage interface can validate the ROM header and execute the UI path, but it cannot prove SD/FatFS behavior. Real-hardware verification remains important.
 
