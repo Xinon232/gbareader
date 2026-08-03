@@ -31,7 +31,9 @@ assert "bn::keypad::r_pressed()" in main
 assert "find_saved_position(save_data, open_name, offset)" in main
 assert "update_saved_position(save_data, filename, page.start_offset)" in main
 assert "GBA Reader v0.2.1" in main
-assert "EPUB_MAX_ZIP_ENTRIES = 128" in epub_header
+assert "EPUB_MAX_ZIP_ENTRIES" not in epub_header
+assert "TOO_MANY_ENTRIES" not in epub_header
+assert "uint32_t _central_offset" in epub_header
 assert "EPUB_MAX_SPINE_ITEMS = 64" in epub_header
 assert "EPUB_MAX_CHAPTER_BYTES = 64 * 1024" in epub_header
 assert "idrefs[EPUB_MAX_SPINE_ITEMS]" not in (root / "src/epub_document.cpp").read_text()

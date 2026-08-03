@@ -7,7 +7,6 @@
 
 namespace reader {
 
-constexpr int EPUB_MAX_ZIP_ENTRIES = 128;
 constexpr int EPUB_MAX_SPINE_ITEMS = 64;
 constexpr int EPUB_MAX_PATH = 192;
 constexpr uint32_t EPUB_MAX_CHAPTER_BYTES = 64 * 1024;
@@ -17,7 +16,7 @@ constexpr uint32_t EPUB_MAX_ARCHIVE_BYTES = 64 * 1024 * 1024;
 
 enum class EpubError : uint8_t {
     NONE, READ_FAILED, NOT_ZIP, MULTI_DISK, ZIP64, ENCRYPTED,
-    UNSUPPORTED_COMPRESSION, MALFORMED_ZIP, TOO_MANY_ENTRIES, TOO_LARGE,
+    UNSUPPORTED_COMPRESSION, MALFORMED_ZIP, TOO_LARGE,
     MISSING_CONTAINER, MISSING_ROOTFILE, MISSING_MANIFEST_ITEM, MISSING_SPINE,
     UNSAFE_PATH, INVALID_XHTML
 };
@@ -44,18 +43,19 @@ private:
         uint16_t flags;
         uint16_t name_length;
     };
-    struct SpineItem { uint16_t entry; uint32_t start; uint32_t size; };
+    struct SpineItem { ZipEntry entry; uint32_t start; uint32_t size; };
 
     bool parse_zip();
     bool build_spine();
-    bool load_entry(int index, uint32_t uncompressed_limit) const;
+    bool load_entry(const ZipEntry& entry, uint32_t uncompressed_limit) const;
     bool load_chapter(int spine_index) const;
-    int find_entry(const char* name) const;
+    int find_entry(const char* name, ZipEntry& entry) const;
     bool fail(EpubError error) const;
 
     const ByteSource* _archive;
-    ZipEntry _entries[EPUB_MAX_ZIP_ENTRIES];
     SpineItem _spine[EPUB_MAX_SPINE_ITEMS];
+    uint32_t _central_offset;
+    uint32_t _central_size;
     int _entry_count;
     int _spine_count;
     uint32_t _virtual_size;

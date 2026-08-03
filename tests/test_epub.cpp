@@ -60,7 +60,7 @@ static void expect_error(const char* path, EpubError expected)
 
 int main(int argc, char** argv)
 {
-    assert(argc == 44);
+    assert(argc == 45);
     expect_text(argv[1], "Stored chapter.\n");
     expect_text(argv[2], "Deflated chapter.\n");
     expect_text(argv[3], "Second\nA & < > \" '  A A ?\nItem\nFirst file.\n");
@@ -113,6 +113,7 @@ int main(int argc, char** argv)
     expect_error(argv[41], EpubError::MALFORMED_ZIP);
     expect_error(argv[42], EpubError::MALFORMED_ZIP);
     expect_error(argv[43], EpubError::MALFORMED_ZIP);
+    expect_text(argv[44], "Many assets, readable text.\n");
 
     FailingSource failed(ordered, ordered.size() - 10); EpubDocument failed_book;
     assert(! failed_book.open(failed)); assert(failed_book.error() == EpubError::READ_FAILED);

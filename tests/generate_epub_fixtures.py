@@ -58,6 +58,16 @@ custom("self-closing-suppressed.epub", '<package><manifest><item id="c" href="ch
 custom("entities.epub", '<package><manifest><item id="c" href="chapter.xhtml"/></manifest><spine><itemref idref="c"/></spine></package>', [("OEBPS/chapter.xhtml", "<p>&mdash;&ndash;&hellip;&copy;&lsquo;&rsquo;&ldquo;&rdquo;&reg;&trade;</p>")])
 custom("ignored-asset.epub", '<package><manifest><item id="c" href="chapter.xhtml" media-type="application/xhtml+xml"/><item id="cover" href="cover.bin" media-type="application/octet-stream"/></manifest><spine><itemref idref="c"/></spine></package>', [("OEBPS/chapter.xhtml", "<p>Readable chapter.</p>"), ("OEBPS/cover.bin", bytes(range(256)) * 300)])
 
+many_opf = '<package><manifest><item id="c" href="chapter.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c"/></spine></package>'
+with zipfile.ZipFile(out / "many-entries.epub", "w", compression=zipfile.ZIP_DEFLATED) as z:
+    for index in range(150):
+        add(z, f"OEBPS/assets/prefix-{index:03d}.bin", bytes((index & 0xFF,)))
+    add(z, "META-INF/container.xml", container)
+    add(z, "OEBPS/book.opf", many_opf)
+    add(z, "OEBPS/chapter.xhtml", "<html><body><p>Many assets, readable text.</p></body></html>")
+    for index in range(150):
+        add(z, f"OEBPS/assets/suffix-{index:03d}.bin", bytes((index & 0xFF,)))
+
 scoped_opf = '''<package>
 <itemref idref="outside"/><item id="c" href="wrong.xhtml"/>
 <manifest><!-- </manifest><item id="c" href="comment.xhtml"/> --><item data-id="wrong" id="c" href="right.xhtml"/><item id="two" href="two.xhtml"/></manifest>

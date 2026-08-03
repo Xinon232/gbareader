@@ -31,7 +31,7 @@ Version 0.2.1 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of
 - **This is not full EPUB compliance.** Images, CSS presentation, JavaScript, embedded fonts, audio, video, SVG and DRM are unsupported and ignored or rejected as appropriate. Arabic is unsupported.
 - Books are read-only; the application never rewrites source files or extracts archive members to SD.
 - ZIP64, multi-disk and encrypted archives are rejected. Required metadata and spine text must use stored (0) or DEFLATE (8) compression; unsupported methods on ignored assets do not prevent reading.
-- Compile-time limits: 128 ZIP entries, 64 spine documents, 192-byte archive paths, 64 KiB uncompressed input/visible text per required chapter or metadata file, 4 MiB compressed required entry and 64 MiB archive. Ignored images, fonts and other non-spine assets are not subject to the 64 KiB text-buffer limit. Exceeding an applicable limit is an error; text is never silently truncated.
+- The ZIP central directory is validated as a stream, so image-heavy EPUBs are not rejected merely for containing more than 128 archive members. Remaining compile-time limits are 64 spine documents, 192-byte archive paths, 64 KiB uncompressed input/visible text per required chapter or metadata file, 4 MiB compressed required entry and 64 MiB archive. Ignored images, fonts and other non-spine assets are not subject to the 64 KiB text-buffer limit. Exceeding an applicable limit is an error; text is never silently truncated.
 
 ## Controls
 
@@ -112,5 +112,5 @@ The inherited project and SuperFW components are distributed under the GNU Gener
 ## Possible later work
 
 - Directory navigation and larger libraries
-- Bookmarks and per-book position records
+- Multiple bookmarks per book
 - Broader EPUB compatibility within the GBA memory budget
