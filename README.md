@@ -2,9 +2,9 @@
 
 A focused plain-text e-reader for the Game Boy Advance, built from the proven SD/FatFS and font foundation of [`gba-vocab-trainer-CC` v0.2.5](https://github.com/Xinon232/gba-vocab-trainer-CC/releases/tag/v0.2.5).
 
-Version 0.2.1 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of `.epub` files directly from a Supercard SD card.
+Version 0.2.2 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of `.epub` files directly from a Supercard SD card.
 
-## v0.2.1 features
+## v0.2.2 features
 
 - Read-only, case-insensitive `.txt` and `.epub` browser for files in the SD-card root
 - EPUB discovery uses FAT long filenames up to 255 bytes and indexes up to 64 books
@@ -28,7 +28,7 @@ Version 0.2.1 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of
 ## Explicit scope
 
 - **Arabic is not supported.** Arabic code points are rendered as `?`; no shaping or bidirectional path is included.
-- **Text size is fixed.** v0.2.1 keeps the native 16-pixel SuperFW bitmap body font.
+- **Text size is fixed.** v0.2.2 keeps the native 16-pixel SuperFW bitmap body font.
 - **This is not full EPUB compliance.** Images are skipped completely, including image-only spine pages. CSS presentation, JavaScript, embedded fonts, audio, video, SVG presentation and DRM are unsupported and ignored or rejected as appropriate. Arabic is unsupported.
 - Books are read-only; the application never rewrites source files or extracts archive members to SD.
 - ZIP64 and multi-disk archives are rejected. Required metadata and spine text must be unencrypted and use stored (0) or DEFLATE (8) compression; unsupported methods or encryption on recognized, ignored image assets do not prevent reading.
@@ -57,7 +57,7 @@ Version 0.2.1 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of
 
 ## Hardware and files
 
-v0.2.1 uses the Supercard SD access path inherited from the base engine. Copy UTF-8 `.txt` or supported `.epub` files to the **root** of the SD card. The browser indexes up to 64 files and retains filenames up to 255 bytes for opening. SRAM retains independent positions for up to 32 filenames; older v0.1.0/v0.2.0 saves migrate automatically.
+v0.2.2 uses the Supercard SD access path inherited from the base engine. Copy UTF-8 `.txt` or supported `.epub` files to the **root** of the SD card. The browser indexes up to 64 files and retains filenames up to 255 bytes for opening. SRAM retains independent positions for up to 32 filenames; older v0.1.0/v0.2.0/v0.2.1 saves migrate automatically.
 
 An emulator without the expected Supercard storage interface can validate the ROM header and execute the UI path, but it cannot prove SD/FatFS behavior. Real-hardware verification remains important.
 

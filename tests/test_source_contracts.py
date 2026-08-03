@@ -8,6 +8,7 @@ header = (root / "include/reader_core.h").read_text(encoding="utf-8")
 file_source = (root / "src/reader_file.cpp").read_text(encoding="utf-8")
 ffconf = (root / "include/ffconf.h").read_text(encoding="utf-8")
 epub_header = (root / "include/epub_document.h").read_text(encoding="utf-8")
+makefile = (root / "Makefile").read_text(encoding="utf-8")
 
 assert "draw_text_idx8_bus16_range" in main
 assert "bn::sprite_font ui_font(" in main
@@ -30,7 +31,8 @@ assert "BN_DATA_EWRAM_BSS reader::SaveData save_data;" in main
 assert "bn::keypad::r_pressed()" in main
 assert "find_saved_position(save_data, open_name, offset)" in main
 assert "update_saved_position(save_data, filename, page.start_offset)" in main
-assert "GBA Reader v0.2.1" in main
+assert "GBA Reader v0.2.2" in main
+assert "GBA Reader v0.2.2" in makefile
 assert "EPUB_MAX_ZIP_ENTRIES" not in epub_header
 assert "TOO_MANY_ENTRIES" not in epub_header
 assert "uint32_t _central_offset" in epub_header

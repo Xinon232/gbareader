@@ -1,20 +1,33 @@
-# GBA Reader v0.2.1 release notes
+# GBA Reader v0.2.2 release notes
 
-GBA Reader v0.2.1 fixes EPUB discovery in the SD-root library and expands FAT
-long-filename handling to 255 bytes. The library now indexes up to 64 `.txt` and
-`.epub` books while keeping only four rows visible at once to remain within the
-GBA sprite limit.
+GBA Reader v0.2.2 improves compatibility and opening speed for image-heavy,
+text-readable EPUB books.
 
-Reading positions are now stored independently for up to 32 filenames. Position
-changes are saved automatically when a book opens, a page changes, settings
-change or the reader closes. Pressing `R` performs a manual save. Existing
-v0.1.0/v0.2.0 SRAM state migrates automatically.
+## Fixed
 
-Line spacing, top margin and bottom margin now each use a clear 1–4 range. Runs
-of three or more ordinary spaces collapse to one space, and repeated CR/LF line
-breaks collapse to a single line break.
+- Removed the old 128-ZIP-entry rejection that caused valid EPUBs with many
+  images and other assets to fail with “EPUB has too many files”.
+- The ZIP central directory is now validated as a bounded stream. Only the
+  container, package document and readable spine entries are retained for use.
+- Required EPUB files can occur anywhere in central-directory order.
 
-Direct text-only EPUB support from v0.2.0 remains bounded and read-only. ZIP64,
-multi-disk archives, encryption/DRM, unsupported compression, Arabic, images,
-CSS presentation, JavaScript, embedded fonts, audio, video and SVG remain
-unsupported. See README for complete limits and compatibility details.
+## Improved image handling
+
+- Common image archive members are recognized case-insensitively by extension
+  and skipped before their local headers or compressed payloads are processed.
+- OPF spine entries declared as `image/*` are omitted from the text stream, so
+  an image-only cover or page no longer blocks later readable chapters.
+- Supported skipped extensions include JPG/JPEG, PNG, GIF, WebP, SVG/SVGZ,
+  BMP, AVIF, TIFF, ICO, JXL, HEIC and HEIF.
+
+## Preserved behavior
+
+- TXT and direct text-only EPUB reading remains read-only.
+- Per-book filename-based resume, automatic page saves and manual `R` saves
+  from v0.2.1 remain available.
+- Line spacing and top/bottom margins remain adjustable from 1 through 4.
+- The fixed native 16-pixel SuperFW body font remains unchanged.
+- Arabic, CSS presentation, JavaScript, embedded fonts, audio, video, DRM,
+  ZIP64 and fixed-layout rendering remain unsupported.
+
+The release archive contains only `gbareader.gba`.
