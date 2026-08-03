@@ -50,6 +50,15 @@ custom("traversal.epub", '<package><manifest><item id="x" href="../../../evil.xh
 custom("declared-large.epub", ordered_opf, [("OEBPS/one.xhtml", "<p>x</p>"), ("OEBPS/two.xhtml", "<p>y</p>")])
 custom("extracted-large.epub", '<package><manifest><item id="x" href="big.xhtml"/></manifest><spine><itemref idref="x"/></spine></package>', [("OEBPS/big.xhtml", "<p>" + "x" * 65530 + "</p>")], zipfile.ZIP_DEFLATED)
 
+custom("window-cross.epub", '<package><manifest><item id="x" href="window.xhtml"/></manifest><spine><itemref idref="x"/></spine></package>', [("OEBPS/window.xhtml", "<p>" + "w" * 40000 + "</p>")], zipfile.ZIP_DEFLATED)
+
+boundary = bytearray(b"<body><p>")
+boundary.extend(b"a" * (510 - len(boundary)))
+boundary.extend(b"&amp;")
+boundary.extend(b"b" * (16382 - len(boundary)))
+boundary.extend(b"<!--hidden--><x:p title='2 > 1'>tail</x:p></body>")
+custom("stream-boundaries.epub", '<package><manifest><item id="x" href="boundary.xhtml"/></manifest><spine><itemref idref="x"/></spine></package>', [("OEBPS/boundary.xhtml", bytes(boundary))])
+
 prefixed_container = '''<?xml version="1.0"?><c:container><c:rootfiles><c:rootfile\n full-path="OEBPS/book.opf" /></c:rootfiles></c:container>'''
 prefixed_opf = '''<opf:package><opf:manifest><opf:item\n href="chapter.xhtml" media-type="application/xhtml+xml" id="c" /></opf:manifest><opf:spine><opf:itemref\n idref="c" /></opf:spine></opf:package>'''
 custom("prefixed-whitespace.epub", prefixed_opf, [("OEBPS/chapter.xhtml", "<p>Namespaced chapter.</p>")], container_xml=prefixed_container)
@@ -198,6 +207,11 @@ struct.pack_into("<I", crc_bad, cpos + 16, old_crc ^ 0x80000000)
 assert struct.unpack_from("<I", crc_bad, cpos + 16)[0] != old_crc
 (out / "crc-central-mismatch.epub").write_bytes(crc_bad)
 
+window_crc_bad = bytearray((out / "window-cross.epub").read_bytes())
+cpos = central_record(window_crc_bad, b"OEBPS/window.xhtml")
+struct.pack_into("<I", window_crc_bad, cpos + 16, struct.unpack_from("<I", window_crc_bad, cpos + 16)[0] ^ 0x40000000)
+(out / "window-crc-mismatch.epub").write_bytes(window_crc_bad)
+
 payload_bad = bytearray((out / "stored.epub").read_bytes())
 cpos = central_record(payload_bad, b"OEBPS/chapter.xhtml")
 lpos = local_record(payload_bad, cpos)
@@ -334,22 +348,10 @@ while pos >= 0:
     name = declared[pos + 46:pos + 46 + name_len]
     if name.endswith(b"one.xhtml"):
         lpos = local_record(declared, pos)
-        struct.pack_into("<I", declared, pos + 24, 65537)
-        struct.pack_into("<I", declared, lpos + 22, 65537)
+        struct.pack_into("<I", declared, pos + 24, 4 * 1024 * 1024 + 1)
+        struct.pack_into("<I", declared, lpos + 22, 4 * 1024 * 1024 + 1)
     pos = declared.find(b"PK\x01\x02", pos + 4)
 (out / "declared-large.epub").write_bytes(declared)
-
-extracted = bytearray((out / "extracted-large.epub").read_bytes())
-pos = extracted.find(b"PK\x01\x02")
-while pos >= 0:
-    name_len = struct.unpack_from("<H", extracted, pos + 28)[0]
-    name = extracted[pos + 46:pos + 46 + name_len]
-    if name.endswith(b"big.xhtml"):
-        lpos = local_record(extracted, pos)
-        struct.pack_into("<I", extracted, pos + 24, 32)
-        struct.pack_into("<I", extracted, lpos + 22, 32)
-    pos = extracted.find(b"PK\x01\x02", pos + 4)
-(out / "extracted-large.epub").write_bytes(extracted)
 
 raw = (out / "stored.epub").read_bytes()
 (out / "truncated.epub").write_bytes(raw[:-9])

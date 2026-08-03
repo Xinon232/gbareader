@@ -58,9 +58,25 @@ static void expect_error(const char* path, EpubError expected)
     assert(epub.error() == expected); assert(epub.size() == 0);
 }
 
+static void expect_repeated_text(const char* path, unsigned char repeated, uint32_t count)
+{
+    FileSource archive(path);
+    EpubDocument epub;
+    if(! epub.open(archive)) std::fprintf(stderr, "%s: %s\n", path, epub_error_string(epub.error()));
+    assert(epub.error() == EpubError::NONE);
+    assert(epub.size() == count + 1);
+    for(uint32_t index = 0; index < count; ++index) {
+        unsigned char value = 0;
+        assert(epub.byte_at(index, value));
+        assert(value == repeated);
+    }
+    unsigned char newline = 0;
+    assert(epub.byte_at(count, newline) && newline == '\n');
+}
+
 int main(int argc, char** argv)
 {
-    assert(argc == 46);
+    assert(argc == 49);
     expect_text(argv[1], "Stored chapter.\n");
     expect_text(argv[2], "Deflated chapter.\n");
     expect_text(argv[3], "Second\nA & < > \" '  A A ?\nItem\nFirst file.\n");
@@ -82,7 +98,7 @@ int main(int argc, char** argv)
     expect_error(argv[10], EpubError::UNSUPPORTED_COMPRESSION);
     expect_error(argv[11], EpubError::UNSAFE_PATH);
     expect_error(argv[12], EpubError::TOO_LARGE);
-    expect_error(argv[13], EpubError::TOO_LARGE);
+    expect_repeated_text(argv[13], 'x', 65530);
     expect_text(argv[14], "Readable chapter.\n");
     expect_text(argv[15], "Namespaced chapter.\n");
     expect_error(argv[16], EpubError::MISSING_SPINE);
@@ -115,6 +131,26 @@ int main(int argc, char** argv)
     expect_error(argv[43], EpubError::MALFORMED_ZIP);
     expect_text(argv[44], "Many assets, readable text.\n");
     expect_text(argv[45], "Image skipped, text readable.\n");
+
+    expect_repeated_text(argv[46], 'w', 40000);
+    FileSource window_archive(argv[46]); EpubDocument window_book; assert(window_book.open(window_archive));
+    assert(window_book.byte_at(33000, value) && value == 'w');
+    assert(window_book.byte_at(5, value) && value == 'w');
+    assert(window_book.byte_at(16383, value) && value == 'w');
+    assert(window_book.byte_at(16384, value) && value == 'w');
+    assert(window_book.byte_at(39999, value) && value == 'w');
+    assert(window_book.byte_at(40000, value) && value == '\n');
+
+    FileSource boundary_archive(argv[47]); EpubDocument boundary_book; assert(boundary_book.open(boundary_archive));
+    assert(boundary_book.size() == 16375);
+    assert(boundary_book.byte_at(500, value) && value == 'a');
+    assert(boundary_book.byte_at(501, value) && value == '&');
+    assert(boundary_book.byte_at(502, value) && value == 'b');
+    assert(boundary_book.byte_at(16368, value) && value == 'b');
+    assert(boundary_book.byte_at(16369, value) && value == '\n');
+    assert(boundary_book.byte_at(16370, value) && value == 't');
+    assert(boundary_book.byte_at(16374, value) && value == '\n');
+    expect_error(argv[48], EpubError::MALFORMED_ZIP);
 
     FailingSource failed(ordered, ordered.size() - 10); EpubDocument failed_book;
     assert(! failed_book.open(failed)); assert(failed_book.error() == EpubError::READ_FAILED);

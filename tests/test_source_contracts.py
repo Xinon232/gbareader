@@ -37,6 +37,7 @@ assert "EPUB_MAX_ZIP_ENTRIES" not in epub_header
 assert "TOO_MANY_ENTRIES" not in epub_header
 assert "uint32_t _central_offset" in epub_header
 assert "EPUB_MAX_SPINE_ITEMS = 64" in epub_header
-assert "EPUB_MAX_CHAPTER_BYTES = 64 * 1024" in epub_header
+assert "EPUB_TEXT_WINDOW_BYTES = 16 * 1024" in epub_header
+assert "EPUB_MAX_XHTML_BYTES = 4 * 1024 * 1024" in epub_header
 assert "idrefs[EPUB_MAX_SPINE_ITEMS]" not in (root / "src/epub_document.cpp").read_text()
 print("PASS: source contracts")

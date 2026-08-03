@@ -9,7 +9,9 @@ namespace reader {
 
 constexpr int EPUB_MAX_SPINE_ITEMS = 64;
 constexpr int EPUB_MAX_PATH = 192;
-constexpr uint32_t EPUB_MAX_CHAPTER_BYTES = 64 * 1024;
+constexpr uint32_t EPUB_TEXT_WINDOW_BYTES = 16 * 1024;
+constexpr uint32_t EPUB_INFLATE_DICTIONARY_BYTES = 32 * 1024;
+constexpr uint32_t EPUB_MAX_XHTML_BYTES = 4 * 1024 * 1024;
 constexpr uint32_t EPUB_MAX_METADATA_BYTES = 64 * 1024;
 constexpr uint32_t EPUB_MAX_COMPRESSED_BYTES = 4 * 1024 * 1024;
 constexpr uint32_t EPUB_MAX_ARCHIVE_BYTES = 64 * 1024 * 1024;
@@ -48,7 +50,7 @@ private:
     bool parse_zip();
     bool build_spine();
     bool load_entry(const ZipEntry& entry, uint32_t uncompressed_limit) const;
-    bool load_chapter(int spine_index) const;
+    bool stream_chapter(int spine_index, uint32_t window_start, bool count_only) const;
     int find_entry(const char* name, ZipEntry& entry) const;
     bool fail(EpubError error) const;
 
@@ -61,10 +63,19 @@ private:
     uint32_t _virtual_size;
     mutable EpubError _error;
     mutable int _cached_spine;
+    mutable uint32_t _window_start;
+    mutable uint32_t _window_size;
     mutable uint32_t _buffer_size;
     mutable tinfl_decompressor _inflator;
     mutable unsigned char _input[512];
-    mutable unsigned char _chapter[EPUB_MAX_CHAPTER_BYTES];
+    union Workspace {
+        unsigned char metadata[EPUB_MAX_METADATA_BYTES];
+        struct {
+            unsigned char dictionary[EPUB_INFLATE_DICTIONARY_BYTES];
+            unsigned char text[EPUB_TEXT_WINDOW_BYTES];
+        } stream;
+    };
+    mutable Workspace _workspace;
 };
 
 }

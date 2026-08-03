@@ -32,7 +32,7 @@ Version 0.2.2 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of
 - **This is not full EPUB compliance.** Images are skipped completely, including image-only spine pages. CSS presentation, JavaScript, embedded fonts, audio, video, SVG presentation and DRM are unsupported and ignored or rejected as appropriate. Arabic is unsupported.
 - Books are read-only; the application never rewrites source files or extracts archive members to SD.
 - ZIP64 and multi-disk archives are rejected. Required metadata and spine text must be unencrypted and use stored (0) or DEFLATE (8) compression; unsupported methods or encryption on recognized, ignored image assets do not prevent reading.
-- The ZIP central directory is validated as a stream, so image-heavy EPUBs are not rejected merely for containing more than 128 archive members. Remaining compile-time limits are 64 spine documents, 192-byte archive paths, 64 KiB uncompressed input/visible text per required chapter or metadata file, 4 MiB compressed required entry and 64 MiB archive. Ignored images, fonts and other non-spine assets are not subject to the 64 KiB text-buffer limit. Exceeding an applicable limit is an error; text is never silently truncated.
+- The ZIP central directory is validated as a stream, so image-heavy EPUBs are not rejected merely for containing more than 128 archive members. Remaining compile-time limits are 64 spine documents, 192-byte archive paths, 64 KiB uncompressed metadata, 4 MiB uncompressed XHTML per spine document, 4 MiB compressed required entry and 64 MiB archive. XHTML text is exposed through a 16 KiB visible-text window rather than a whole-chapter buffer. Ignored images, fonts and other non-spine assets are not subject to the XHTML limit. Exceeding an applicable limit is an error; text is never silently truncated.
 
 ## Controls
 
@@ -95,7 +95,7 @@ The emulator target only checks for immediate ROM/header or illegal-opcode rejec
 
 - `reader_core`: host-testable UTF-8 decoding, wrapping, pagination and page history
 - `reader_file`: read-only FatFS library scan and 512-byte cached book stream
-- `epub_document`: bounded ZIP/container/OPF/XHTML parser exposed as a virtual concatenated `ByteSource`; one chapter is cached at a time
+- `epub_document`: bounded ZIP/container/OPF parser plus streaming stored/DEFLATE XHTML-to-text conversion, exposed as a virtual concatenated `ByteSource`; open performs a count-only pass for stable offsets and random reads use a restartable 16 KiB text window
 - `reader_save`: checksummed, versioned SRAM state
 - `main`: Butano UI, controls and page presentation
 - `superfw_font`: SuperFW software glyph renderer targeting a double-buffered 8-bit bitmap background

@@ -50,6 +50,8 @@ g++ "${CXXFLAGS[@]}" \
     "$OUT/fixtures/descriptor-signed.epub" "$OUT/fixtures/descriptor-unsigned.epub" \
     "$OUT/fixtures/descriptor-absent.epub" "$OUT/fixtures/descriptor-bad-crc.epub" \
     "$OUT/fixtures/descriptor-bad-compressed-size.epub" "$OUT/fixtures/descriptor-truncated.epub" \
-    "$OUT/fixtures/many-entries.epub" "$OUT/fixtures/ignored-corrupt-image.epub"
+    "$OUT/fixtures/many-entries.epub" "$OUT/fixtures/ignored-corrupt-image.epub" \
+    "$OUT/fixtures/window-cross.epub" "$OUT/fixtures/stream-boundaries.epub" \
+    "$OUT/fixtures/window-crc-mismatch.epub"
 
 python3 "$ROOT/tests/test_source_contracts.py"
