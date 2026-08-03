@@ -11,6 +11,7 @@ Version 0.2.1 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of
 - Buffered FatFS access; books are streamed instead of loaded into GBA RAM
 - Direct EPUB ZIP reading with stored and raw-DEFLATE entries and required-entry CRC-32 verification; nothing is extracted to SD
 - EPUB container, OPF manifest and declared spine-order handling
+- Recognized image archive members are skipped before local-header or payload processing; image-only spine entries are omitted from the text stream
 - XHTML visible-text conversion with block breaks and common XML/HTML entities
 - Word wrapping and CRLF/LF handling
 - Fixed native 16-pixel SuperFW body-font size
@@ -28,9 +29,9 @@ Version 0.2.1 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of
 
 - **Arabic is not supported.** Arabic code points are rendered as `?`; no shaping or bidirectional path is included.
 - **Text size is fixed.** v0.2.1 keeps the native 16-pixel SuperFW bitmap body font.
-- **This is not full EPUB compliance.** Images, CSS presentation, JavaScript, embedded fonts, audio, video, SVG and DRM are unsupported and ignored or rejected as appropriate. Arabic is unsupported.
+- **This is not full EPUB compliance.** Images are skipped completely, including image-only spine pages. CSS presentation, JavaScript, embedded fonts, audio, video, SVG presentation and DRM are unsupported and ignored or rejected as appropriate. Arabic is unsupported.
 - Books are read-only; the application never rewrites source files or extracts archive members to SD.
-- ZIP64, multi-disk and encrypted archives are rejected. Required metadata and spine text must use stored (0) or DEFLATE (8) compression; unsupported methods on ignored assets do not prevent reading.
+- ZIP64 and multi-disk archives are rejected. Required metadata and spine text must be unencrypted and use stored (0) or DEFLATE (8) compression; unsupported methods or encryption on recognized, ignored image assets do not prevent reading.
 - The ZIP central directory is validated as a stream, so image-heavy EPUBs are not rejected merely for containing more than 128 archive members. Remaining compile-time limits are 64 spine documents, 192-byte archive paths, 64 KiB uncompressed input/visible text per required chapter or metadata file, 4 MiB compressed required entry and 64 MiB archive. Ignored images, fonts and other non-spine assets are not subject to the 64 KiB text-buffer limit. Exceeding an applicable limit is an error; text is never silently truncated.
 
 ## Controls

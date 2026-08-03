@@ -57,6 +57,7 @@ custom("wrong-media.epub", '<package><manifest><item id="c" href="chapter.xhtml"
 custom("self-closing-suppressed.epub", '<package><manifest><item id="c" href="chapter.xhtml"/></manifest><spine><itemref idref="c"/></spine></package>', [("OEBPS/chapter.xhtml", "<html><head/><style/><script/><body><p>Still visible.</p></body></html>")])
 custom("entities.epub", '<package><manifest><item id="c" href="chapter.xhtml"/></manifest><spine><itemref idref="c"/></spine></package>', [("OEBPS/chapter.xhtml", "<p>&mdash;&ndash;&hellip;&copy;&lsquo;&rsquo;&ldquo;&rdquo;&reg;&trade;</p>")])
 custom("ignored-asset.epub", '<package><manifest><item id="c" href="chapter.xhtml" media-type="application/xhtml+xml"/><item id="cover" href="cover.bin" media-type="application/octet-stream"/></manifest><spine><itemref idref="c"/></spine></package>', [("OEBPS/chapter.xhtml", "<p>Readable chapter.</p>"), ("OEBPS/cover.bin", bytes(range(256)) * 300)])
+custom("ignored-corrupt-image.epub", '<package><manifest><item id="c" href="chapter.xhtml" media-type="application/xhtml+xml"/><item id="cover" href="cover.JpG" media-type="image/jpeg"/></manifest><spine><itemref idref="cover"/><itemref idref="c"/></spine></package>', [("OEBPS/chapter.xhtml", "<p>Image skipped, text readable.</p>"), ("OEBPS/cover.JpG", b"not displayed")])
 
 many_opf = '<package><manifest><item id="c" href="chapter.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c"/></spine></package>'
 with zipfile.ZipFile(out / "many-entries.epub", "w", compression=zipfile.ZIP_DEFLATED) as z:
@@ -131,6 +132,14 @@ def local_record(data, central):
     pos = struct.unpack_from("<I", data, central + 42)[0]
     assert data[pos:pos + 4] == b"PK\x03\x04"
     return pos
+
+ignored_image = bytearray((out / "ignored-corrupt-image.epub").read_bytes())
+ignored_image_central = central_record(ignored_image, b"OEBPS/cover.JpG")
+ignored_image_local = local_record(ignored_image, ignored_image_central)
+ignored_image_flags = struct.unpack_from("<H", ignored_image, ignored_image_central + 8)[0]
+struct.pack_into("<H", ignored_image, ignored_image_central + 8, ignored_image_flags | 1)
+ignored_image[ignored_image_local:ignored_image_local + 4] = b"BAD!"
+(out / "ignored-corrupt-image.epub").write_bytes(ignored_image)
 
 def add_central_extra(src, dst, target, extra):
     data = bytearray((out / src).read_bytes())
