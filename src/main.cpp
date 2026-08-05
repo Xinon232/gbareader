@@ -1,4 +1,4 @@
-// GBA Reader v0.4.0 -- read-only Supercard SD TXT/EPUB reader.
+// GBA Reader v0.4.1 -- read-only Supercard SD TXT/EPUB reader.
 
 #include "bn_bg_palette_item.h"
 #include "bn_core.h"
@@ -42,7 +42,7 @@ constexpr int UI_SPRITE_CAPACITY = 127;
 constexpr int LIBRARY_VISIBLE_ROWS = 4;
 constexpr int LIBRARY_DISPLAY_CHARACTERS = 15;
 constexpr int LIBRARY_WORST_CASE_SPRITES =
-        int(sizeof("GBA Reader v0.4.0") - 1) +
+        int(sizeof("GBA Reader v0.4.1") - 1) +
         LIBRARY_VISIBLE_ROWS * (2 + LIBRARY_DISPLAY_CHARACTERS) +
         int(sizeof("UP/DOWN select   A open") - 1);
 static_assert(UI_SPRITE_CAPACITY <= 128);
@@ -78,8 +78,10 @@ void draw_page(bn::palette_bitmap_bg_painter& painter)
                     reader::SCREEN_WIDTH - reader::BODY_SIDE_MARGIN * 2,
                     240,
                     1);
-        y += reader::FONT_HEIGHT + settings.line_spacing;
-        if(page.lines[line].paragraph_break) y += reader::FONT_HEIGHT + settings.line_spacing;
+        if(line + 1 < page.line_count) {
+            y += reader::FONT_HEIGHT + settings.line_spacing;
+            if(page.lines[line].paragraph_break) y += reader::FONT_HEIGHT + settings.line_spacing;
+        }
     }
     painter.flip_page_later();
 }
@@ -193,15 +195,15 @@ int main()
             }
         } else if(scene == Scene::READER) {
             reader::Page next{};
-            if((bn::keypad::right_pressed() || bn::keypad::a_pressed()) &&
+            if((bn::keypad::right_pressed() || bn::keypad::a_pressed() || bn::keypad::r_pressed()) &&
                reader::next_page(*active_source, settings, glyph_width, history, page, next)) {
                 page = next; redraw_page = true;
             } else if((bn::keypad::left_pressed() || bn::keypad::b_pressed()) &&
                       reader::previous_page(*active_source, settings, glyph_width, history, next)) {
                 page = next; redraw_page = true;
-            } else if(bn::keypad::start_pressed()) {
-                scene = Scene::SETTINGS; redraw_ui = true;
             } else if(bn::keypad::l_pressed()) {
+                scene = Scene::SETTINGS; redraw_ui = true;
+            } else if(bn::keypad::start_pressed()) {
                 reader::TxtSaveFooter footer{page.start_offset, settings};
                 file.save_footer(footer);
             } else if(bn::keypad::select_pressed()) {
@@ -235,7 +237,7 @@ int main()
             sprites.clear();
             ui.set_center_alignment();
             if(scene == Scene::LIBRARY) {
-                add_text(ui, 0, -68, "GBA Reader v0.4.0", sprites);
+                add_text(ui, 0, -68, "GBA Reader v0.4.1", sprites);
                 if(! storage_ok) add_text(ui, 0, -48, "Supercard SD not ready", sprites);
                 else if(! reader::library_count()) add_text(ui, 0, -48, "No TXT/EPUB in root", sprites);
                 else if(library_status) add_text(ui, 0, -48, library_status, sprites);

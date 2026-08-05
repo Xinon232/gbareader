@@ -1,6 +1,12 @@
-# GBA Reader v0.4.0 release notes
+# v0.4.1 — Reading layout and controls
 
-GBA Reader v0.4.0 substantially improves compatibility with real-world UTF-8 EPUB 2/3 books while keeping parsing bounded for Game Boy Advance hardware.
+- Fix paragraph-aware pagination so the final line stays fully visible.
+- `Start` saves the current TXT book; `L` opens settings.
+- `R` also advances to the next page.
+
+# GBA Reader v0.4.1 release notes
+
+GBA Reader v0.4.1 substantially improves compatibility with real-world UTF-8 EPUB 2/3 books while keeping parsing bounded for Game Boy Advance hardware.
 
 ## EPUB compatibility
 

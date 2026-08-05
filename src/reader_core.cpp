@@ -183,13 +183,23 @@ bool layout_page(const ByteSource& source, uint32_t offset, const Settings& inpu
     Page result{};
     result.start_offset = offset;
     uint32_t cursor = offset;
-    int line_height = FONT_HEIGHT + settings.line_spacing;
-    int capacity = (160 - settings.top_margin - settings.bottom_margin) / line_height;
-    if(capacity < 1) capacity = 1;
-    if(capacity > PAGE_MAX_LINES) capacity = PAGE_MAX_LINES;
+    const int bottom_limit = 160 - settings.bottom_margin;
+    int used_height = settings.top_margin;
     bool source_ok = true;
-    while(cursor < source.size() && result.line_count < capacity) {
+    while(cursor < source.size() && result.line_count < PAGE_MAX_LINES) {
+        const uint32_t line_start = cursor;
         if(! make_line(source, cursor, glyph_width, result.lines[result.line_count], source_ok)) break;
+        int gap_before = 0;
+        if(result.line_count > 0) {
+            gap_before = settings.line_spacing;
+            if(result.lines[result.line_count - 1].paragraph_break)
+                gap_before += FONT_HEIGHT + settings.line_spacing;
+        }
+        if(used_height + gap_before + FONT_HEIGHT > bottom_limit) {
+            cursor = line_start;
+            break;
+        }
+        used_height += gap_before + FONT_HEIGHT;
         ++result.line_count;
     }
     if(! source_ok) return false;

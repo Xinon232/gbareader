@@ -33,8 +33,8 @@ assert "reader::Settings settings;" in main
 assert "bn::keypad::l_pressed()" in main
 assert "file.saved_footer(footer)" in main
 assert "file.save_footer(footer)" in main
-assert "GBA Reader v0.4.0" in main
-assert "GBA Reader v0.4.0" in makefile
+assert "GBA Reader v0.4.1" in main
+assert "GBA Reader v0.4.1" in makefile
 assert "EPUB_MAX_ZIP_ENTRIES" not in epub_header
 assert "TOO_MANY_ENTRIES" not in epub_header
 assert "uint32_t _central_offset" in epub_header
