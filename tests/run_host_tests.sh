@@ -17,9 +17,9 @@ g++ "${CXXFLAGS[@]}" \
 "$OUT/test_reader_core"
 
 g++ "${CXXFLAGS[@]}" \
-    "$ROOT/tests/test_reader_save.cpp" "$ROOT/src/reader_save.cpp" "$ROOT/src/reader_core.cpp" \
-    -o "$OUT/test_reader_save"
-"$OUT/test_reader_save"
+    "$ROOT/tests/test_reader_txt_save.cpp" "$ROOT/src/reader_txt_save.cpp" "$ROOT/src/reader_core.cpp" \
+    -o "$OUT/test_reader_txt_save"
+"$OUT/test_reader_txt_save"
 
 g++ "${CXXFLAGS[@]}" "$ROOT/tests/test_reader_file.cpp" "$ROOT/src/reader_file.cpp" \
     -o "$OUT/test_reader_file"

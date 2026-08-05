@@ -1,6 +1,6 @@
-# GBA Reader v0.3.0 release notes
+# GBA Reader v0.4.0 release notes
 
-GBA Reader v0.3.0 substantially improves compatibility with real-world UTF-8 EPUB 2/3 books while keeping parsing bounded for Game Boy Advance hardware.
+GBA Reader v0.4.0 substantially improves compatibility with real-world UTF-8 EPUB 2/3 books while keeping parsing bounded for Game Boy Advance hardware.
 
 ## EPUB compatibility
 

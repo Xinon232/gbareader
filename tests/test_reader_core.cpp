@@ -119,8 +119,8 @@ static void test_excess_whitespace_is_collapsed()
     assert(std::strcmp(page.lines[0].text, "One  two three four") == 0);
     assert(std::strcmp(page.lines[1].text, "Five") == 0);
     assert(std::strcmp(page.lines[2].text, "Six") == 0);
-    assert(! page.lines[0].paragraph_break);
-    assert(! page.lines[1].paragraph_break);
+    assert(page.lines[0].paragraph_break);
+    assert(page.lines[1].paragraph_break);
     assert(! page.lines[2].paragraph_break);
 }
 

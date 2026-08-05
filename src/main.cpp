@@ -1,4 +1,4 @@
-// GBA Reader v0.3.0 -- read-only Supercard SD TXT/EPUB reader.
+// GBA Reader v0.4.0 -- read-only Supercard SD TXT/EPUB reader.
 
 #include "bn_bg_palette_item.h"
 #include "bn_core.h"
@@ -18,7 +18,6 @@ extern "C" {
 #include "reader_core.h"
 #include "epub_document.h"
 #include "reader_file.h"
-#include "reader_save.h"
 
 #include <cstring>
 
@@ -37,13 +36,13 @@ BN_DATA_EWRAM_BSS reader::ReaderFile file;
 BN_DATA_EWRAM_BSS reader::EpubDocument epub;
 BN_DATA_EWRAM_BSS reader::Page page;
 BN_DATA_EWRAM_BSS reader::PageHistory history;
-BN_DATA_EWRAM_BSS reader::SaveData save_data;
+reader::Settings settings;
 
 constexpr int UI_SPRITE_CAPACITY = 127;
 constexpr int LIBRARY_VISIBLE_ROWS = 4;
 constexpr int LIBRARY_DISPLAY_CHARACTERS = 15;
 constexpr int LIBRARY_WORST_CASE_SPRITES =
-        int(sizeof("GBA Reader v0.3.0") - 1) +
+        int(sizeof("GBA Reader v0.4.0") - 1) +
         LIBRARY_VISIBLE_ROWS * (2 + LIBRARY_DISPLAY_CHARACTERS) +
         int(sizeof("UP/DOWN select   A open") - 1);
 static_assert(UI_SPRITE_CAPACITY <= 128);
@@ -69,7 +68,7 @@ void draw_page(bn::palette_bitmap_bg_painter& painter)
 {
     painter.fill(0);
     uint8_t* pixels = reinterpret_cast<uint8_t*>(painter.page().data());
-    int y = save_data.settings.top_margin;
+    int y = settings.top_margin;
     for(int line = 0; line < page.line_count; ++line) {
         if(page.lines[line].text[0])
             draw_text_idx8_bus16_range(
@@ -79,34 +78,10 @@ void draw_page(bn::palette_bitmap_bg_painter& painter)
                     reader::SCREEN_WIDTH - reader::BODY_SIDE_MARGIN * 2,
                     240,
                     1);
-        y += reader::FONT_HEIGHT + save_data.settings.line_spacing;
+        y += reader::FONT_HEIGHT + settings.line_spacing;
+        if(page.lines[line].paragraph_break) y += reader::FONT_HEIGHT + settings.line_spacing;
     }
     painter.flip_page_later();
-}
-
-void persist_position(const char* filename)
-{
-    reader::update_saved_position(save_data, filename, page.start_offset);
-    if(filename) {
-        int index = 0;
-        while(filename[index] && index < reader::SAVE_FILENAME_MAX - 1) {
-            save_data.last_filename[index] = filename[index];
-            ++index;
-        }
-        save_data.last_filename[index] = 0;
-    }
-    reader::store_save(save_data);
-}
-
-bool text_equal(const char* first, const char* second)
-{
-    if(! first || ! second) return false;
-    while(*first && *second) {
-        if(*first != *second) return false;
-        ++first;
-        ++second;
-    }
-    return *first == *second;
 }
 
 bool epub_name(const char* name)
@@ -167,8 +142,7 @@ int main()
     ui.set_palette_item(bn::sprite_items::ui_variable_8x16_font.palette_item());
     bn::vector<bn::sprite_ptr, UI_SPRITE_CAPACITY> sprites;
 
-    save_data = reader::default_save();
-    reader::load_save(save_data);
+    settings = reader::default_settings();
     bool storage_ok = reader::storage_init();
     Scene scene = Scene::LIBRARY;
     int selected = 0;
@@ -178,10 +152,6 @@ int main()
     const char* open_name = nullptr;
     const reader::ByteSource* active_source = &file;
     const char* library_status = nullptr;
-
-    for(int i = 0; i < reader::library_count(); ++i) {
-        if(text_equal(reader::library_name(i), save_data.last_filename)) selected = i;
-    }
 
     while(true) {
         if(scene == Scene::LIBRARY) {
@@ -200,14 +170,14 @@ int main()
                     else library_status = reader::epub_error_string(epub.error());
                 }
                 uint32_t offset = 0;
-                reader::find_saved_position(save_data, open_name, offset);
+                reader::TxtSaveFooter footer{};
+                if(file.saved_footer(footer)) { settings = footer.settings; offset = footer.byte_offset; }
                 bool page_open = ! library_status && reader::open_page_at(
-                        *active_source, offset, save_data.settings, glyph_width, history, page);
+                        *active_source, offset, settings, glyph_width, history, page);
                 if(! page_open && ! library_status)
                     page_open = reader::open_first_page(
-                            *active_source, save_data.settings, glyph_width, history, page);
+                            *active_source, settings, glyph_width, history, page);
                 if(page_open) {
-                    persist_position(open_name);
                     scene = Scene::READER;
                     sprites.clear();
                     redraw_page = true;
@@ -224,17 +194,18 @@ int main()
         } else if(scene == Scene::READER) {
             reader::Page next{};
             if((bn::keypad::right_pressed() || bn::keypad::a_pressed()) &&
-               reader::next_page(*active_source, save_data.settings, glyph_width, history, page, next)) {
-                page = next; redraw_page = true; persist_position(open_name);
+               reader::next_page(*active_source, settings, glyph_width, history, page, next)) {
+                page = next; redraw_page = true;
             } else if((bn::keypad::left_pressed() || bn::keypad::b_pressed()) &&
-                      reader::previous_page(*active_source, save_data.settings, glyph_width, history, next)) {
-                page = next; redraw_page = true; persist_position(open_name);
+                      reader::previous_page(*active_source, settings, glyph_width, history, next)) {
+                page = next; redraw_page = true;
             } else if(bn::keypad::start_pressed()) {
                 scene = Scene::SETTINGS; redraw_ui = true;
-            } else if(bn::keypad::r_pressed()) {
-                persist_position(open_name);
+            } else if(bn::keypad::l_pressed()) {
+                reader::TxtSaveFooter footer{page.start_offset, settings};
+                file.save_footer(footer);
             } else if(bn::keypad::select_pressed()) {
-                persist_position(open_name); epub.close(); file.close(); open_name = nullptr;
+                epub.close(); file.close(); open_name = nullptr;
                 scene = Scene::LIBRARY; redraw_ui = true;
             }
             if(scene == Scene::READER && active_source == &epub && epub.error() != reader::EpubError::NONE) {
@@ -247,15 +218,13 @@ int main()
             if(bn::keypad::down_pressed() && settings_row < 2) { ++settings_row; redraw_ui = true; }
             int delta = bn::keypad::left_pressed() ? -1 : bn::keypad::right_pressed() ? 1 : 0;
             if(delta) {
-                reader::adjust_setting(save_data.settings, reader::SettingField(settings_row), delta);
-                reader::layout_page(*active_source, page.start_offset, save_data.settings, glyph_width, page);
-                persist_position(open_name);
+                reader::adjust_setting(settings, reader::SettingField(settings_row), delta);
+                reader::layout_page(*active_source, page.start_offset, settings, glyph_width, page);
                 redraw_ui = true;
             }
             if(bn::keypad::b_pressed() || bn::keypad::start_pressed()) {
                 uint32_t resume_offset = page.start_offset;
-                reader::open_page_at(*active_source, resume_offset, save_data.settings, glyph_width, history, page);
-                persist_position(open_name);
+                reader::open_page_at(*active_source, resume_offset, settings, glyph_width, history, page);
                 scene = Scene::READER; sprites.clear(); redraw_page = true; redraw_ui = false;
             }
         }
@@ -266,7 +235,7 @@ int main()
             sprites.clear();
             ui.set_center_alignment();
             if(scene == Scene::LIBRARY) {
-                add_text(ui, 0, -68, "GBA Reader v0.3.0", sprites);
+                add_text(ui, 0, -68, "GBA Reader v0.4.0", sprites);
                 if(! storage_ok) add_text(ui, 0, -48, "Supercard SD not ready", sprites);
                 else if(! reader::library_count()) add_text(ui, 0, -48, "No TXT/EPUB in root", sprites);
                 else if(library_status) add_text(ui, 0, -48, library_status, sprites);
@@ -286,8 +255,8 @@ int main()
             } else if(scene == Scene::SETTINGS) {
                 add_text(ui, 0, -62, "Reader settings", sprites);
                 const char* labels[3] = { "Line spacing", "Top margin", "Bottom margin" };
-                int values[3] = { save_data.settings.line_spacing, save_data.settings.top_margin,
-                                  save_data.settings.bottom_margin };
+                int values[3] = { settings.line_spacing, settings.top_margin,
+                                  settings.bottom_margin };
                 for(int i = 0; i < 3; ++i) {
                     bn::string<48> row = i == settings_row ? "> " : "  ";
                     row += labels[i]; row += ": "; row += bn::to_string<4>(values[i]);

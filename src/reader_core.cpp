@@ -4,7 +4,7 @@
 
 namespace reader {
 
-Settings default_settings() { return { 2, 2, 2 }; }
+Settings default_settings() { return { 1, 1, 1 }; }
 
 void clamp_settings(Settings& s)
 {
@@ -100,6 +100,7 @@ static bool make_line(const ByteSource& source, uint32_t& cursor, GlyphWidth wid
         unsigned char raw = 0;
         if(! source.byte_at(cursor, raw)) { source_ok = false; return false; }
         if(raw == '\r' || raw == '\n') {
+            int newlines = 0;
             do {
                 const unsigned char newline = raw;
                 ++cursor;
@@ -108,10 +109,11 @@ static bool make_line(const ByteSource& source, uint32_t& cursor, GlyphWidth wid
                     if(! source.byte_at(cursor, lf)) { source_ok = false; return false; }
                     if(lf == '\n') ++cursor;
                 }
+                ++newlines;
                 if(cursor >= source.size()) break;
                 if(! source.byte_at(cursor, raw)) { source_ok = false; return false; }
             } while(raw == '\r' || raw == '\n');
-            line.paragraph_break = false;
+            line.paragraph_break = newlines >= 2;
             break;
         }
         if(raw == ' ') {
