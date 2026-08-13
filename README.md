@@ -4,7 +4,7 @@ A focused plain-text e-reader for the Game Boy Advance, built from the proven SD
 
 Version 0.3.0 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of UTF-8 EPUB 2/3 files directly from a Supercard SD card.
 
-## v0.4.2 features
+## v0.4.3 features
 
 - Read-only, case-insensitive `.txt` and `.epub` browser for files in the SD-card root
 - EPUB discovery uses FAT long filenames up to 255 bytes and indexes up to 64 books
@@ -50,7 +50,7 @@ Version 0.3.0 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of
 - `Left` or `B`: previous page
 - `Down`: open settings
 - `Up`: toggle session-only shoulder page turns, with no confirmation prompt. When enabled, both `L` and `R` advance one page; when disabled, both do nothing. This mode starts disabled at every app launch and is never saved.
-- `Start`: save the current TXT book manually
+- `Start`: save the current TXT book manually; a foreground `save...` UI-font overlay is shown while the SD save runs
 - `Select`: return to library
 
 ### Settings
@@ -61,7 +61,7 @@ Version 0.3.0 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of
 
 ## Hardware and files
 
-v0.4.2 uses the Supercard SD access path inherited from the base engine. Copy UTF-8 `.txt` or supported `.epub` files to the **root** of the SD card. The browser indexes up to 64 files and retains filenames up to 255 bytes for opening. TXT save footers retain the current position and reading-layout settings.
+v0.4.3 uses the Supercard SD access path inherited from the base engine. Copy UTF-8 `.txt` or supported `.epub` files to the **root** of the SD card. The browser indexes up to 64 files and retains filenames up to 255 bytes for opening. TXT save footers retain the current position and reading-layout settings.
 
 An emulator without the expected Supercard storage interface can validate the ROM header and execute the UI path, but it cannot prove SD/FatFS behavior. Real-hardware verification remains important.
 

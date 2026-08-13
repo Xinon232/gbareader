@@ -1,4 +1,4 @@
-// GBA Reader v0.4.2 -- read-only Supercard SD TXT/EPUB reader.
+// GBA Reader v0.4.3 -- read-only Supercard SD TXT/EPUB reader.
 
 #include "bn_bg_palette_item.h"
 #include "bn_core.h"
@@ -39,10 +39,11 @@ BN_DATA_EWRAM_BSS reader::PageHistory history;
 reader::Settings settings;
 
 constexpr int UI_SPRITE_CAPACITY = 127;
+constexpr int SAVE_OVERLAY_SPRITE_CAPACITY = 8;
 constexpr int LIBRARY_VISIBLE_ROWS = 4;
 constexpr int LIBRARY_DISPLAY_CHARACTERS = 15;
 constexpr int LIBRARY_WORST_CASE_SPRITES =
-        int(sizeof("GBA Reader v0.4.2") - 1) +
+        int(sizeof("GBA Reader v0.4.3") - 1) +
         LIBRARY_VISIBLE_ROWS * (2 + LIBRARY_DISPLAY_CHARACTERS) +
         int(sizeof("UP/DOWN select   A open") - 1);
 static_assert(UI_SPRITE_CAPACITY <= 128);
@@ -107,6 +108,18 @@ void add_text(bn::sprite_text_generator& generator, int x, int y, const char* te
     generator.generate(x, y, text, sprites);
 }
 
+void show_saving_overlay(bn::sprite_text_generator& generator,
+                         bn::vector<bn::sprite_ptr, SAVE_OVERLAY_SPRITE_CAPACITY>& sprites)
+{
+    generator.set_right_alignment();
+    generator.set_bg_priority(0);
+    generator.set_z_order(-32767);
+    generator.generate(112, 64, "save...", sprites);
+    for(bn::sprite_ptr& sprite : sprites) sprite.put_above();
+    generator.set_z_order(0);
+    generator.set_center_alignment();
+}
+
 void library_display_name(const char* name, char* output)
 {
     int input = 0;
@@ -143,6 +156,9 @@ int main()
     bn::sprite_text_generator ui(ui_font);
     ui.set_palette_item(bn::sprite_items::ui_variable_8x16_font.palette_item());
     bn::vector<bn::sprite_ptr, UI_SPRITE_CAPACITY> sprites;
+    bn::sprite_text_generator save_ui(ui_font);
+    save_ui.set_palette_item(bn::sprite_items::ui_variable_8x16_font.palette_item());
+    bn::vector<bn::sprite_ptr, SAVE_OVERLAY_SPRITE_CAPACITY> save_sprites;
 
     settings = reader::default_settings();
     bool storage_ok = reader::storage_init();
@@ -210,7 +226,10 @@ int main()
                 scene = Scene::SETTINGS; redraw_ui = true;
             } else if(bn::keypad::start_pressed()) {
                 reader::TxtSaveFooter footer{page.start_offset, settings};
+                show_saving_overlay(save_ui, save_sprites);
+                bn::core::update();
                 file.save_footer(footer);
+                save_sprites.clear();
             } else if(bn::keypad::select_pressed()) {
                 epub.close(); file.close(); open_name = nullptr;
                 scene = Scene::LIBRARY; redraw_ui = true;
@@ -242,7 +261,7 @@ int main()
             sprites.clear();
             ui.set_center_alignment();
             if(scene == Scene::LIBRARY) {
-                add_text(ui, 0, -68, "GBA Reader v0.4.2", sprites);
+                add_text(ui, 0, -68, "GBA Reader v0.4.3", sprites);
                 if(! storage_ok) add_text(ui, 0, -48, "Supercard SD not ready", sprites);
                 else if(! reader::library_count()) add_text(ui, 0, -48, "No TXT/EPUB in root", sprites);
                 else if(library_status) add_text(ui, 0, -48, library_status, sprites);

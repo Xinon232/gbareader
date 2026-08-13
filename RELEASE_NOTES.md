@@ -1,7 +1,7 @@
-# GBA Reader v0.4.2 — Reader control update
+# GBA Reader v0.4.3 — Save feedback
 
-- `Down` opens Reader settings; `L` no longer opens settings.
-- `L` and `R` are inactive whenever the app launches.
-- `Up` silently toggles a session-only shoulder-button mode. When enabled, either `L` or `R` advances to the next page; pressing `Up` again disables both buttons.
-- The shoulder-button mode is not persisted in TXT save footers and always resets to disabled on the next app launch.
-- Existing page controls remain: `Right`/`A` advance, `Left`/`B` go back, and `Start` manually saves a TXT book.
+- Pressing `Start` now displays a `save...` overlay in the existing UI font before the TXT footer is written to SD.
+- The overlay is foreground UI: it appears above the reading-page bitmap and any other visible sprites.
+- One frame is committed before the synchronous SD write begins, so the indicator remains visible while saving.
+- The overlay is removed as soon as the existing save call returns.
+- The TXT footer format and all existing save mechanics are unchanged.
