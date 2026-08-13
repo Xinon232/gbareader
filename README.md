@@ -41,23 +41,23 @@ Version 0.3.0 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of
 
 ### Library
 
-- `Up` / `Down`: select a `.txt` or `.epub` file
-- `A`: open selected file
+- `Up` / `Down`: select a `.txt` or `.epub` book
+- `A`: open the selected book
 
 ### Reader
 
 - `Right` or `A`: next page
 - `Left` or `B`: previous page
-- `Down`: open settings
-- `Up`: toggle session-only shoulder page turns, with no confirmation prompt. When enabled, both `L` and `R` advance one page; when disabled, both do nothing. This mode starts disabled at every app launch and is never saved.
-- `Start`: save the current TXT book manually; a foreground `save...` UI-font overlay is shown while the SD save runs
-- `Select`: return to library
+- `Down`: open the reader settings
+- `Up`: enable or disable shoulder-button page turns for the current session. When enabled, `L` or `R` goes to the next page. This option starts disabled whenever the app launches and is not saved.
+- `Start`: save the current page and reader settings in the open TXT file. A `save...` message appears while the footer is written to the SD card. EPUB files are read-only, so `Start` does not save them.
+- `Select`: close the book and return to the library without saving
 
 ### Settings
 
-- `Up` / `Down`: select setting
-- `Left` / `Right`: change value
-- `B` or `Start`: save and return to reading
+- `Up` / `Down`: select line spacing, top margin or bottom margin
+- `Left` / `Right`: change the selected value
+- `B` or `Start`: apply the displayed settings and return to the reader. To retain them for a TXT book, press `Start` again from the reader.
 
 ## Hardware and files
 
