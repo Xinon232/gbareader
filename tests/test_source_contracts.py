@@ -30,11 +30,16 @@ assert "#define FF_MAX_LFN\t\t255" in ffconf
 assert "#define FF_LFN_BUF\t\t255" in ffconf
 assert "BN_DATA_EWRAM_BSS reader::EpubDocument epub;" in main
 assert "reader::Settings settings;" in main
-assert "bn::keypad::l_pressed()" in main
+assert "bool shoulder_page_turns = false;" in main
+assert "shoulder_page_turns = ! shoulder_page_turns;" in main
+assert "bn::keypad::up_pressed()" in main
+assert "bn::keypad::down_pressed()" in main
+assert "shoulder_page_turns && (bn::keypad::l_pressed() || bn::keypad::r_pressed())" in main
+assert "} else if(bn::keypad::l_pressed())" not in main
 assert "file.saved_footer(footer)" in main
 assert "file.save_footer(footer)" in main
-assert "GBA Reader v0.4.1" in main
-assert "GBA Reader v0.4.1" in makefile
+assert "GBA Reader v0.4.2" in main
+assert "GBA Reader v0.4.2" in makefile
 assert "EPUB_MAX_ZIP_ENTRIES" not in epub_header
 assert "TOO_MANY_ENTRIES" not in epub_header
 assert "uint32_t _central_offset" in epub_header
