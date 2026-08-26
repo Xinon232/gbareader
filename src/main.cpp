@@ -43,7 +43,7 @@ constexpr int SAVE_OVERLAY_SPRITE_CAPACITY = 8;
 constexpr int LIBRARY_VISIBLE_ROWS = 4;
 constexpr int LIBRARY_DISPLAY_CHARACTERS = 15;
 constexpr int LIBRARY_WORST_CASE_SPRITES =
-        int(sizeof("GBA Reader v0.4.3") - 1) +
+        int(sizeof("GBA Reader v0.4.4") - 1) +
         LIBRARY_VISIBLE_ROWS * (2 + LIBRARY_DISPLAY_CHARACTERS) +
         int(sizeof("UP/DOWN select   A open") - 1);
 static_assert(UI_SPRITE_CAPACITY <= 128);
