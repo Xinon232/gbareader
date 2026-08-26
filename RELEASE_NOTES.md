@@ -1,7 +1,5 @@
-# GBA Reader v0.4.3 — Save feedback
+# GBA Reader v0.4.4 — Shoulder-button page direction
 
-- Pressing `Start` now displays a `save...` overlay in the existing UI font before the TXT footer is written to SD.
-- The overlay is foreground UI: it appears above the reading-page bitmap and any other visible sprites.
-- One frame is committed before the synchronous SD write begins, so the indicator remains visible while saving.
-- The overlay is removed as soon as the existing save call returns.
-- The TXT footer format and all existing save mechanics are unchanged.
+- Press `Up` in the reader to enable or disable the session-only shoulder-button page turns, as before.
+- When enabled, `L` now goes to the previous page (the same direction as D-pad `Left` and `B`), while `R` goes to the next page.
+- Shoulder-button page turns still start disabled at launch and are not saved.

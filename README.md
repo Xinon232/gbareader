@@ -4,7 +4,7 @@ A focused plain-text e-reader for the Game Boy Advance, built from the proven SD
 
 Version 0.3.0 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of UTF-8 EPUB 2/3 files directly from a Supercard SD card.
 
-## v0.4.3 features
+## v0.4.4 features
 
 - Read-only, case-insensitive `.txt` and `.epub` browser for files in the SD-card root
 - EPUB discovery uses FAT long filenames up to 255 bytes and indexes up to 64 books
@@ -49,7 +49,7 @@ Version 0.3.0 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of
 - `Right` or `A`: next page
 - `Left` or `B`: previous page
 - `Down`: open the reader settings
-- `Up`: enable or disable shoulder-button page turns for the current session. When enabled, `L` or `R` goes to the next page. This option starts disabled whenever the app launches and is not saved.
+- `Up`: enable or disable shoulder-button page turns for the current session. When enabled, `L` goes to the previous page and `R` goes to the next page. This option starts disabled whenever the app launches and is not saved.
 - `Start`: save the current page and reader settings in the open TXT file. A `save...` message appears while the footer is written to the SD card. EPUB files are read-only, so `Start` does not save them.
 - `Select`: close the book and return to the library without saving
 
@@ -61,7 +61,7 @@ Version 0.3.0 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of
 
 ## Hardware and files
 
-v0.4.3 uses the Supercard SD access path inherited from the base engine. Copy UTF-8 `.txt` or supported `.epub` files to the **root** of the SD card. The browser indexes up to 64 files and retains filenames up to 255 bytes for opening. TXT save footers retain the current position and reading-layout settings.
+v0.4.4 uses the Supercard SD access path inherited from the base engine. Copy UTF-8 `.txt` or supported `.epub` files to the **root** of the SD card. The browser indexes up to 64 files and retains filenames up to 255 bytes for opening. TXT save footers retain the current position and reading-layout settings.
 
 An emulator without the expected Supercard storage interface can validate the ROM header and execute the UI path, but it cannot prove SD/FatFS behavior. Real-hardware verification remains important.
 

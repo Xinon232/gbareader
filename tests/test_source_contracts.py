@@ -34,7 +34,8 @@ assert "bool shoulder_page_turns = false;" in main
 assert "shoulder_page_turns = ! shoulder_page_turns;" in main
 assert "bn::keypad::up_pressed()" in main
 assert "bn::keypad::down_pressed()" in main
-assert "shoulder_page_turns && (bn::keypad::l_pressed() || bn::keypad::r_pressed())" in main
+assert "shoulder_page_turns && bn::keypad::r_pressed()" in main
+assert "shoulder_page_turns && bn::keypad::l_pressed()" in main
 assert "} else if(bn::keypad::l_pressed())" not in main
 assert "file.saved_footer(footer)" in main
 assert "file.save_footer(footer)" in main
@@ -44,8 +45,8 @@ assert "file.save_footer(footer);\n                save_sprites.clear();" in mai
 assert "generator.set_bg_priority(0);" in main
 assert "generator.set_z_order(-32767);" in main
 assert "sprite.put_above();" in main
-assert "GBA Reader v0.4.3" in main
-assert "GBA Reader v0.4.3" in makefile
+assert "GBA Reader v0.4.4" in main
+assert "GBA Reader v0.4.4" in makefile
 assert "EPUB_MAX_ZIP_ENTRIES" not in epub_header
 assert "TOO_MANY_ENTRIES" not in epub_header
 assert "uint32_t _central_offset" in epub_header

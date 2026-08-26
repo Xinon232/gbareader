@@ -1,4 +1,4 @@
-// GBA Reader v0.4.3 -- read-only Supercard SD TXT/EPUB reader.
+// GBA Reader v0.4.4 -- read-only Supercard SD TXT/EPUB reader.
 
 #include "bn_bg_palette_item.h"
 #include "bn_core.h"
@@ -216,10 +216,11 @@ int main()
             if(bn::keypad::up_pressed()) {
                 shoulder_page_turns = ! shoulder_page_turns;
             } else if((bn::keypad::right_pressed() || bn::keypad::a_pressed() ||
-                       (shoulder_page_turns && (bn::keypad::l_pressed() || bn::keypad::r_pressed()))) &&
+                       (shoulder_page_turns && bn::keypad::r_pressed())) &&
                reader::next_page(*active_source, settings, glyph_width, history, page, next)) {
                 page = next; redraw_page = true;
-            } else if((bn::keypad::left_pressed() || bn::keypad::b_pressed()) &&
+            } else if((bn::keypad::left_pressed() || bn::keypad::b_pressed() ||
+                       (shoulder_page_turns && bn::keypad::l_pressed())) &&
                       reader::previous_page(*active_source, settings, glyph_width, history, next)) {
                 page = next; redraw_page = true;
             } else if(bn::keypad::down_pressed()) {
@@ -261,7 +262,7 @@ int main()
             sprites.clear();
             ui.set_center_alignment();
             if(scene == Scene::LIBRARY) {
-                add_text(ui, 0, -68, "GBA Reader v0.4.3", sprites);
+                add_text(ui, 0, -68, "GBA Reader v0.4.4", sprites);
                 if(! storage_ok) add_text(ui, 0, -48, "Supercard SD not ready", sprites);
                 else if(! reader::library_count()) add_text(ui, 0, -48, "No TXT/EPUB in root", sprites);
                 else if(library_status) add_text(ui, 0, -48, library_status, sprites);
