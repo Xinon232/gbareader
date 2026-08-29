@@ -2,9 +2,9 @@
 
 A focused plain-text e-reader for the Game Boy Advance, built from the proven SD/FatFS and font foundation of [`gba-vocab-trainer-CC` v0.2.5](https://github.com/Xinon232/gba-vocab-trainer-CC/releases/tag/v0.2.5).
 
-Version 0.4.5 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of UTF-8 EPUB 2/3 files directly from a Supercard SD card.
+Version 0.4.6 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of UTF-8 EPUB 2/3 files directly from a Supercard SD card.
 
-## v0.4.5 features
+## v0.4.6 features
 
 - Case-insensitive `.txt` and `.epub` browser for files in the SD-card root
 - EPUB discovery uses FAT long filenames up to 255 bytes and indexes up to 64 books
@@ -21,8 +21,10 @@ Version 0.4.5 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of
 - SuperFW font coverage for supported Latin, Greek, Cyrillic, Japanese, CJK and Hangul text
 - Dedicated `gba-vocab-trainer-CC` UI font for menus
 - Line spacing, top margin and bottom margin settings, each adjustable from 1 through 4
-- Lazy, circular page-back history avoids scanning from byte zero when a bookmark is restored or settings close
-- Checksummed embedded TXT/EPUB save footer preserves reading position and settings without sidecars; repeat saves replace the footer instead of growing the book
+- Fixed 64-page circular Back history, persisted in current-format bookmarks
+- Checksummed embedded TXT/EPUB save footer preserves reading position, settings and up to 64 previous page offsets without sidecars; repeat saves replace the footer instead of growing the book
+- Saved page history makes Back immediate after reopening a current-format bookmark; older bookmarks rebuild Back history incrementally without a blocking full-book scan
+- Save completion is reported as `Saved` or `Save failed`, then disappears automatically while controls remain responsive
 - Runs of three or more spaces collapse to one space, and repeated newlines collapse to one line break
 - UTF-8 BOM handling and safe replacement of malformed or unsupported input
 - White reading page with black text
@@ -50,8 +52,10 @@ Version 0.4.5 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of
 - `Left` or `B`: previous page
 - `Down`: open the reader settings
 - `Up`: enable or disable shoulder-button page turns for the current session. When enabled, `L` goes to the previous page and `R` goes to the next page. This option starts disabled whenever the app launches and is not saved.
-- `Start`: save the current page and reader settings inside the open TXT or EPUB file. A `save...` message appears while writing, followed by the honest result: `Saved` or `Save failed`.
+- `Start`: save the current page, reader settings and up to 64 previous page offsets inside the open TXT or EPUB file. A `save...` message appears while writing, followed temporarily by the honest result: `Saved` or `Save failed`.
 - `Select`: close the book and return to the library without saving
+
+When opening a v0.4.6 bookmark, up to 64 saved previous pages are immediately available. Older bookmarks are still accepted; their Back history is rebuilt incrementally, and an early Back request shows `Loading back...` without blocking the application.
 
 ### Settings
 
@@ -61,7 +65,7 @@ Version 0.4.5 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of
 
 ## Hardware and files
 
-v0.4.5 uses the Supercard SD access path inherited from the base engine. Copy UTF-8 `.txt` or supported `.epub` files to the **root** of the SD card. The browser indexes up to 64 files and retains filenames up to 255 bytes for opening. Embedded save footers retain the current position and reading-layout settings for both formats.
+v0.4.6 uses the Supercard SD access path inherited from the base engine. Copy UTF-8 `.txt` or supported `.epub` files to the **root** of the SD card. The browser indexes up to 64 files and retains filenames up to 255 bytes for opening. Embedded save footers retain the current position and reading-layout settings for both formats.
 
 An emulator without the expected Supercard storage interface can validate the ROM header and execute the UI path, but it cannot prove SD/FatFS behavior. Real-hardware verification remains important.
 

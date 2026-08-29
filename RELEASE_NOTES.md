@@ -1,8 +1,9 @@
-# GBA Reader v0.4.5 — Embedded EPUB saves and larger books
+# GBA Reader v0.4.6 — Immediate Back navigation and transient save status
 
-- `Start` now embeds the same checksummed progress/settings footer in TXT and EPUB books. Recognizable footers are hidden from both logical streams even after an interrupted write, while progress is restored only from a checksum-valid footer; EPUB parsing sees the original ZIP length and repeat saves replace rather than append.
-- Save completion is checked and reported honestly as `Saved` or `Save failed` after the write attempt.
-- Streaming XHTML support increases to 32 MiB uncompressed and 16 MiB compressed per required entry, with a 128 MiB archive bound and no whole-chapter allocation.
-- Archive, metadata, compressed-entry, chapter-count, chapter-size and total-text limits now have distinct diagnostics.
-- Exact bookmark restore and settings close no longer rebuild page history from byte zero. Back history is reconstructed lazily, and the fixed 64-page history now uses a circular buffer.
-- Existing TXT footer compatibility, ZIP/metadata safety bounds, and the text-only EPUB scope are preserved.
+- Current-format embedded TXT/EPUB bookmarks now preserve the fixed 64-page circular Back history in addition to reading position and layout settings.
+- Reopening a newly saved book makes up to 64 previous pages immediately available without scanning from byte zero.
+- Existing 96-byte v1 bookmarks remain compatible. Missing Back history is rebuilt one page per main-loop update; an early Back request shows `Loading back...` instead of blocking in an apparent freeze.
+- `Saved` and `Save failed` now disappear automatically after a short non-blocking interval, while page and menu controls remain responsive.
+- The new checksummed 384-byte v2 footer replaces either an existing v1 or v2 footer without cumulative file growth.
+- Failed footer upgrades restore the exact previous footer and file length.
+- TXT and EPUB logical streams continue to hide recognizable save footers, including checksum-invalid interrupted saves.

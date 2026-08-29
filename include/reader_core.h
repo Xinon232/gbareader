@@ -68,6 +68,16 @@ struct PageHistory {
     bool lazy;
 };
 
+enum class HistoryRebuildState : uint8_t { IDLE, BUILDING, READY, FAILED };
+
+struct PageHistoryRebuild {
+    PageHistory rebuilt;
+    Page scan;
+    uint32_t anchor;
+    HistoryRebuildState state;
+    bool initialized;
+};
+
 bool layout_page(const ByteSource& source, uint32_t offset, const Settings& settings,
                  GlyphWidth glyph_width, Page& page);
 bool open_first_page(const ByteSource& source, const Settings& settings, GlyphWidth glyph_width,
@@ -78,5 +88,9 @@ bool next_page(const ByteSource& source, const Settings& settings, GlyphWidth gl
                PageHistory& history, const Page& current, Page& next);
 bool previous_page(const ByteSource& source, const Settings& settings, GlyphWidth glyph_width,
                    PageHistory& history, Page& previous);
+void begin_history_rebuild(uint32_t anchor, PageHistoryRebuild& rebuild);
+HistoryRebuildState step_history_rebuild(const ByteSource& source, const Settings& settings,
+                                         GlyphWidth glyph_width, PageHistoryRebuild& rebuild);
+bool adopt_rebuilt_history(PageHistoryRebuild& rebuild, PageHistory& history);
 
 }

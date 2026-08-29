@@ -17,6 +17,11 @@ g++ "${CXXFLAGS[@]}" \
 "$OUT/test_reader_core"
 
 g++ "${CXXFLAGS[@]}" \
+    "$ROOT/tests/test_reader_ui_state.cpp" "$ROOT/src/reader_ui_state.cpp" \
+    -o "$OUT/test_reader_ui_state"
+"$OUT/test_reader_ui_state"
+
+g++ "${CXXFLAGS[@]}" \
     "$ROOT/tests/test_reader_txt_save.cpp" "$ROOT/src/reader_txt_save.cpp" "$ROOT/src/reader_core.cpp" \
     -o "$OUT/test_reader_txt_save"
 "$OUT/test_reader_txt_save"

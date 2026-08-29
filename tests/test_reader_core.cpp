@@ -38,10 +38,14 @@ public:
     {
         if(offset >= _size) return false;
         if(offset == 0) ++zero_reads;
+        if(offset > max_offset) max_offset = offset;
+        ++reads;
         value = _data[offset];
         return true;
     }
     mutable int zero_reads = 0;
+    mutable uint32_t max_offset = 0;
+    mutable uint32_t reads = 0;
 private:
     const unsigned char* _data;
     uint32_t _size;
@@ -115,9 +119,11 @@ static void test_settings_bounds_and_pagination_checkpoints()
     assert(open_first_page(source, s, mono_width, history, first));
     assert(next_page(source, s, mono_width, history, first, second));
     assert(second.start_offset == first.next_offset);
+    PageHistory saved_history = history;
     PageHistory resumed_history{};
     Page resumed{}, resumed_back{};
     assert(open_page_at(source, second.start_offset, s, mono_width, resumed_history, resumed));
+    resumed_history = saved_history; // Version-2 footer restores prior page checkpoints.
     assert(resumed.start_offset == second.start_offset);
     assert(previous_page(source, s, mono_width, resumed_history, resumed_back));
     assert(resumed_back.start_offset == first.start_offset);
@@ -181,7 +187,7 @@ static void test_source_read_failures_are_reported()
     assert(history.count == 1); // A failed page read must not consume a checkpoint.
 }
 
-static void test_bookmark_restore_is_lazy_and_history_is_circular()
+static void test_bookmark_restore_rebuilds_history_incrementally()
 {
     unsigned char text[24000];
     for(uint32_t i = 0; i < sizeof(text); ++i) text[i] = (i % 5 == 4) ? '\n' : 'a';
@@ -191,10 +197,40 @@ static void test_bookmark_restore_is_lazy_and_history_is_circular()
     assert(open_page_at(source, 1000, default_settings(), mono_width, history, page));
     assert(page.start_offset == 1000);
     assert(source.zero_reads == 0); // Exact bookmark restore does not scan from byte zero.
-    Page before{};
-    assert(previous_page(source, default_settings(), mono_width, history, before));
-    assert(source.zero_reads > 0); // Back history is reconstructed only on demand.
 
+    Page before{};
+    const uint32_t reads_before_back = source.reads;
+    assert(!previous_page(source, default_settings(), mono_width, history, before));
+    assert(source.reads == reads_before_back); // Back never starts a blocking full-book scan.
+
+    source.zero_reads = 0;
+    source.max_offset = 0;
+    PageHistoryRebuild rebuild{};
+    begin_history_rebuild(1000, rebuild);
+    assert(source.zero_reads == 0); // Starting the job performs no I/O.
+    assert(step_history_rebuild(source, default_settings(), mono_width, rebuild) ==
+           HistoryRebuildState::BUILDING);
+    assert(source.zero_reads > 0);
+    assert(source.max_offset < 1000); // One step is bounded to one laid-out page.
+
+    int steps = 1;
+    while(rebuild.state == HistoryRebuildState::BUILDING && steps < 1000) {
+        step_history_rebuild(source, default_settings(), mono_width, rebuild);
+        ++steps;
+    }
+    assert(rebuild.state == HistoryRebuildState::READY);
+    assert(adopt_rebuilt_history(rebuild, history));
+    assert(previous_page(source, default_settings(), mono_width, history, before));
+    assert(before.start_offset < 1000);
+}
+
+static void test_page_history_is_circular()
+{
+    unsigned char text[24000];
+    for(uint32_t i = 0; i < sizeof(text); ++i) text[i] = (i % 5 == 4) ? '\n' : 'a';
+    MemorySource source(text, sizeof(text));
+    PageHistory history{};
+    Page page{};
     assert(open_first_page(source, default_settings(), mono_width, history, page));
     uint32_t remembered[PAGE_HISTORY_MAX + 8]{};
     for(int i = 0; i < PAGE_HISTORY_MAX + 8; ++i) {
@@ -221,6 +257,7 @@ int main()
     test_settings_bounds_and_pagination_checkpoints();
     test_excess_whitespace_is_collapsed();
     test_source_read_failures_are_reported();
-    test_bookmark_restore_is_lazy_and_history_is_circular();
+    test_bookmark_restore_rebuilds_history_incrementally();
+    test_page_history_is_circular();
     std::puts("PASS: reader core");
 }

@@ -251,24 +251,62 @@ bool next_page(const ByteSource& source, const Settings& settings, GlyphWidth gl
 bool previous_page(const ByteSource& source, const Settings& settings, GlyphWidth glyph_width,
                    PageHistory& history, Page& previous)
 {
-    if(history.count <= 0 && history.lazy) {
-        PageHistory rebuilt{};
-        Page scan{};
-        if(!layout_page(source, 0, settings, glyph_width, scan)) return false;
-        while(scan.start_offset < history.lazy_anchor) {
-            remember_page(rebuilt, scan.start_offset);
-            if(scan.eof || scan.next_offset <= scan.start_offset ||
-               scan.next_offset >= history.lazy_anchor) break;
-            if(!layout_page(source, scan.next_offset, settings, glyph_width, scan)) return false;
-        }
-        rebuilt.lazy = false;
-        history = rebuilt;
-    }
     if(history.count <= 0) return false;
     const int index = (history.head + history.count - 1) % PAGE_HISTORY_MAX;
     uint32_t offset = history.offsets[index];
     if(! layout_page(source, offset, settings, glyph_width, previous)) return false;
     --history.count;
+    return true;
+}
+
+void begin_history_rebuild(uint32_t anchor, PageHistoryRebuild& rebuild)
+{
+    rebuild = {};
+    rebuild.anchor = anchor;
+    rebuild.state = anchor ? HistoryRebuildState::BUILDING : HistoryRebuildState::READY;
+}
+
+HistoryRebuildState step_history_rebuild(const ByteSource& source, const Settings& settings,
+                                         GlyphWidth glyph_width, PageHistoryRebuild& rebuild)
+{
+    if(rebuild.state != HistoryRebuildState::BUILDING) return rebuild.state;
+
+    if(!rebuild.initialized) {
+        if(!layout_page(source, 0, settings, glyph_width, rebuild.scan)) {
+            rebuild.state = HistoryRebuildState::FAILED;
+            return rebuild.state;
+        }
+        rebuild.initialized = true;
+    } else {
+        if(rebuild.scan.eof || rebuild.scan.next_offset <= rebuild.scan.start_offset) {
+            rebuild.state = HistoryRebuildState::FAILED;
+            return rebuild.state;
+        }
+        if(rebuild.scan.next_offset >= rebuild.anchor) {
+            rebuild.state = HistoryRebuildState::READY;
+            return rebuild.state;
+        }
+        const uint32_t next_offset = rebuild.scan.next_offset;
+        if(!layout_page(source, next_offset, settings, glyph_width, rebuild.scan)) {
+            rebuild.state = HistoryRebuildState::FAILED;
+            return rebuild.state;
+        }
+    }
+
+    if(rebuild.scan.start_offset < rebuild.anchor)
+        remember_page(rebuild.rebuilt, rebuild.scan.start_offset);
+    if(rebuild.scan.eof || rebuild.scan.next_offset >= rebuild.anchor)
+        rebuild.state = HistoryRebuildState::READY;
+    return rebuild.state;
+}
+
+bool adopt_rebuilt_history(PageHistoryRebuild& rebuild, PageHistory& history)
+{
+    if(rebuild.state != HistoryRebuildState::READY) return false;
+    history = rebuild.rebuilt;
+    history.lazy = false;
+    history.lazy_anchor = 0;
+    rebuild.state = HistoryRebuildState::IDLE;
     return true;
 }
 
