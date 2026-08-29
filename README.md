@@ -2,11 +2,11 @@
 
 A focused plain-text e-reader for the Game Boy Advance, built from the proven SD/FatFS and font foundation of [`gba-vocab-trainer-CC` v0.2.5](https://github.com/Xinon232/gba-vocab-trainer-CC/releases/tag/v0.2.5).
 
-Version 0.3.0 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of UTF-8 EPUB 2/3 files directly from a Supercard SD card.
+Version 0.4.5 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of UTF-8 EPUB 2/3 files directly from a Supercard SD card.
 
-## v0.4.4 features
+## v0.4.5 features
 
-- Read-only, case-insensitive `.txt` and `.epub` browser for files in the SD-card root
+- Case-insensitive `.txt` and `.epub` browser for files in the SD-card root
 - EPUB discovery uses FAT long filenames up to 255 bytes and indexes up to 64 books
 - Buffered FatFS access; books are streamed instead of loaded into GBA RAM
 - Direct EPUB ZIP reading with stored and raw-DEFLATE entries and required-entry CRC-32 verification; nothing is extracted to SD
@@ -21,8 +21,8 @@ Version 0.3.0 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of
 - SuperFW font coverage for supported Latin, Greek, Cyrillic, Japanese, CJK and Hangul text
 - Dedicated `gba-vocab-trainer-CC` UI font for menus
 - Line spacing, top margin and bottom margin settings, each adjustable from 1 through 4
-- Page-forward and page-back history
-- Checksummed embedded TXT-save footer preserves reading position and settings
+- Lazy, circular page-back history avoids scanning from byte zero when a bookmark is restored or settings close
+- Checksummed embedded TXT/EPUB save footer preserves reading position and settings without sidecars; repeat saves replace the footer instead of growing the book
 - Runs of three or more spaces collapse to one space, and repeated newlines collapse to one line break
 - UTF-8 BOM handling and safe replacement of malformed or unsupported input
 - White reading page with black text
@@ -32,9 +32,9 @@ Version 0.3.0 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of
 - **Arabic is not supported.** Arabic code points are rendered as `?`; no shaping or bidirectional path is included.
 - **Text size is fixed.** v0.4.2 keeps the native 16-pixel SuperFW bitmap body font.
 - **This is not full EPUB compliance.** Images are skipped completely, including image-only spine pages. CSS presentation, JavaScript, embedded fonts, audio, video, SVG presentation and DRM are unsupported and ignored or rejected as appropriate. Arabic is unsupported.
-- TXT books can be saved manually with an embedded footer; EPUB files remain read-only and are never extracted to SD.
+- TXT and EPUB books can be saved manually with an embedded trailing footer. EPUB ZIP bytes remain logically unchanged because the reader hides a recognizable footer before parsing, but restores progress only when its checksum is valid; EPUB contents are never extracted or rewritten.
 - ZIP64 and multi-disk archives are rejected. Required metadata and spine text must be unencrypted and use stored (0) or DEFLATE (8) compression; unsupported methods or encryption on recognized, ignored image assets do not prevent reading.
-- The ZIP central directory is validated as a stream, so image-heavy EPUBs are not rejected merely for containing more than 128 archive members. Remaining compile-time limits are 256 readable spine documents, 255-byte archive paths, 64 KiB uncompressed metadata, 4 MiB uncompressed XHTML per spine document, 4 MiB compressed required entry and 64 MiB archive. XHTML text is exposed through a 16 KiB visible-text window rather than a whole-chapter buffer. Ignored images, fonts and other non-spine assets are not subject to the XHTML limit. Exceeding an applicable limit is an error; text is never silently truncated.
+- The ZIP central directory is validated as a stream, so image-heavy EPUBs are not rejected merely for containing more than 128 archive members. Remaining compile-time limits are 256 readable spine documents, 255-byte archive paths, 64 KiB uncompressed metadata, 32 MiB uncompressed XHTML per spine document, 16 MiB compressed required entry and 128 MiB archive. XHTML is inflated and converted through a 32 KiB dictionary and 16 KiB visible-text window, never a whole-chapter allocation. Ignored images, fonts and other non-spine assets are not subject to the XHTML limit. Each applicable limit has a distinct user-facing error; text is never silently truncated.
 - EPUB package metadata and XHTML must be UTF-8. UTF-16 XML/XHTML is outside this release's bounded parser scope.
 
 ## Controls
@@ -50,7 +50,7 @@ Version 0.3.0 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of
 - `Left` or `B`: previous page
 - `Down`: open the reader settings
 - `Up`: enable or disable shoulder-button page turns for the current session. When enabled, `L` goes to the previous page and `R` goes to the next page. This option starts disabled whenever the app launches and is not saved.
-- `Start`: save the current page and reader settings in the open TXT file. A `save...` message appears while the footer is written to the SD card. EPUB files are read-only, so `Start` does not save them.
+- `Start`: save the current page and reader settings inside the open TXT or EPUB file. A `save...` message appears while writing, followed by the honest result: `Saved` or `Save failed`.
 - `Select`: close the book and return to the library without saving
 
 ### Settings
@@ -61,7 +61,7 @@ Version 0.3.0 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of
 
 ## Hardware and files
 
-v0.4.4 uses the Supercard SD access path inherited from the base engine. Copy UTF-8 `.txt` or supported `.epub` files to the **root** of the SD card. The browser indexes up to 64 files and retains filenames up to 255 bytes for opening. TXT save footers retain the current position and reading-layout settings.
+v0.4.5 uses the Supercard SD access path inherited from the base engine. Copy UTF-8 `.txt` or supported `.epub` files to the **root** of the SD card. The browser indexes up to 64 files and retains filenames up to 255 bytes for opening. Embedded save footers retain the current position and reading-layout settings for both formats.
 
 An emulator without the expected Supercard storage interface can validate the ROM header and execute the UI path, but it cannot prove SD/FatFS behavior. Real-hardware verification remains important.
 
@@ -98,9 +98,9 @@ The emulator target only checks for immediate ROM/header or illegal-opcode rejec
 ## Architecture
 
 - `reader_core`: host-testable UTF-8 decoding, wrapping, pagination and page history
-- `reader_file`: read-only FatFS library scan and 512-byte cached book stream
+- `reader_file`: FatFS library scan, 512-byte cached logical book stream and replaceable trailing save-footer I/O
 - `epub_document`: bounded ZIP/container/OPF parser plus streaming stored/DEFLATE XHTML-to-text conversion, exposed as a virtual concatenated `ByteSource`; open performs a count-only pass for stable offsets and random reads use a restartable 16 KiB text window
-- `reader_save`: checksummed, versioned SRAM state
+- `reader_txt_save`: checksummed, versioned embedded save-footer encoding retained compatibly from TXT support
 - `main`: Butano UI, controls and page presentation
 - `superfw_font`: SuperFW software glyph renderer targeting a double-buffered 8-bit bitmap background
 

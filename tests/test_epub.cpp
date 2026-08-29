@@ -34,6 +34,12 @@ private:
     uint32_t _fail_at;
 };
 
+class OversizedSource final : public ByteSource {
+public:
+    uint32_t size() const override { return EPUB_MAX_ARCHIVE_BYTES + 1; }
+    bool byte_at(uint32_t, unsigned char&) const override { return false; }
+};
+
 static void expect_text(const char* path, const char* expected)
 {
     FileSource archive(path);
@@ -76,7 +82,18 @@ static void expect_repeated_text(const char* path, unsigned char repeated, uint3
 
 int main(int argc, char** argv)
 {
-    assert(argc == 62);
+    static_assert(EPUB_MAX_XHTML_BYTES >= 16 * 1024 * 1024);
+    assert(std::strcmp(epub_error_string(EpubError::ARCHIVE_TOO_LARGE), "EPUB archive too large") == 0);
+    assert(std::strcmp(epub_error_string(EpubError::METADATA_TOO_LARGE), "EPUB metadata too large") == 0);
+    assert(std::strcmp(epub_error_string(EpubError::COMPRESSED_ENTRY_TOO_LARGE), "EPUB compressed entry too large") == 0);
+    assert(std::strcmp(epub_error_string(EpubError::CHAPTER_TOO_LARGE), "EPUB chapter too large") == 0);
+    assert(std::strcmp(epub_error_string(EpubError::TOO_MANY_SPINE_ITEMS), "EPUB has too many chapters") == 0);
+    assert(std::strcmp(epub_error_string(EpubError::BOOK_TEXT_TOO_LARGE), "EPUB text total too large") == 0);
+    OversizedSource oversized_source;
+    EpubDocument oversized_book;
+    assert(!oversized_book.open(oversized_source));
+    assert(oversized_book.error() == EpubError::ARCHIVE_TOO_LARGE);
+    assert(argc == 66);
     expect_text(argv[1], "Stored chapter.\n");
     expect_text(argv[2], "Deflated chapter.\n");
     expect_text(argv[3], "Second\nA & < > \" '  A A ?\nItem\nFirst file.\n");
@@ -97,7 +114,7 @@ int main(int argc, char** argv)
     expect_error(argv[9], EpubError::ENCRYPTED);
     expect_error(argv[10], EpubError::UNSUPPORTED_COMPRESSION);
     expect_error(argv[11], EpubError::UNSAFE_PATH);
-    expect_error(argv[12], EpubError::TOO_LARGE);
+    expect_error(argv[12], EpubError::CHAPTER_TOO_LARGE);
     expect_repeated_text(argv[13], 'x', 65530);
     expect_text(argv[14], "Readable chapter.\n");
     expect_text(argv[15], "Namespaced chapter.\n");
@@ -176,6 +193,17 @@ int main(int argc, char** argv)
     expect_text(argv[59], "One\nTwo\nTerm\nDef\nA B\nPic\nCaption\n");
     expect_error(argv[60], EpubError::MALFORMED_ZIP);
     expect_error(argv[61], EpubError::MALFORMED_ZIP);
+
+    FileSource large_archive(argv[62]); EpubDocument large_book;
+    assert(large_book.open(large_archive));
+    assert(large_book.size() == 5 * 1024 * 1024 + 1);
+    assert(large_book.byte_at(0, value) && value == 'z');
+    assert(large_book.byte_at(5 * 1024 * 1024 - 1, value) && value == 'z');
+    assert(large_book.byte_at(5 * 1024 * 1024, value) && value == '\n');
+
+    expect_error(argv[63], EpubError::METADATA_TOO_LARGE);
+    expect_error(argv[64], EpubError::COMPRESSED_ENTRY_TOO_LARGE);
+    expect_error(argv[65], EpubError::TOO_MANY_SPINE_ITEMS);
 
     FailingSource failed(ordered, ordered.size() - 10); EpubDocument failed_book;
     assert(! failed_book.open(failed)); assert(failed_book.error() == EpubError::READ_FAILED);

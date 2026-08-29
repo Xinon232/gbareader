@@ -30,6 +30,23 @@ private:
     uint32_t _fail_at;
 };
 
+class CountingSource final : public ByteSource {
+public:
+    CountingSource(const unsigned char* data, uint32_t size) : _data(data), _size(size) {}
+    uint32_t size() const override { return _size; }
+    bool byte_at(uint32_t offset, unsigned char& value) const override
+    {
+        if(offset >= _size) return false;
+        if(offset == 0) ++zero_reads;
+        value = _data[offset];
+        return true;
+    }
+    mutable int zero_reads = 0;
+private:
+    const unsigned char* _data;
+    uint32_t _size;
+};
+
 static void test_bom_crlf_paragraphs_and_wrap()
 {
     const unsigned char text[] =
@@ -164,6 +181,38 @@ static void test_source_read_failures_are_reported()
     assert(history.count == 1); // A failed page read must not consume a checkpoint.
 }
 
+static void test_bookmark_restore_is_lazy_and_history_is_circular()
+{
+    unsigned char text[24000];
+    for(uint32_t i = 0; i < sizeof(text); ++i) text[i] = (i % 5 == 4) ? '\n' : 'a';
+    CountingSource source(text, sizeof(text));
+    PageHistory history{};
+    Page page{};
+    assert(open_page_at(source, 1000, default_settings(), mono_width, history, page));
+    assert(page.start_offset == 1000);
+    assert(source.zero_reads == 0); // Exact bookmark restore does not scan from byte zero.
+    Page before{};
+    assert(previous_page(source, default_settings(), mono_width, history, before));
+    assert(source.zero_reads > 0); // Back history is reconstructed only on demand.
+
+    assert(open_first_page(source, default_settings(), mono_width, history, page));
+    uint32_t remembered[PAGE_HISTORY_MAX + 8]{};
+    for(int i = 0; i < PAGE_HISTORY_MAX + 8; ++i) {
+        remembered[i] = page.start_offset;
+        Page next{};
+        assert(next_page(source, default_settings(), mono_width, history, page, next));
+        page = next;
+    }
+    assert(history.count == PAGE_HISTORY_MAX);
+    assert(history.head > 0);
+    for(int i = PAGE_HISTORY_MAX + 7; i >= 8; --i) {
+        Page previous{};
+        assert(previous_page(source, default_settings(), mono_width, history, previous));
+        assert(previous.start_offset == remembered[i]);
+    }
+    assert(history.count == 0);
+}
+
 int main()
 {
     test_bom_crlf_paragraphs_and_wrap();
@@ -172,5 +221,6 @@ int main()
     test_settings_bounds_and_pagination_checkpoints();
     test_excess_whitespace_is_collapsed();
     test_source_read_failures_are_reported();
+    test_bookmark_restore_is_lazy_and_history_is_circular();
     std::puts("PASS: reader core");
 }

@@ -22,6 +22,7 @@ g++ "${CXXFLAGS[@]}" \
 "$OUT/test_reader_txt_save"
 
 g++ "${CXXFLAGS[@]}" "$ROOT/tests/test_reader_file.cpp" "$ROOT/src/reader_file.cpp" \
+    "$ROOT/src/reader_txt_save.cpp" "$ROOT/src/reader_core.cpp" \
     -o "$OUT/test_reader_file"
 "$OUT/test_reader_file"
 
@@ -66,6 +67,9 @@ g++ "${CXXFLAGS[@]}" \
     "$OUT/fixtures/mixed-case-media.epub" "$OUT/fixtures/percent-traversal.epub" \
     "$OUT/fixtures/long-internal-path.epub" "$OUT/fixtures/visible-cdata.epub" \
     "$OUT/fixtures/semantic-blocks.epub" "$OUT/fixtures/payload-overlap.epub" \
-    "$OUT/fixtures/duplicate-required-name.epub"
+    "$OUT/fixtures/duplicate-required-name.epub" "$OUT/fixtures/large-streamed.epub" \
+    "$OUT/fixtures/metadata-too-large.epub" \
+    "$OUT/fixtures/compressed-entry-too-large.epub" \
+    "$OUT/fixtures/too-many-spine-items.epub"
 
 python3 "$ROOT/tests/test_source_contracts.py"

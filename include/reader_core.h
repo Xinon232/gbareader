@@ -63,6 +63,9 @@ using GlyphWidth = int (*)(uint32_t codepoint);
 struct PageHistory {
     uint32_t offsets[PAGE_HISTORY_MAX];
     int count;
+    int head;
+    uint32_t lazy_anchor;
+    bool lazy;
 };
 
 bool layout_page(const ByteSource& source, uint32_t offset, const Settings& settings,

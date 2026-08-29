@@ -53,6 +53,15 @@ custom("declared-large.epub", ordered_opf, [("OEBPS/one.xhtml", "<p>x</p>"), ("O
 custom("extracted-large.epub", '<package><manifest><item id="x" href="big.xhtml"/></manifest><spine><itemref idref="x"/></spine></package>', [("OEBPS/big.xhtml", "<p>" + "x" * 65530 + "</p>")], zipfile.ZIP_DEFLATED)
 
 custom("window-cross.epub", '<package><manifest><item id="x" href="window.xhtml"/></manifest><spine><itemref idref="x"/></spine></package>', [("OEBPS/window.xhtml", "<p>" + "w" * 40000 + "</p>")], zipfile.ZIP_DEFLATED)
+custom("large-streamed.epub", '<package><manifest><item id="x" href="large.xhtml"/></manifest><spine><itemref idref="x"/></spine></package>', [("OEBPS/large.xhtml", "<p>" + "z" * (5 * 1024 * 1024) + "</p>")], zipfile.ZIP_DEFLATED)
+
+metadata_large_opf = '<package><!--' + ('m' * (64 * 1024)) + '--><manifest><item id="c" href="chapter.xhtml"/></manifest><spine><itemref idref="c"/></spine></package>'
+custom("metadata-too-large.epub", metadata_large_opf, [("OEBPS/chapter.xhtml", "<p>x</p>")])
+custom("compressed-entry-too-large.epub", '<package><manifest><item id="c" href="huge.xhtml"/></manifest><spine><itemref idref="c"/></spine></package>', [("OEBPS/huge.xhtml", b"<p>" + b"q" * (16 * 1024 * 1024) + b"</p>")])
+too_many_manifest = ''.join(f'<item id="s{i}" href="s{i}.xhtml"/>' for i in range(257))
+too_many_refs = ''.join(f'<itemref idref="s{i}"/>' for i in range(257))
+too_many_chapters = [(f"OEBPS/s{i}.xhtml", "<p>x</p>") for i in range(257)]
+custom("too-many-spine-items.epub", f'<package><manifest>{too_many_manifest}</manifest><spine>{too_many_refs}</spine></package>', too_many_chapters)
 
 boundary = bytearray(b"<body><p>")
 boundary.extend(b"a" * (510 - len(boundary)))
@@ -398,8 +407,8 @@ while pos >= 0:
     name = declared[pos + 46:pos + 46 + name_len]
     if name.endswith(b"one.xhtml"):
         lpos = local_record(declared, pos)
-        struct.pack_into("<I", declared, pos + 24, 4 * 1024 * 1024 + 1)
-        struct.pack_into("<I", declared, lpos + 22, 4 * 1024 * 1024 + 1)
+        struct.pack_into("<I", declared, pos + 24, 32 * 1024 * 1024 + 1)
+        struct.pack_into("<I", declared, lpos + 22, 32 * 1024 * 1024 + 1)
     pos = declared.find(b"PK\x01\x02", pos + 4)
 (out / "declared-large.epub").write_bytes(declared)
 

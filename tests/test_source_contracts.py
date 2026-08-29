@@ -40,19 +40,25 @@ assert "} else if(bn::keypad::l_pressed())" not in main
 assert "file.saved_footer(footer)" in main
 assert "file.save_footer(footer)" in main
 assert "show_saving_overlay(save_ui, save_sprites);" in main
-assert "bn::core::update();\n                file.save_footer(footer);" in main
-assert "file.save_footer(footer);\n                save_sprites.clear();" in main
+overlay = main[main.index("void show_saving_overlay"):main.index("void show_save_result")]
+assert overlay.index("sprites.clear();") < overlay.index("generator.generate")
+assert "const bool saved = file.save_footer(footer);" in main
+assert "show_save_result(save_ui, save_sprites, saved);" in main
+assert "save_sprites.clear();\n                epub.close(); file.close();" in main
 assert "generator.set_bg_priority(0);" in main
 assert "generator.set_z_order(-32767);" in main
 assert "sprite.put_above();" in main
-assert "GBA Reader v0.4.4" in main
-assert "GBA Reader v0.4.4" in makefile
+assert "GBA Reader v0.4.5" in main
+assert "GBA Reader v0.4.5" in makefile
 assert "EPUB_MAX_ZIP_ENTRIES" not in epub_header
 assert "TOO_MANY_ENTRIES" not in epub_header
 assert "uint32_t _central_offset" in epub_header
 assert "EPUB_MAX_SPINE_ITEMS = 256" in epub_header
 assert "struct SpineItem { uint32_t central_offset;" in epub_header
 assert "EPUB_TEXT_WINDOW_BYTES = 16 * 1024" in epub_header
-assert "EPUB_MAX_XHTML_BYTES = 4 * 1024 * 1024" in epub_header
+assert "EPUB_MAX_XHTML_BYTES = 32 * 1024 * 1024" in epub_header
+assert "COMPRESSED_ENTRY_TOO_LARGE" in epub_header
+assert "book_size_without_footer(_name" in file_source
+assert "!supported_book_name(_name)" in file_source
 assert "idrefs[EPUB_MAX_SPINE_ITEMS]" not in (root / "src/epub_document.cpp").read_text()
 print("PASS: source contracts")

@@ -411,7 +411,7 @@ struct TextParser {
 
 const char* epub_error_string(EpubError e)
 {
-    switch(e) { case EpubError::NONE:return "EPUB ready"; case EpubError::READ_FAILED:return "EPUB read failed"; case EpubError::NOT_ZIP:return "Not an EPUB ZIP"; case EpubError::MULTI_DISK:return "Multi-disk EPUB"; case EpubError::ZIP64:return "ZIP64 EPUB unsupported"; case EpubError::ENCRYPTED:return "Encrypted EPUB"; case EpubError::UNSUPPORTED_COMPRESSION:return "EPUB compression unsupported"; case EpubError::TOO_LARGE:return "EPUB chapter too large"; case EpubError::MISSING_CONTAINER:return "EPUB container missing"; case EpubError::MISSING_ROOTFILE:return "EPUB package missing"; case EpubError::MISSING_MANIFEST_ITEM:return "EPUB manifest broken"; case EpubError::MISSING_SPINE:return "EPUB spine missing"; case EpubError::UNSAFE_PATH:return "Unsafe EPUB path"; case EpubError::INVALID_XHTML:return "EPUB text malformed"; default:return "Corrupt EPUB"; }
+    switch(e) { case EpubError::NONE:return "EPUB ready"; case EpubError::READ_FAILED:return "EPUB read failed"; case EpubError::NOT_ZIP:return "Not an EPUB ZIP"; case EpubError::MULTI_DISK:return "Multi-disk EPUB"; case EpubError::ZIP64:return "ZIP64 EPUB unsupported"; case EpubError::ENCRYPTED:return "Encrypted EPUB"; case EpubError::UNSUPPORTED_COMPRESSION:return "EPUB compression unsupported"; case EpubError::ARCHIVE_TOO_LARGE:return "EPUB archive too large"; case EpubError::METADATA_TOO_LARGE:return "EPUB metadata too large"; case EpubError::COMPRESSED_ENTRY_TOO_LARGE:return "EPUB compressed entry too large"; case EpubError::CHAPTER_TOO_LARGE:return "EPUB chapter too large"; case EpubError::TOO_MANY_SPINE_ITEMS:return "EPUB has too many chapters"; case EpubError::BOOK_TEXT_TOO_LARGE:return "EPUB text total too large"; case EpubError::MISSING_CONTAINER:return "EPUB container missing"; case EpubError::MISSING_ROOTFILE:return "EPUB package missing"; case EpubError::MISSING_MANIFEST_ITEM:return "EPUB manifest broken"; case EpubError::MISSING_SPINE:return "EPUB spine missing"; case EpubError::UNSAFE_PATH:return "Unsafe EPUB path"; case EpubError::INVALID_XHTML:return "EPUB text malformed"; default:return "Corrupt EPUB"; }
 }
 
 EpubDocument::EpubDocument() { close(); }
@@ -421,7 +421,7 @@ bool EpubDocument::fail(EpubError e) const { _error=e; return false; }
 bool EpubDocument::open(const ByteSource& archive)
 {
     close(); _archive=&archive;
-    if(archive.size()>EPUB_MAX_ARCHIVE_BYTES)return fail(EpubError::TOO_LARGE);
+    if(archive.size()>EPUB_MAX_ARCHIVE_BYTES)return fail(EpubError::ARCHIVE_TOO_LARGE);
     if(!parse_zip()||!build_spine()){_virtual_size=0;return false;}
     _error=EpubError::NONE; return true;
 }
@@ -560,12 +560,13 @@ bool EpubDocument::validate_local_entry(const ZipEntry& z, uint32_t& data) const
 bool EpubDocument::load_entry(const ZipEntry& z, uint32_t uncompressed_limit) const
 {
     if(z.method!=0&&z.method!=8)return fail(EpubError::UNSUPPORTED_COMPRESSION);
-    if(z.compressed_size>EPUB_MAX_COMPRESSED_BYTES||z.uncompressed_size>uncompressed_limit)return fail(EpubError::TOO_LARGE);
+    if(z.compressed_size>EPUB_MAX_COMPRESSED_BYTES)return fail(EpubError::COMPRESSED_ENTRY_TOO_LARGE);
+    if(z.uncompressed_size>uncompressed_limit)return fail(EpubError::METADATA_TOO_LARGE);
     uint32_t data;if(!validate_local_entry(z,data))return false;
     if(z.method==0){if(z.compressed_size!=z.uncompressed_size)return fail(EpubError::MALFORMED_ZIP);if(!read_bytes(*_archive,data,_workspace.metadata,z.uncompressed_size))return fail(EpubError::READ_FAILED);if(crc32_bytes(_workspace.metadata,z.uncompressed_size)!=z.crc32)return fail(EpubError::MALFORMED_ZIP);_buffer_size=z.uncompressed_size;return true;}
     tinfl_init(&_inflator);uint32_t in_pos=0,out_pos=0;size_t avail=0,used=0;tinfl_status status=TINFL_STATUS_NEEDS_MORE_INPUT;
     while(status>0){if(used==avail){uint32_t left=z.compressed_size-in_pos;uint32_t take=left>sizeof(_input)?sizeof(_input):left;if(!take)return fail(EpubError::MALFORMED_ZIP);if(!read_bytes(*_archive,data+in_pos,_input,take))return fail(EpubError::READ_FAILED);in_pos+=take;avail=take;used=0;}
-        size_t in_count=avail-used,out_count=z.uncompressed_size-out_pos;uint32_t f=TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF;if(in_pos<z.compressed_size||used+in_count<avail)f|=TINFL_FLAG_HAS_MORE_INPUT;status=tinfl_decompress(&_inflator,_input+used,&in_count,_workspace.metadata,_workspace.metadata+out_pos,&out_count,f);used+=in_count;out_pos+=uint32_t(out_count);if(out_pos>z.uncompressed_size||(status==TINFL_STATUS_HAS_MORE_OUTPUT&&out_pos==z.uncompressed_size))return fail(EpubError::TOO_LARGE);}
+        size_t in_count=avail-used,out_count=z.uncompressed_size-out_pos;uint32_t f=TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF;if(in_pos<z.compressed_size||used+in_count<avail)f|=TINFL_FLAG_HAS_MORE_INPUT;status=tinfl_decompress(&_inflator,_input+used,&in_count,_workspace.metadata,_workspace.metadata+out_pos,&out_count,f);used+=in_count;out_pos+=uint32_t(out_count);if(out_pos>z.uncompressed_size||(status==TINFL_STATUS_HAS_MORE_OUTPUT&&out_pos==z.uncompressed_size))return fail(EpubError::MALFORMED_ZIP);}
     const uint32_t consumed=in_pos-uint32_t(avail-used);
     if(status!=TINFL_STATUS_DONE||out_pos!=z.uncompressed_size||consumed!=z.compressed_size||crc32_bytes(_workspace.metadata,out_pos)!=z.crc32)return fail(EpubError::MALFORMED_ZIP);_buffer_size=out_pos;return true;
 }
@@ -602,7 +603,7 @@ bool EpubDocument::build_spine()
                 const bool has_media=attribute(item,item_end,"media-type",media,sizeof(media));
                 if(has_media&&image_media_type(media)){matched=true;skip_image=true;break;}
                 if(has_media&&!ascii_equal(media,"application/xhtml+xml")&&!ascii_equal(media,"text/html"))return fail(EpubError::MISSING_MANIFEST_ITEM);
-                if(refs>=EPUB_MAX_SPINE_ITEMS)return fail(EpubError::TOO_LARGE);
+                if(refs>=EPUB_MAX_SPINE_ITEMS)return fail(EpubError::TOO_MANY_SPINE_ITEMS);
                 char path[EPUB_MAX_PATH];if(!normalize_path(normalized,href,path))return fail(EpubError::UNSAFE_PATH);
                 ZipEntry entry{};int entry_status=find_entry(path,entry);if(entry_status<0)return false;if(!entry_status)return fail(EpubError::MISSING_MANIFEST_ITEM);
                 _spine[refs].central_offset=entry.central_offset;matched=true;break;
@@ -615,7 +616,7 @@ bool EpubDocument::build_spine()
     }
     if(!refs)return fail(EpubError::MISSING_SPINE);
     _spine_count=refs;_virtual_size=0;_cached_spine=-1;
-    for(int i=0;i<_spine_count;++i){if(!stream_chapter(i,0,true))return false;_spine[i].start=_virtual_size;_spine[i].size=_buffer_size;if(_virtual_size>0xFFFFFFFFu-_buffer_size)return fail(EpubError::TOO_LARGE);_virtual_size+=_buffer_size;}
+    for(int i=0;i<_spine_count;++i){if(!stream_chapter(i,0,true))return false;_spine[i].start=_virtual_size;_spine[i].size=_buffer_size;if(_virtual_size>0xFFFFFFFFu-_buffer_size)return fail(EpubError::BOOK_TEXT_TOO_LARGE);_virtual_size+=_buffer_size;}
     _cached_spine=-1;return true;
 }
 
@@ -623,7 +624,8 @@ bool EpubDocument::stream_chapter(int i,uint32_t window_start,bool count_only) c
 {
     ZipEntry z{};if(!read_entry(_spine[i].central_offset,z))return false;
     if(z.method!=0&&z.method!=8)return fail(EpubError::UNSUPPORTED_COMPRESSION);
-    if(z.compressed_size>EPUB_MAX_COMPRESSED_BYTES||z.uncompressed_size>EPUB_MAX_XHTML_BYTES)return fail(EpubError::TOO_LARGE);
+    if(z.compressed_size>EPUB_MAX_COMPRESSED_BYTES)return fail(EpubError::COMPRESSED_ENTRY_TOO_LARGE);
+    if(z.uncompressed_size>EPUB_MAX_XHTML_BYTES)return fail(EpubError::CHAPTER_TOO_LARGE);
     uint32_t data;if(!validate_local_entry(z,data))return false;
     TextParser parser{};parser.window=_workspace.stream.text;parser.window_start=window_start;
     uint32_t crc=0xFFFFFFFFu,output=0;

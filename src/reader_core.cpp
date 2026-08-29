@@ -219,28 +219,24 @@ bool open_first_page(const ByteSource& source, const Settings& settings, GlyphWi
 
 static void remember_page(PageHistory& history, uint32_t offset)
 {
-    if(history.count == PAGE_HISTORY_MAX) {
-        std::memmove(history.offsets, history.offsets + 1, sizeof(uint32_t) * (PAGE_HISTORY_MAX - 1));
-        --history.count;
+    if(history.count < PAGE_HISTORY_MAX) {
+        history.offsets[(history.head + history.count) % PAGE_HISTORY_MAX] = offset;
+        ++history.count;
+    } else {
+        history.offsets[history.head] = offset;
+        history.head = (history.head + 1) % PAGE_HISTORY_MAX;
     }
-    history.offsets[history.count++] = offset;
 }
 
 bool open_page_at(const ByteSource& source, uint32_t offset, const Settings& settings,
                   GlyphWidth glyph_width, PageHistory& history, Page& page)
 {
     history = {};
-    if(offset == 0) return layout_page(source, 0, settings, glyph_width, page);
     if(offset >= source.size()) return false;
-
-    Page scan{};
-    if(! layout_page(source, 0, settings, glyph_width, scan)) return false;
-    while(scan.start_offset < offset) {
-        remember_page(history, scan.start_offset);
-        if(scan.eof || scan.next_offset <= scan.start_offset || scan.next_offset >= offset) break;
-        if(! layout_page(source, scan.next_offset, settings, glyph_width, scan)) return false;
-    }
-    return layout_page(source, offset, settings, glyph_width, page);
+    if(!layout_page(source, offset, settings, glyph_width, page)) return false;
+    history.lazy = offset > 0;
+    history.lazy_anchor = offset;
+    return true;
 }
 
 bool next_page(const ByteSource& source, const Settings& settings, GlyphWidth glyph_width,
@@ -255,8 +251,22 @@ bool next_page(const ByteSource& source, const Settings& settings, GlyphWidth gl
 bool previous_page(const ByteSource& source, const Settings& settings, GlyphWidth glyph_width,
                    PageHistory& history, Page& previous)
 {
+    if(history.count <= 0 && history.lazy) {
+        PageHistory rebuilt{};
+        Page scan{};
+        if(!layout_page(source, 0, settings, glyph_width, scan)) return false;
+        while(scan.start_offset < history.lazy_anchor) {
+            remember_page(rebuilt, scan.start_offset);
+            if(scan.eof || scan.next_offset <= scan.start_offset ||
+               scan.next_offset >= history.lazy_anchor) break;
+            if(!layout_page(source, scan.next_offset, settings, glyph_width, scan)) return false;
+        }
+        rebuilt.lazy = false;
+        history = rebuilt;
+    }
     if(history.count <= 0) return false;
-    uint32_t offset = history.offsets[history.count - 1];
+    const int index = (history.head + history.count - 1) % PAGE_HISTORY_MAX;
+    uint32_t offset = history.offsets[index];
     if(! layout_page(source, offset, settings, glyph_width, previous)) return false;
     --history.count;
     return true;
