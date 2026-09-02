@@ -34,6 +34,8 @@ public:
     void close();
     uint32_t size() const override { return _virtual_size; }
     bool byte_at(uint32_t offset, unsigned char& value) const override;
+    bool cache_archive_layout(uint32_t& central_offset, uint32_t& central_size,
+                              uint16_t& entry_count) const override;
     EpubError error() const { return _error; }
 
 private:
@@ -71,6 +73,7 @@ private:
     mutable uint32_t _window_start;
     mutable uint32_t _window_size;
     mutable uint32_t _buffer_size;
+    bool _optimized;
     mutable tinfl_decompressor _inflator;
     mutable unsigned char _input[512];
     union Workspace {

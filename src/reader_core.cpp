@@ -66,6 +66,14 @@ static Decoded decode(const ByteSource& source, uint32_t offset)
     for(int i = 1; i < count; ++i) cp = (cp << 6) | (d.bytes[i] & 0x3F);
     if((count == 3 && cp >= 0xD800 && cp <= 0xDFFF) ||
        (count == 3 && cp < 0x800) || (count == 4 && (cp < 0x10000 || cp > 0x10FFFF))) return d;
+    if(cp == 0x2212 || (cp >= 0xFF01 && cp <= 0xFF5E)) {
+        const uint32_t ascii = cp == 0x2212 ? '-' : cp - 0xFEE0;
+        d.code = ascii;
+        d.bytes[0] = static_cast<uint8_t>(ascii);
+        d.count = 1;
+        d.consumed = count;
+        return d;
+    }
     const bool arabic = (cp >= 0x0600 && cp <= 0x06FF) ||
                         (cp >= 0x0750 && cp <= 0x077F) ||
                         (cp >= 0x08A0 && cp <= 0x08FF) ||

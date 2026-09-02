@@ -26,6 +26,7 @@
 #include "hangul.h"
 
 extern void *font_base_addr;
+extern void *reader_font_base_addr;
 
 // Memory structures that describe character/font data.
 
@@ -62,6 +63,7 @@ static bool lookup_chptr(uint32_t code, t_char_render_info *chinfo) {
   // Add here any font database pointers as you wish, they are looked up in order.
   void *font_dblist[] = {
     font_ascii_embedded,
+    reader_font_base_addr,
     font_base_addr,
   };
 
@@ -95,6 +97,8 @@ static bool lookup_chptr(uint32_t code, t_char_render_info *chinfo) {
         } else {
           // Lookup the second index (contains widths and offsets)
           uint16_t ientry = chptr[code_offset];
+          if (ientry == 0xFFFF)
+            break;
           const uint16_t *chdata = &chptr[chdat->charblks[i].end_char - chdat->charblks[i].start_char + 1];
 
           chinfo->char_width = (ientry >> 13) + 1;

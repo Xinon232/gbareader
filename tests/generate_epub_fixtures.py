@@ -27,6 +27,9 @@ def make(name, compression, text):
 make("stored.epub", zipfile.ZIP_STORED, "Stored chapter.")
 make("deflated.epub", zipfile.ZIP_DEFLATED, "Deflated chapter.")
 
+glyph_text = 'ASCII " £ ¥ © ® – — ‘ ’ “ ” • … € ™ 🙂'
+(out / "glyph-corpus.txt").write_text(glyph_text + "\n", encoding="utf-8")
+
 def custom(name, opf, chapters, compression=zipfile.ZIP_STORED, container_xml=container):
     with zipfile.ZipFile(out / name, "w", compression=compression) as z:
         if container_xml is not None:
@@ -76,6 +79,7 @@ custom("prefixed-whitespace.epub", prefixed_opf, [("OEBPS/chapter.xhtml", "<p>Na
 custom("wrong-media.epub", '<package><manifest><item id="c" href="chapter.xhtml" media-type="image/svg+xml"/></manifest><spine><itemref idref="c"/></spine></package>', [("OEBPS/chapter.xhtml", "<p>Not text.</p>")])
 custom("self-closing-suppressed.epub", '<package><manifest><item id="c" href="chapter.xhtml"/></manifest><spine><itemref idref="c"/></spine></package>', [("OEBPS/chapter.xhtml", "<html><head/><style/><script/><body><p>Still visible.</p></body></html>")])
 custom("entities.epub", '<package><manifest><item id="c" href="chapter.xhtml"/></manifest><spine><itemref idref="c"/></spine></package>', [("OEBPS/chapter.xhtml", "<p>&mdash;&ndash;&hellip;&copy;&lsquo;&rsquo;&ldquo;&rdquo;&reg;&trade;</p>")])
+custom("glyph-corpus.epub", '<package><manifest><item id="c" href="chapter.xhtml"/></manifest><spine><itemref idref="c"/></spine></package>', [("OEBPS/chapter.xhtml", '<p>ASCII &quot; &pound; &yen; &copy; &reg; &ndash; &mdash; &lsquo; &rsquo; &ldquo; &rdquo; &bull; &hellip; &euro; &trade; 🙂</p>')])
 custom("ignored-asset.epub", '<package><manifest><item id="c" href="chapter.xhtml" media-type="application/xhtml+xml"/><item id="cover" href="cover.bin" media-type="application/octet-stream"/></manifest><spine><itemref idref="c"/></spine></package>', [("OEBPS/chapter.xhtml", "<p>Readable chapter.</p>"), ("OEBPS/cover.bin", bytes(range(256)) * 300)])
 custom("ignored-corrupt-image.epub", '<package><manifest><item id="c" href="chapter.xhtml" media-type="application/xhtml+xml"/><item id="cover" href="cover.JpG" media-type="image/jpeg"/></manifest><spine><itemref idref="cover"/><itemref idref="c"/></spine></package>', [("OEBPS/chapter.xhtml", "<p>Image skipped, text readable.</p>"), ("OEBPS/cover.JpG", b"not displayed")])
 custom("percent-encoded-href.epub", '<package><manifest><item id="c" href="Text/My%20Chapter.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c"/></spine></package>', [("OEBPS/Text/My Chapter.xhtml", "<p>Encoded path readable.</p>")])
@@ -372,6 +376,30 @@ make_descriptor("descriptor-absent.epub", "absent")
 make_descriptor("descriptor-bad-crc.epub", "bad-crc")
 make_descriptor("descriptor-bad-compressed-size.epub", "bad-compressed-size")
 make_descriptor("descriptor-truncated.epub", "truncated")
+
+def append_compatible_cache(src, dst, cached_text):
+    original = (out / src).read_bytes()
+    eocd = original.rfind(b"PK\x05\x06")
+    assert eocd >= 0
+    count = struct.unpack_from("<H", original, eocd + 10)[0]
+    central_size = struct.unpack_from("<I", original, eocd + 12)[0]
+    central_offset = struct.unpack_from("<I", original, eocd + 16)[0]
+    central = original[central_offset:central_offset + central_size]
+    new_central_offset = len(original) + len(cached_text)
+    new_eocd = struct.pack("<IHHHHIIH", 0x06054B50, 0, 0, count, count,
+                           central_size, new_central_offset, 0)
+    compatible = original + cached_text + central + new_eocd
+    (out / dst).write_bytes(compatible)
+    # Real GBAReader files add only a 32-byte cache trailer and 384-byte save
+    # footer after this fresh EOCD, well inside ordinary ZIP readers' search window.
+    external = out / "external-reader-cache-check.epub"
+    external.write_bytes(compatible + b"x" * (32 + 384))
+    with zipfile.ZipFile(external) as archive:
+        assert archive.read("OEBPS/chapter.xhtml")
+    external.unlink()
+
+append_compatible_cache("descriptor-signed.epub", "appended-cache-compatible.epub",
+                        b"cached normalized text\n" + b"z" * 70000)
 
 trailing = bytearray((out / "deflated.epub").read_bytes())
 cpos = central_record(trailing, b"OEBPS/chapter.xhtml")

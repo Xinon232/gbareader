@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstdio>
 #include <cstring>
+#include <vector>
 
 using namespace reader;
 
@@ -38,6 +39,35 @@ class OversizedSource final : public ByteSource {
 public:
     uint32_t size() const override { return EPUB_MAX_ARCHIVE_BYTES + 1; }
     bool byte_at(uint32_t, unsigned char&) const override { return false; }
+};
+
+class OptimizedSource final : public ByteSource {
+public:
+    OptimizedSource(const char* archive, const char* optimized) :
+        _archive(archive, archive + std::strlen(archive)),
+        _optimized(optimized, optimized + std::strlen(optimized)) {}
+
+    uint32_t size() const override { return uint32_t(_archive.size()); }
+    bool byte_at(uint32_t offset, unsigned char& value) const override {
+        ++archive_reads;
+        if(offset >= _archive.size()) return false;
+        value = static_cast<unsigned char>(_archive[offset]);
+        return true;
+    }
+    uint32_t optimized_size() const override { return uint32_t(_optimized.size()); }
+    bool optimized_byte_at(uint32_t offset, unsigned char& value) const override {
+        ++optimized_reads;
+        if(offset >= _optimized.size()) return false;
+        value = static_cast<unsigned char>(_optimized[offset]);
+        return true;
+    }
+
+    mutable int archive_reads = 0;
+    mutable int optimized_reads = 0;
+
+private:
+    std::vector<char> _archive;
+    std::vector<char> _optimized;
 };
 
 static void expect_text(const char* path, const char* expected)
@@ -93,12 +123,29 @@ int main(int argc, char** argv)
     EpubDocument oversized_book;
     assert(!oversized_book.open(oversized_source));
     assert(oversized_book.error() == EpubError::ARCHIVE_TOO_LARGE);
-    assert(argc == 66);
+    assert(argc == 68);
+
+    OptimizedSource optimized("not a ZIP", "Cached normalized text.\n");
+    EpubDocument optimized_book;
+    assert(optimized_book.open(optimized));
+    assert(optimized_book.size() == std::strlen("Cached normalized text.\n"));
+    assert(optimized.archive_reads == 0);
+    unsigned char optimized_value = 0;
+    assert(optimized_book.byte_at(7, optimized_value) && optimized_value == 'n');
+    assert(optimized.archive_reads == 0);
+    assert(optimized.optimized_reads == 1);
+
     expect_text(argv[1], "Stored chapter.\n");
     expect_text(argv[2], "Deflated chapter.\n");
     expect_text(argv[3], "Second\nA & < > \" '  A A ?\nItem\nFirst file.\n");
 
     FileSource ordered(argv[3]); EpubDocument book; assert(book.open(ordered));
+    uint32_t central_offset = 0;
+    uint32_t central_size = 0;
+    uint16_t entry_count = 0;
+    assert(book.cache_archive_layout(central_offset, central_size, entry_count));
+    assert(central_size > 0 && entry_count == 4);
+    assert(central_offset + central_size < ordered.size());
     const uint32_t boundary = 31; // start of the second spine chapter in the virtual stream.
     unsigned char value = 0; assert(book.byte_at(boundary - 1, value) && value == '\n');
     assert(book.byte_at(boundary, value) && value == 'F');
@@ -204,6 +251,8 @@ int main(int argc, char** argv)
     expect_error(argv[63], EpubError::METADATA_TOO_LARGE);
     expect_error(argv[64], EpubError::COMPRESSED_ENTRY_TOO_LARGE);
     expect_error(argv[65], EpubError::TOO_MANY_SPINE_ITEMS);
+    expect_text(argv[66], "Stored chapter.\n");
+    expect_text(argv[67], "ASCII \" £ ¥ © ® – — ‘ ’ “ ” • … € ™ 🙂\n");
 
     FailingSource failed(ordered, ordered.size() - 10); EpubDocument failed_book;
     assert(! failed_book.open(failed)); assert(failed_book.error() == EpubError::READ_FAILED);

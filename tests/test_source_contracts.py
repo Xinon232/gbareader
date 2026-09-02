@@ -38,7 +38,8 @@ assert "reader::start_save_message(save_message_timer);" in main
 assert "reader::tick_save_message(save_message_timer)" in main
 assert "SAVE_MESSAGE_FRAMES = 90" in (root / "include/reader_ui_state.h").read_text()
 assert "--timer.frames_remaining" in ui_source
-assert "bn::core::update();\n                const bool saved = file.save_footer(footer);" in main
+assert "bn::core::update();\n                const bool saved = file.save_footer(" in main
+assert "active_source == &epub ? active_source : nullptr" in main
 assert "reader::TxtSaveFooter footer{page.start_offset, settings, history};" in main
 
 # Version-2 saves carry the circular page history; version 1 remains readable.
@@ -49,6 +50,7 @@ assert "V2_HISTORY_AT" in save_source
 assert "parse_v1" in save_source
 assert "same_history(verified.history, footer.history)" in file_source
 assert "candidate_sizes[] = {TXT_SAVE_FOOTER_SIZE, TXT_SAVE_FOOTER_V1_SIZE}" in file_source
+assert "layout.has_valid_cache && validate_epub_cache_payload(" in file_source
 
 # Back navigation never performs a synchronous scan from byte zero.
 previous = core[core.index("bool previous_page"):core.index("void begin_history_rebuild")]
@@ -58,10 +60,10 @@ assert "step_history_rebuild" in core
 assert "reader::step_history_rebuild" in main
 assert 'show_overlay(save_ui, save_sprites, "Loading back...")' in main
 
-assert "GBA Reader v0.4.6" in main
-assert "GBA Reader v0.4.6" in makefile
-assert "release/v0.4.6" in workflow
-assert "GBAReader-v0.4.6" in workflow
+assert "GBA Reader v0.4.7" in main
+assert "GBA Reader v0.4.7" in makefile
+assert "release/v0.4.7" in workflow
+assert "GBAReader-v0.4.7" in workflow
 
 assert "EPUB_MAX_ZIP_ENTRIES" not in epub_header
 assert "TOO_MANY_ENTRIES" not in epub_header
@@ -71,5 +73,8 @@ assert "struct SpineItem { uint32_t central_offset;" in epub_header
 assert "EPUB_TEXT_WINDOW_BYTES = 16 * 1024" in epub_header
 assert "EPUB_MAX_XHTML_BYTES = 32 * 1024 * 1024" in epub_header
 assert "COMPRESSED_ENTRY_TOO_LARGE" in epub_header
+assert 'reader_font_base_addr' in (root / "references/superfw/src/fonts/font_render.c").read_text()
+assert 'ientry == 0xFFFF' in (root / "references/superfw/src/fonts/font_render.c").read_text()
+assert 'reader-symbols.pack' in (root / "src/superfw_font_pack.s").read_text()
 assert "idrefs[EPUB_MAX_SPINE_ITEMS]" not in (root / "src/epub_document.cpp").read_text()
 print("PASS: source contracts")

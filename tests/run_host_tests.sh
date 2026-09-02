@@ -75,6 +75,15 @@ g++ "${CXXFLAGS[@]}" \
     "$OUT/fixtures/duplicate-required-name.epub" "$OUT/fixtures/large-streamed.epub" \
     "$OUT/fixtures/metadata-too-large.epub" \
     "$OUT/fixtures/compressed-entry-too-large.epub" \
-    "$OUT/fixtures/too-many-spine-items.epub"
+    "$OUT/fixtures/too-many-spine-items.epub" \
+    "$OUT/fixtures/appended-cache-compatible.epub" \
+    "$OUT/fixtures/glyph-corpus.epub"
+
+python3 "$ROOT/tests/test_glyph_coverage.py" "$OUT/fixtures"
+python3 "$ROOT/references/superfw/res/fonts/generator.py" \
+    --font-files "$ROOT/references/superfw/res/fonts/unscii-16-full.hex" \
+    --font-blocks reader-punctuation,reader-currency,reader-letterlike \
+    --output "$OUT/reader-symbols.pack" >/dev/null
+cmp "$ROOT/references/superfw/res/reader-symbols.pack" "$OUT/reader-symbols.pack"
 
 python3 "$ROOT/tests/test_source_contracts.py"

@@ -91,6 +91,9 @@ blocks = {
   "hangul":   (0xAC00, 0xD7A3, 16),   # Hangul Syllables (pre-composed)
   "cjk-uni":  (0x4E00, 0x9FEF, 16),   # Unified CJK Ideographs
   "fixwidth": (0xFF01, 0xFF20, 16),   # Full-width characters
+  "reader-punctuation": (0x2000, 0x206F, 8),
+  "reader-currency": (0x20A0, 0x20CF, 8),
+  "reader-letterlike": (0x2100, 0x214F, 8),
 
   # Composable char blocks
   "hangul-part": (0x20000, 0x200CC, 16, ["hangul"]),   # Full-width hangul composite syllable.

@@ -99,6 +99,99 @@ void test_failed_replacement_restores_exact_previous_footer_size()
     assert(successful_upgrade.physical_size == 8 + reader::TXT_SAVE_FOOTER_SIZE);
 }
 
+void test_epub_cache_trailer_round_trip_and_corruption()
+{
+    unsigned char trailer[reader::EPUB_CACHE_TRAILER_SIZE];
+    reader::make_epub_cache_trailer(12345, 6789, 20000, 0xA1B2C3D4u, trailer);
+
+    reader::EpubCacheInfo info{};
+    assert(reader::parse_epub_cache_trailer(trailer, sizeof(trailer), 20000,
+                                            info));
+    assert(info.cache_start == 12345);
+    assert(info.text_size == 6789);
+    assert(info.book_size == 20000);
+    assert(info.text_crc32 == 0xA1B2C3D4u);
+
+    trailer[reader::EPUB_CACHE_TRAILER_SIZE - 1] ^= 1;
+    assert(!reader::parse_epub_cache_trailer(trailer, sizeof(trailer), 20000,
+                                             info));
+}
+
+void test_first_epub_cache_write_is_transactional()
+{
+    const uint32_t expected = 8 + 37 + 20 + 22 + reader::EPUB_CACHE_TRAILER_SIZE +
+                              reader::TXT_SAVE_FOOTER_SIZE;
+    const reader::EpubCacheWriteTestResult success =
+            reader::epub_cache_write_transaction_for_tests(37, 0, -1, false);
+    assert(success.success);
+    assert(success.physical_size == expected);
+
+    for(int failed_write = 0; failed_write < 5; ++failed_write) {
+        const reader::EpubCacheWriteTestResult failed =
+                reader::epub_cache_write_transaction_for_tests(
+                        37, reader::TXT_SAVE_FOOTER_SIZE, failed_write, false);
+        assert(!failed.success);
+        assert(failed.physical_size == 8 + reader::TXT_SAVE_FOOTER_SIZE);
+        assert(failed.old_footer_restored);
+    }
+
+    const reader::EpubCacheWriteTestResult failed_sync =
+            reader::epub_cache_write_transaction_for_tests(
+                    37, reader::TXT_SAVE_FOOTER_V1_SIZE, -1, true);
+    assert(!failed_sync.success);
+    assert(failed_sync.physical_size == 8 + reader::TXT_SAVE_FOOTER_V1_SIZE);
+    assert(failed_sync.old_footer_restored);
+}
+
+void test_epub_cache_payload_crc_rejects_corruption_and_bounds()
+{
+    unsigned char payload[] = "123456789";
+    reader::MemorySource source(payload, 9);
+    assert(reader::validate_epub_cache_payload(source, 0, 9, 0xCBF43926u));
+    payload[4] ^= 1;
+    assert(!reader::validate_epub_cache_payload(source, 0, 9, 0xCBF43926u));
+    assert(!reader::validate_epub_cache_payload(source, 4, 6, 0));
+}
+
+void test_epub_cache_layout_hides_cache_and_falls_back_safely()
+{
+    const unsigned char untouched_tail[] = "ordinary ZIP tail";
+    reader::BookStorageLayout untouched{};
+    assert(reader::inspect_book_tail("book.epub", 1000, untouched_tail,
+                                     sizeof(untouched_tail) - 1, untouched));
+    assert(untouched.book_size == 1000);
+    assert(untouched.footer_offset == 1000);
+    assert(!untouched.has_valid_footer);
+    assert(!untouched.has_valid_cache);
+
+    reader::TxtSaveFooter saved{};
+    saved.settings = reader::default_settings();
+    unsigned char tail[reader::EPUB_CACHE_TRAILER_SIZE + reader::TXT_SAVE_FOOTER_SIZE];
+    reader::make_epub_cache_trailer(1000, 200, 1300, 0x12345678u, tail);
+    reader::make_txt_save_footer(saved, tail + reader::EPUB_CACHE_TRAILER_SIZE);
+
+    reader::BookStorageLayout layout{};
+    const uint32_t physical_size = 1300 + sizeof(tail);
+    assert(reader::inspect_book_tail("book.epub", physical_size, tail, sizeof(tail),
+                                     layout));
+    assert(layout.book_size == 1300);
+    assert(layout.footer_offset == 1300 + reader::EPUB_CACHE_TRAILER_SIZE);
+    assert(layout.footer_size == reader::TXT_SAVE_FOOTER_SIZE);
+    assert(layout.cache_start == 1000);
+    assert(layout.cache_size == 200);
+    assert(layout.cache_crc32 == 0x12345678u);
+    assert(layout.has_valid_footer);
+    assert(layout.has_valid_cache);
+
+    tail[reader::EPUB_CACHE_TRAILER_SIZE - 1] ^= 1;
+    assert(reader::inspect_book_tail("book.epub", physical_size, tail, sizeof(tail),
+                                     layout));
+    assert(layout.book_size == 1300);
+    assert(layout.has_valid_footer);
+    assert(!layout.has_valid_cache);
+    assert(layout.cache_crc32 == 0);
+}
+
 }
 
 int main()
@@ -106,6 +199,10 @@ int main()
     test_library_extensions();
     test_v2_and_v1_footer_sizes_are_hidden();
     test_failed_replacement_restores_exact_previous_footer_size();
+    test_epub_cache_trailer_round_trip_and_corruption();
+    test_first_epub_cache_write_is_transactional();
+    test_epub_cache_payload_crc_rejects_corruption_and_bounds();
+    test_epub_cache_layout_hides_cache_and_falls_back_safely();
     assert(std::strcmp(reader::save_result_string(true), "Saved") == 0);
     assert(std::strcmp(reader::save_result_string(false), "Save failed") == 0);
     std::puts("PASS: library and versioned footer I/O");

@@ -375,6 +375,8 @@ struct TextParser {
             else if(len==5&&!std::memcmp(s,"mdash",5))cp=0x2014; else if(len==5&&!std::memcmp(s,"ndash",5))cp=0x2013; else if(len==6&&!std::memcmp(s,"hellip",6))cp=0x2026; else if(len==4&&!std::memcmp(s,"copy",4))cp=0x00A9;
             else if(len==5&&!std::memcmp(s,"lsquo",5))cp=0x2018; else if(len==5&&!std::memcmp(s,"rsquo",5))cp=0x2019; else if(len==5&&!std::memcmp(s,"ldquo",5))cp=0x201C; else if(len==5&&!std::memcmp(s,"rdquo",5))cp=0x201D;
             else if(len==3&&!std::memcmp(s,"reg",3))cp=0x00AE; else if(len==5&&!std::memcmp(s,"trade",5))cp=0x2122;
+            else if(len==4&&!std::memcmp(s,"euro",4))cp=0x20AC; else if(len==5&&!std::memcmp(s,"pound",5))cp=0x00A3; else if(len==3&&!std::memcmp(s,"yen",3))cp=0x00A5;
+            else if(len==4&&!std::memcmp(s,"bull",4))cp=0x2022; else if(len==6&&!std::memcmp(s,"middot",6))cp=0x00B7;
             else if(len>=2&&s[0]=='#') { cp=0;uint32_t i=1;int base=10;if(i<len&&(s[i]=='x'||s[i]=='X')){base=16;++i;}if(i==len)valid=false;for(;valid&&i<len;++i){int d=s[i]>='0'&&s[i]<='9'?s[i]-'0':s[i]>='a'&&s[i]<='f'?s[i]-'a'+10:s[i]>='A'&&s[i]<='F'?s[i]-'A'+10:-1;if(d<0||d>=base||cp>(0x10FFFF-uint32_t(d))/uint32_t(base))valid=false;else cp=cp*uint32_t(base)+uint32_t(d);}if(!valid||cp==0||cp>0x10FFFF||(cp>=0xD800&&cp<=0xDFFF))cp='?';}
         }
         unsigned char bytes[4];int count=encode_utf8(cp,bytes);if(pending_space){emit(' ');pending_space=false;}for(int i=0;i<count;++i)emit(bytes[i]);
@@ -415,15 +417,29 @@ const char* epub_error_string(EpubError e)
 }
 
 EpubDocument::EpubDocument() { close(); }
-void EpubDocument::close() { _archive=nullptr;_central_offset=0;_central_size=0;_entry_count=0;_spine_count=0;_virtual_size=0;_error=EpubError::NONE;_cached_spine=-1;_window_start=0;_window_size=0;_buffer_size=0; }
+void EpubDocument::close() { _archive=nullptr;_central_offset=0;_central_size=0;_entry_count=0;_spine_count=0;_virtual_size=0;_error=EpubError::NONE;_cached_spine=-1;_window_start=0;_window_size=0;_buffer_size=0;_optimized=false; }
 bool EpubDocument::fail(EpubError e) const { _error=e; return false; }
 
 bool EpubDocument::open(const ByteSource& archive)
 {
     close(); _archive=&archive;
+    if(archive.optimized_size()) {
+        _virtual_size=archive.optimized_size();_optimized=true;return true;
+    }
     if(archive.size()>EPUB_MAX_ARCHIVE_BYTES)return fail(EpubError::ARCHIVE_TOO_LARGE);
     if(!parse_zip()||!build_spine()){_virtual_size=0;return false;}
     _error=EpubError::NONE; return true;
+}
+
+bool EpubDocument::cache_archive_layout(uint32_t& central_offset, uint32_t& central_size,
+                                        uint16_t& entry_count) const
+{
+    if(_optimized || !_archive || _error != EpubError::NONE || _entry_count <= 0 ||
+       _entry_count > 0xFFFF) return false;
+    central_offset = _central_offset;
+    central_size = _central_size;
+    entry_count = static_cast<uint16_t>(_entry_count);
+    return true;
 }
 
 bool EpubDocument::parse_zip()
@@ -483,7 +499,7 @@ bool EpubDocument::parse_zip()
                 uint32_t next_sig=0;
                 if(end>cd_offset||cd_offset-end<4u)return false;
                 if(!read32(*_archive,end,next_sig)){endpoint_read_failed=true;return false;}
-                return next_sig==0x04034b50u;
+                return next_sig==0x04034b50u||next_sig==0x02014b50u;
             };
             const bool valid=(unsigned_values&&legal_endpoint(12u))||(signed_values&&legal_endpoint(16u));
             if(endpoint_read_failed)return fail(EpubError::READ_FAILED);
@@ -551,7 +567,7 @@ bool EpubDocument::validate_local_entry(const ZipEntry& z, uint32_t& data) const
         if(first==0x08074b50u&&available>=16u){if(!read32(*_archive,descriptor+12u,fourth))return fail(EpubError::READ_FAILED);signed_values=second==z.crc32&&third==z.compressed_size&&fourth==z.uncompressed_size;}
     }
     bool endpoint_read_failed=false;
-    auto legal_endpoint=[&](uint32_t length){const uint32_t end=descriptor+length;if(end==_central_offset)return true;uint32_t next_sig=0;if(end>_central_offset||_central_offset-end<4u)return false;if(!read32(*_archive,end,next_sig)){endpoint_read_failed=true;return false;}return next_sig==0x04034b50u;};
+    auto legal_endpoint=[&](uint32_t length){const uint32_t end=descriptor+length;if(end==_central_offset)return true;uint32_t next_sig=0;if(end>_central_offset||_central_offset-end<4u)return false;if(!read32(*_archive,end,next_sig)){endpoint_read_failed=true;return false;}return next_sig==0x04034b50u||next_sig==0x02014b50u;};
     const bool valid=(unsigned_values&&legal_endpoint(12u))||(signed_values&&legal_endpoint(16u));
     if(endpoint_read_failed)return fail(EpubError::READ_FAILED);
     return valid?true:fail(EpubError::MALFORMED_ZIP);
@@ -657,6 +673,7 @@ bool EpubDocument::stream_chapter(int i,uint32_t window_start,bool count_only) c
 
 bool EpubDocument::byte_at(uint32_t offset,unsigned char& value) const
 {
+    if(_optimized)return offset<_virtual_size&&_archive->optimized_byte_at(offset,value);
     if(offset>=_virtual_size)return false;int lo=0,hi=_spine_count-1;while(lo<=hi){int mid=(lo+hi)/2;const SpineItem&s=_spine[mid];if(offset<s.start)hi=mid-1;else if(offset>=s.start+s.size)lo=mid+1;else{uint32_t local=offset-s.start;if(_cached_spine!=mid||local<_window_start||local>=_window_start+_window_size){uint32_t start=(local/EPUB_TEXT_WINDOW_BYTES)*EPUB_TEXT_WINDOW_BYTES;if(!stream_chapter(mid,start,false))return false;}if(local<_window_start||local>=_window_start+_window_size)return fail(EpubError::MALFORMED_ZIP);value=_workspace.stream.text[local-_window_start];return true;}}return fail(EpubError::MALFORMED_ZIP);
 }
 }

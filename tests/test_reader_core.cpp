@@ -86,6 +86,18 @@ static void test_arabic_is_not_supported()
     assert(std::strcmp(page.lines[0].text, "A?B") == 0);
 }
 
+static void test_readable_fallbacks_for_unsupported_equivalents()
+{
+    const unsigned char text[] = {
+        'A', 0xE2, 0x88, 0x92, 'B', ' ', // U+2212 MINUS SIGN
+        0xEF, 0xBC, 0x82, 'q', 0xEF, 0xBC, 0x82 // U+FF02 FULLWIDTH QUOTATION MARK
+    };
+    MemorySource source(text, sizeof(text));
+    Page page{};
+    assert(layout_page(source, 0, default_settings(), mono_width, page));
+    assert(std::strcmp(page.lines[0].text, "A-B \"q\"") == 0);
+}
+
 static void test_settings_bounds_and_pagination_checkpoints()
 {
     static_assert(MIN_LINE_SPACING == 1 && MAX_LINE_SPACING == 4);
@@ -254,6 +266,7 @@ int main()
     test_bom_crlf_paragraphs_and_wrap();
     test_invalid_utf8_fallback();
     test_arabic_is_not_supported();
+    test_readable_fallbacks_for_unsupported_equivalents();
     test_settings_bounds_and_pagination_checkpoints();
     test_excess_whitespace_is_collapsed();
     test_source_read_failures_are_reported();
