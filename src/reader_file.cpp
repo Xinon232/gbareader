@@ -1,4 +1,5 @@
 #include "reader_file.h"
+#include "reader_crc32.h"
 #include "epub_document.h"
 
 #include <cstring>
@@ -43,8 +44,6 @@ void put16(unsigned char* p,uint16_t v){p[0]=unsigned(v);p[1]=unsigned(v>>8);}
 void put32(unsigned char* p,uint32_t v){p[0]=unsigned(v);p[1]=unsigned(v>>8);p[2]=unsigned(v>>16);p[3]=unsigned(v>>24);}
 uint16_t get16(const unsigned char* p){return uint16_t(p[0]|uint16_t(p[1])<<8);}
 uint32_t get32(const unsigned char* p){return uint32_t(p[0])|uint32_t(p[1])<<8|uint32_t(p[2])<<16|uint32_t(p[3])<<24;}
-uint32_t crc_update(uint32_t c,const unsigned char* p,uint32_t n){for(uint32_t i=0;i<n;++i){c^=p[i];for(int b=0;b<8;++b)c=(c>>1)^(0xEDB88320u&uint32_t(0-int32_t(c&1)));}return c;}
-uint32_t crc(const unsigned char* p,uint32_t n){return ~crc_update(0xffffffffu,p,n);}
 constexpr unsigned char LEGACY_CACHE_MAGIC[]={'G','B','A','R','C','H','E','1'};
 constexpr uint32_t LEGACY_CACHE_TRAILER_SIZE=32;
 uint32_t legacy_hash(const unsigned char* b){uint32_t h=2166136261u;for(uint32_t i=0;i<LEGACY_CACHE_TRAILER_SIZE;++i)if(i<28||i>=32)h=(h^b[i])*16777619u;return h;}
@@ -80,7 +79,7 @@ bool owned_name(const ByteSource&s,uint32_t at,uint16_t n){
     unsigned char p[sizeof(prefix)-1];return source_read(s,at,p,sizeof(p))&&!std::memcmp(p,prefix,sizeof(p));
 }
 bool central_fingerprint(const ByteSource&s,const ZipLayout& z,uint32_t& result){
-    uint32_t p=z.central,c=0xffffffffu;for(uint16_t i=0;i<z.count;++i){uint16_t nl;uint32_t r;if(!central_record(s,p,z.central+z.size,nl,r))return false;if(!owned_name(s,p+46,nl)){uint32_t left=r,at=p;unsigned char block[512];while(left){uint32_t take=left>sizeof(block)?sizeof(block):left;if(!source_read(s,at,block,take))return false;c=crc_update(c,block,take);at+=take;left-=take;}}p+=r;}if(p!=z.central+z.size)return false;result=~c;return true;
+    uint32_t p=z.central,c=0xffffffffu;for(uint16_t i=0;i<z.count;++i){uint16_t nl;uint32_t r;if(!central_record(s,p,z.central+z.size,nl,r))return false;if(!owned_name(s,p+46,nl)){uint32_t left=r,at=p;unsigned char block[512];while(left){uint32_t take=left>sizeof(block)?sizeof(block):left;if(!source_read(s,at,block,take))return false;c=crc32_update(c,block,take);at+=take;left-=take;}}p+=r;}if(p!=z.central+z.size)return false;result=~c;return true;
 }
 [[maybe_unused]] bool find_state(const ByteSource&s,const ZipLayout& z,uint32_t& data,uint32_t& size){
     bool found=false;uint32_t p=z.central;for(uint16_t i=0;i<z.count;++i){uint16_t nl;uint32_t r;if(!central_record(s,p,z.central+z.size,nl,r))return false;if(name_at(s,p+46,nl,STATE_NAME)){unsigned char h[46],local[30];if(!source_read(s,p,h,46)||get16(h+10)||get32(h+20)!=TXT_SAVE_FOOTER_SIZE||get32(h+24)!=TXT_SAVE_FOOTER_SIZE||!source_read(s,get32(h+42),local,30)||get32(local)!=0x04034b50u||get16(local+6)||get16(local+8)||get32(local+18)!=TXT_SAVE_FOOTER_SIZE||get32(local+22)!=TXT_SAVE_FOOTER_SIZE)return false;uint32_t d=get32(h+42)+30u+get16(local+26)+get16(local+28);if(d>s.size()||TXT_SAVE_FOOTER_SIZE>s.size()-d)return false;data=d;size=TXT_SAVE_FOOTER_SIZE;found=true;}p+=r;}return found;
@@ -156,49 +155,13 @@ template<class Ops> bool append_state(
     if(end > EPUB_MAX_ARCHIVE_BYTES) return false;
     const uint32_t local = append_offset, data = local + 30u + name_size;
     const uint32_t central = data + TXT_SAVE_FOOTER_SIZE;
-    const uint32_t checksum = crc(footer, TXT_SAVE_FOOTER_SIZE);
+    const uint32_t checksum = crc32_bytes(footer, TXT_SAVE_FOOTER_SIZE);
     return local_header(o, local, STATE_NAME, TXT_SAVE_FOOTER_SIZE, checksum) &&
            write_all(o, data, footer, TXT_SAVE_FOOTER_SIZE) &&
            retained_directory(o, archive, old, central, scratch, cap, retained, count, true) &&
            central_header(o, central + retained, STATE_NAME, TXT_SAVE_FOOTER_SIZE, checksum, local) &&
            final_eocd(o, central + retained + 46u + name_size, central,
                       retained + 46u + name_size, uint16_t(count + 1)) && o.truncate() && o.sync();
-}
-
-// Combine the CRCs of header and payload without rereading exported text.
-uint32_t matrix_times(const uint32_t* matrix, uint32_t vector)
-{
-    uint32_t sum = 0;
-    while(vector) {
-        if(vector & 1) sum ^= *matrix;
-        vector >>= 1;
-        ++matrix;
-    }
-    return sum;
-}
-void matrix_square(uint32_t* square, const uint32_t* matrix)
-{
-    for(int i = 0; i < 32; ++i) square[i] = matrix_times(matrix, matrix[i]);
-}
-uint32_t combine_crc(uint32_t first, uint32_t second, uint32_t length)
-{
-    if(!length) return first;
-    uint32_t odd[32], even[32];
-    odd[0] = 0xEDB88320u;
-    uint32_t row = 1;
-    for(int i = 1; i < 32; ++i) { odd[i] = row; row <<= 1; }
-    matrix_square(even, odd);
-    matrix_square(odd, even);
-    do {
-        matrix_square(even, odd);
-        if(length & 1) first = matrix_times(even, first);
-        length >>= 1;
-        if(!length) break;
-        matrix_square(odd, even);
-        if(length & 1) first = matrix_times(odd, first);
-        length >>= 1;
-    } while(length);
-    return first ^ second;
 }
 
 template<class Ops> bool append_cache_and_state(
@@ -227,7 +190,7 @@ template<class Ops> bool append_cache_and_state(
     const uint32_t state_local = cache_data + cache_bytes;
     const uint32_t state_data = state_local + 30u + state_name_size;
     const uint32_t central = state_data + TXT_SAVE_FOOTER_SIZE;
-    const uint32_t state_crc = crc(footer, TXT_SAVE_FOOTER_SIZE);
+    const uint32_t state_crc = crc32_bytes(footer, TXT_SAVE_FOOTER_SIZE);
     // Nothing before the original EOF is written. Headers are finalized before
     // publishing the new directory/EOCD, after the single payload export.
     struct Export {
@@ -237,7 +200,7 @@ template<class Ops> bool append_cache_and_state(
             auto& self = *static_cast<Export*>(context);
             if(!count || count > self.remaining || !write_all(self.ops, self.at, bytes, count))
                 return false;
-            self.checksum = crc_update(self.checksum, bytes, count);
+            self.checksum = crc32_update(self.checksum, bytes, count);
             self.at += count;
             self.remaining -= count;
             return true;
@@ -250,8 +213,8 @@ template<class Ops> bool append_cache_and_state(
     put16(header + 8, 5); put16(header + 10, 1);
     put32(header + 12, fingerprint); put32(header + 16, text.size());
     put32(header + 20, text_crc); put32(header + 24, text_crc);
-    put32(header + 28, crc(header, 28));
-    const uint32_t whole_crc = combine_crc(crc(header, sizeof(header)), text_crc, text.size());
+    put32(header + 28, crc32_bytes(header, 28));
+    const uint32_t whole_crc = crc32_combine(crc32_bytes(header, sizeof(header)), text_crc, text.size());
     return local_header(o, cache_local, CACHE_NAME, cache_bytes, whole_crc) &&
            write_all(o, cache_data, header, sizeof(header)) &&
            local_header(o, state_local, STATE_NAME, TXT_SAVE_FOOTER_SIZE, state_crc) &&
@@ -340,6 +303,21 @@ return false;
 #endif
 }if(offset-_cache_start>=uint32_t(_cache_size))return false;value=_cache[offset-_cache_start];return true;}
 bool ReaderFile::byte_at(uint32_t o,unsigned char&v)const{return o<_size&&physical_byte_at(o,v);}bool ReaderFile::optimized_byte_at(uint32_t o,unsigned char&v)const{return _has_valid_cache&&o<_epub_cache_size&&physical_byte_at(_epub_cache_start+o,v);}
+bool ReaderFile::read_range(uint32_t offset, unsigned char* output, uint32_t count) const
+{
+    if(!output || offset > _size || count > _size - offset) return false;
+    while(count) {
+        // Reuse the physical window refill/error handling once per block, not
+        // the virtual byte-at fallback once per byte. Copy only valid bytes.
+        unsigned char first;
+        if(!physical_byte_at(offset, first)) return false;
+        uint32_t take = uint32_t(_cache_size) - (offset - _cache_start);
+        if(take > count) take = count;
+        std::memcpy(output, _cache + offset - _cache_start, take);
+        output += take; offset += take; count -= take;
+    }
+    return true;
+}
 bool ReaderFile::saved_footer(TxtSaveFooter& footer)const{if(!_open||!_has_footer||!_footer_size)return false;
 #ifdef __DEVKITARM__
 unsigned char b[TXT_SAVE_FOOTER_SIZE];UINT n=0;if(f_lseek(&_file,_footer_offset)!=FR_OK||f_read(&_file,b,_footer_size,&n)!=FR_OK||n!=_footer_size)return false;_cache_size=0;return parse_txt_save_footer(b,_footer_size,footer);

@@ -69,9 +69,9 @@ assert "step_history_rebuild" in core
 assert "reader::step_history_rebuild" in main
 assert 'show_overlay(save_ui, save_sprites, "Loading back...")' in main
 
-assert "GBA Reader v0.6.0" in main
-assert "GBA Reader v0.6.0" in makefile
-assert "release/v0.6.0" in workflow
+assert "GBA Reader v0.7.0" in main
+assert "GBA Reader v0.7.0" in makefile
+assert "release/v0.7.0" in workflow
 assert "pull_request:" in workflow and "      - main" in workflow
 assert "contents: read" in workflow
 assert "tests/fatfs/run.py" in workflow
@@ -102,4 +102,11 @@ assert "settings_before = settings" in settings_entry
 settings_ui = main[main.index("if(bn::keypad::up_pressed() && settings_row"):main.index("if(scene == Scene::READER && reader::tick_save_message")]
 assert "reader::layout_page" not in settings_ui, "no intermediate settings layout"
 assert "if(!reader::same_settings(settings_before, settings))" in settings_ui
+# Cached text is hashed once; the ZIP-member CRC combines finalized header/text CRCs.
+cache_load = epub_source[epub_source.index("bool EpubDocument::load_owned_cache()"):epub_source.index("bool EpubDocument::parse_zip()")]
+assert "whole_crc = crc32_update(whole_crc, block, take)" not in cache_load, "cache text must not be hashed twice"
+assert "crc32_combine(" in cache_load
+# Both readers use the same bounded read-only CRC primitive (no per-bit hot loops).
+assert '#include "reader_crc32.h"' in epub_source and '#include "reader_crc32.h"' in file_source
+assert "0xEDB88320" not in epub_source and "0xEDB88320" not in file_source
 print("PASS: source contracts")

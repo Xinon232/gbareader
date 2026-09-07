@@ -107,6 +107,40 @@ static void test_sequential_export(const char* path, uint32_t count = 40000, uns
     assert(!book.export_text([](void*, const unsigned char*, uint32_t) { return false; }, nullptr));
 }
 
+static void test_block_reads(const char* path)
+{
+    class BlockSource final : public ByteSource {
+    public:
+        FileSource file;
+        mutable uint32_t blocks = 0, bytes = 0, largest = 0;
+        bool fail = false;
+        explicit BlockSource(const char* p) : file(p) {}
+        uint32_t size() const override { return file.size(); }
+        bool byte_at(uint32_t at, unsigned char& out) const override {
+            ++bytes; return file.byte_at(at, out);
+        }
+        bool read_range(uint32_t at, unsigned char* out, uint32_t count) const override {
+            ++blocks;
+            if(count > largest) largest = count;
+            return !fail && file.read_range(at, out, count);
+        }
+    } source(path);
+    EpubDocument book;
+    assert(book.open(source));
+    assert(source.blocks > 0 && source.largest >= 32);
+    assert(source.bytes == 0);
+    source.fail = true;
+    assert(!book.open(source) && book.error() == EpubError::READ_FAILED);
+    // Existing byte-only FileSource exercises ByteSource's fallback separately.
+    unsigned char out[4];
+    assert(!source.file.read_range(source.size() - 1, out, 2));
+    assert(!source.file.read_range(0xffffffffu, out, 4));
+    assert(!source.file.read_range(0, nullptr, 0));
+    assert(source.file.read_range(source.size(), out, 0));
+    FailingSource short_source(source.file, 2);
+    assert(!short_source.read_range(0, out, 4));
+}
+
 static void expect_text(const char* path, const char* expected)
 {
     FileSource archive(path);
@@ -179,6 +213,8 @@ int main(int argc, char** argv)
     assert(optimized_text.size() == optimized_book.size());
     assert(!std::memcmp(optimized_text.data(), "Cached normalized text.\n", optimized_text.size()));
 
+    test_block_reads(argv[1]);
+    test_block_reads(argv[2]);
     expect_text(argv[1], "Stored chapter.\n");
     expect_text(argv[2], "Deflated chapter.\n");
     expect_text(argv[3], "Second\nA & < > \" '  A A ?\nItem\nFirst file.\n");

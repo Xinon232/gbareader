@@ -1,4 +1,5 @@
 #include "epub_document.h"
+#include "reader_crc32.h"
 
 #include <cstring>
 
@@ -12,8 +13,7 @@ namespace {
 bool read_bytes(const ByteSource& source, uint32_t offset, unsigned char* out, uint32_t count)
 {
     if(offset > source.size() || count > source.size() - offset) return false;
-    for(uint32_t i = 0; i < count; ++i) if(! source.byte_at(offset + i, out[i])) return false;
-    return true;
+    return source.read_range(offset, out, count);
 }
 
 bool read16(const ByteSource& s, uint32_t o, uint16_t& v)
@@ -27,27 +27,6 @@ bool read32(const ByteSource& s, uint32_t o, uint32_t& v)
     unsigned char b[4]; if(! read_bytes(s, o, b, 4)) return false;
     v = uint32_t(b[0]) | (uint32_t(b[1]) << 8) | (uint32_t(b[2]) << 16) | (uint32_t(b[3]) << 24);
     return true;
-}
-
-uint32_t crc32_bytes(const unsigned char* data, uint32_t size)
-{
-    uint32_t crc = 0xFFFFFFFFu;
-    for(uint32_t i = 0; i < size; ++i) {
-        crc ^= data[i];
-        for(int bit = 0; bit < 8; ++bit)
-            crc = (crc >> 1) ^ (0xEDB88320u & uint32_t(0 - int32_t(crc & 1)));
-    }
-    return ~crc;
-}
-
-uint32_t crc32_update(uint32_t crc, const unsigned char* data, uint32_t size)
-{
-    for(uint32_t i = 0; i < size; ++i) {
-        crc ^= data[i];
-        for(int bit = 0; bit < 8; ++bit)
-            crc = (crc >> 1) ^ (0xEDB88320u & uint32_t(0 - int32_t(crc & 1)));
-    }
-    return crc;
 }
 
 constexpr char CACHE_NAME[] = "META-INF/gbareader/cache-v5";
@@ -459,25 +438,23 @@ bool EpubDocument::open(const ByteSource& archive)
     }
     if(archive.size()>EPUB_MAX_ARCHIVE_BYTES)return fail(EpubError::ARCHIVE_TOO_LARGE);
     if(!parse_zip()||!build_spine()){_virtual_size=0;return false;}
-    // Discover and validate package metadata first. A cache never bypasses the
-    // original required-content CRC or complete deflate-stream validation.
-    const bool cached = load_owned_cache();
+    // ZIP/package and required-entry metadata are checked before trusting the
+    // source fingerprint/version and fully validated normalized cache. A hit
+    // deliberately defers original chapter payload CRC/inflate checks.
+    if(load_owned_cache()) return true;
     _error = EpubError::NONE;
     for(int i = 0; i < _spine_count; ++i) {
-        if(!stream_chapter(i, 0, true, nullptr, nullptr, cached)) {
+        if(!stream_chapter(i, 0, true)) {
             _virtual_size = 0;
-            _optimized = false;
             return false;
         }
-        if(!cached) {
-            _spine[i].start = _virtual_size;
-            _spine[i].size = _buffer_size;
-            if(_virtual_size > 0xffffffffu - _buffer_size) {
-                _virtual_size = 0;
-                return fail(EpubError::BOOK_TEXT_TOO_LARGE);
-            }
-            _virtual_size += _buffer_size;
+        _spine[i].start = _virtual_size;
+        _spine[i].size = _buffer_size;
+        if(_virtual_size > 0xffffffffu - _buffer_size) {
+            _virtual_size = 0;
+            return fail(EpubError::BOOK_TEXT_TOO_LARGE);
         }
+        _virtual_size += _buffer_size;
     }
     _cached_spine = -1;
     _error=EpubError::NONE; return true;
@@ -524,17 +501,17 @@ bool EpubDocument::load_owned_cache()
     }
     if(read32_mem(header+12)!=~fingerprint) { _error=EpubError::NONE; return false; }
     uint32_t crc = 0xffffffffu;
-    uint32_t whole_crc = crc32_update(0xffffffffu, header, sizeof(header));
     uint32_t at = data + CACHE_HEADER_SIZE, left = length;
     unsigned char block[512];
     while(left) {
         const uint32_t take = left > sizeof(block) ? sizeof(block) : left;
         if(!read_bytes(*_archive, at, block, take)) return false;
         crc = crc32_update(crc, block, take);
-        whole_crc = crc32_update(whole_crc, block, take);
         at += take; left -= take;
     }
-    if(~crc != read32_mem(header + 20) || ~whole_crc != cache.crc32) return false;
+    const uint32_t text_crc = ~crc;
+    const uint32_t whole_crc = crc32_combine(crc32_bytes(header, sizeof(header)), text_crc, length);
+    if(text_crc != read32_mem(header + 20) || whole_crc != cache.crc32) return false;
     _cache_data_offset=data+CACHE_HEADER_SIZE; _virtual_size=length; _optimized=true; return true;
 }
 
@@ -724,6 +701,12 @@ bool EpubDocument::build_spine()
                 if(refs>=EPUB_MAX_SPINE_ITEMS)return fail(EpubError::TOO_MANY_SPINE_ITEMS);
                 char path[EPUB_MAX_PATH];if(!normalize_path(normalized,href,path))return fail(EpubError::UNSAFE_PATH);
                 ZipEntry entry{};int entry_status=find_entry(path,entry);if(entry_status<0)return false;if(!entry_status)return fail(EpubError::MISSING_MANIFEST_ITEM);
+                // Keep required-entry guards even when a cache avoids streaming.
+                if(entry.method!=0&&entry.method!=8)return fail(EpubError::UNSUPPORTED_COMPRESSION);
+                if(entry.compressed_size>EPUB_MAX_COMPRESSED_BYTES)return fail(EpubError::COMPRESSED_ENTRY_TOO_LARGE);
+                if(entry.uncompressed_size>EPUB_MAX_XHTML_BYTES)return fail(EpubError::CHAPTER_TOO_LARGE);
+                uint32_t payload;if(!validate_local_entry(entry,payload))return false;
+                if(entry.method==0&&entry.compressed_size!=entry.uncompressed_size)return fail(EpubError::MALFORMED_ZIP);
                 _spine[refs].central_offset=entry.central_offset;matched=true;break;
             }
             manifest_pos=uint32_t(item_end-manifest)+1;
@@ -751,7 +734,7 @@ bool EpubDocument::stream_chapter(int i, uint32_t window_start, bool count_only,
     parser.sink = sink;
     parser.context = context;
     uint32_t crc=0xFFFFFFFFu,output=0;
-    auto consume=[&](const unsigned char* bytes,uint32_t count){for(uint32_t n=0;n<count;++n){crc^=bytes[n];for(int bit=0;bit<8;++bit)crc=(crc>>1)^(0xEDB88320u&uint32_t(0-int32_t(crc&1)));if(!validate_only)parser.feed(bytes[n]);}output+=count;};
+    auto consume=[&](const unsigned char* bytes,uint32_t count){crc=crc32_update(crc,bytes,count);if(!validate_only)for(uint32_t n=0;n<count;++n)parser.feed(bytes[n]);output+=count;};
     uint32_t consumed=0;
     if(z.method==0){
         if(z.compressed_size!=z.uncompressed_size)return fail(EpubError::MALFORMED_ZIP);

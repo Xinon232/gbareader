@@ -11,6 +11,9 @@ if [[ -n "${EXTRA_CXXFLAGS:-}" ]]; then
     CXXFLAGS+=("${EXTRA_CXXFLAGS_ARRAY[@]}")
 fi
 
+g++ "${CXXFLAGS[@]}" "$ROOT/tests/test_reader_crc32.cpp" -o "$OUT/test_reader_crc32"
+"$OUT/test_reader_crc32"
+
 g++ "${CXXFLAGS[@]}" \
     "$ROOT/tests/test_reader_core.cpp" "$ROOT/src/reader_core.cpp" \
     -o "$OUT/test_reader_core"
@@ -25,6 +28,16 @@ g++ "${CXXFLAGS[@]}" \
     "$ROOT/tests/test_reader_txt_save.cpp" "$ROOT/src/reader_txt_save.cpp" "$ROOT/src/reader_core.cpp" \
     -o "$OUT/test_reader_txt_save"
 "$OUT/test_reader_txt_save"
+
+# Compile the production storage branch with only its unused Butano include stubbed.
+mkdir -p "$OUT/stubs"
+printf '#pragma once\n' > "$OUT/stubs/bn_core.h"
+g++ "${CXXFLAGS[@]}" -D__DEVKITARM__ -I"$OUT/stubs" \
+    -Wno-misleading-indentation -ffunction-sections -fdata-sections \
+    "$ROOT/tests/test_reader_file_ranges.cpp" "$ROOT/src/reader_file.cpp" \
+    "$ROOT/src/reader_core.cpp" "$ROOT/src/reader_txt_save.cpp" \
+    -Wl,--gc-sections -o "$OUT/test_reader_file_ranges"
+"$OUT/test_reader_file_ranges"
 
 python3 "$ROOT/tests/generate_epub_fixtures.py" "$OUT/fixtures"
 g++ "${CXXFLAGS[@]}" \

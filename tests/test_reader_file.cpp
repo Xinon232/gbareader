@@ -133,6 +133,67 @@ void test_append_size_preflight(const char* input)
     assert(!large.exported && raw == original);
 }
 
+uint32_t reference_crc(const unsigned char* bytes, uint32_t count)
+{
+    uint32_t c = 0xffffffffu;
+    for(uint32_t i = 0; i < count; ++i) {
+        c ^= bytes[i];
+        for(int bit = 0; bit < 8; ++bit) c = (c & 1) ? (c >> 1) ^ 0xedb88320u : c >> 1;
+    }
+    return ~c;
+}
+void set32(std::vector<unsigned char>& raw, uint32_t at, uint32_t value)
+{
+    for(int i = 0; i < 4; ++i) raw[at + i] = static_cast<unsigned char>(value >> (8 * i));
+}
+uint32_t entry_data(const std::vector<unsigned char>& raw, uint32_t entry)
+{
+    const auto local = zip32(raw, entry + 42);
+    return local + 30 + zip16(raw, local + 26) + zip16(raw, local + 28);
+}
+class PayloadSource final : public ByteSource {
+public:
+    struct Span { uint32_t at, size; };
+    const std::vector<unsigned char>& raw;
+    std::vector<Span> chapters;
+    mutable uint32_t payload_reads = 0, byte_calls = 0, block_calls = 0, cache_bytes = 0;
+    uint32_t cache_at = 0, cache_size = 0;
+    bool deny_chapters = false, fail_cache = false;
+    explicit PayloadSource(const std::vector<unsigned char>& bytes) : raw(bytes) {
+        uint32_t at = zip32(raw, raw.size() - 6);
+        for(int i = 0; i < zip16(raw, raw.size() - 12); ++i) {
+            const auto n = zip16(raw, at + 28);
+            const auto* name = raw.data() + at + 46;
+            if(n >= 6 && !std::memcmp(name + n - 6, ".xhtml", 6))
+                chapters.push_back({entry_data(raw, at), zip32(raw, at + 20)});
+            if(n == std::strlen("META-INF/gbareader/cache-v5") &&
+               !std::memcmp(name, "META-INF/gbareader/cache-v5", n)) {
+                cache_at = entry_data(raw, at) + 32; cache_size = zip32(raw, at + 24) - 32;
+            }
+            at += 46 + n + zip16(raw, at + 30) + zip16(raw, at + 32);
+        }
+        assert(!chapters.empty());
+    }
+    uint32_t size() const override { return raw.size(); }
+    bool byte_at(uint32_t at, unsigned char& value) const override {
+        ++byte_calls; return read_range(at, &value, 1);
+    }
+    bool read_range(uint32_t at, unsigned char* out, uint32_t count) const override {
+        ++block_calls;
+        if(!out || at > size() || count > size() - at) return false;
+        for(auto chapter : chapters) if(count && at < chapter.at + chapter.size && chapter.at < at + count) {
+            ++payload_reads; if(deny_chapters) return false;
+        }
+        if(count && cache_size && at < cache_at + cache_size && cache_at < at + count) {
+            if(fail_cache) return false;
+            const auto begin = at > cache_at ? at : cache_at;
+            const auto end = at + count < cache_at + cache_size ? at + count : cache_at + cache_size;
+            cache_bytes += end - begin;
+        }
+        std::memcpy(out, raw.data() + at, count); return true;
+    }
+};
+
 void test_cache_integrity_guards(const char* input)
 {
     FileSource file(input);
@@ -147,27 +208,157 @@ void test_cache_integrity_guards(const char* input)
     const auto good = raw;
     int matches;
     const auto cache = live_entry(raw, "META-INF/gbareader/cache-v5", matches);
-    const auto local = zip32(raw, cache + 42);
-    // Matching but incorrect local/central cache-member CRC is not a valid cache.
-    raw[cache + 16] ^= 1;
-    raw[local + 14] ^= 1;
-    MemorySource bad_crc(raw.data(), raw.size());
-    EpubDocument fallback;
-    assert(fallback.open(bad_crc) && !fallback.optimized_size());
-    assert(fallback.size() == text.size());
-    // The original payload must still pass its CRC/deflate checks, even though
-    // its untouched metadata continues to match the owned cache fingerprint.
-    raw = good;
-    const char* chapter = "OEBPS/two.xhtml";
-    auto entry = live_entry(raw, chapter, matches);
-    if(!matches) { chapter = "OEBPS/chapter.xhtml"; entry = live_entry(raw, chapter, matches); }
     assert(matches == 1);
-    const auto chapter_local = zip32(raw, entry + 42);
-    const auto data = chapter_local + 30 + zip16(raw, chapter_local + 26) + zip16(raw, chapter_local + 28);
-    raw[data] ^= 1;
-    MemorySource corrupt(raw.data(), raw.size());
-    EpubDocument rejected;
-    assert(!rejected.open(corrupt) && rejected.error() == EpubError::MALFORMED_ZIP);
+    const auto local = zip32(raw, cache + 42);
+    const auto header = entry_data(raw, cache);
+    PayloadSource valid(raw);
+    valid.deny_chapters = true;
+    EpubDocument cached;
+    assert(cached.open(valid) && cached.optimized_size() == text.size());
+    assert(valid.payload_reads == 0 && valid.byte_calls == 0 && valid.block_calls > 0);
+    assert(valid.cache_bytes == text.size()); // full text, one sequential I/O pass
+    unsigned char value;
+    assert(cached.byte_at(0, value));
+    assert(cached.byte_at(cached.size() - 1, value) && value == '\n');
+    assert(valid.payload_reads == 0);
+
+    // Deliberate policy: intact metadata/cache defers original payload integrity.
+    raw[valid.chapters.front().at] ^= 1;
+    PayloadSource corrupt_original(raw);
+    EpubDocument deferred;
+    assert(deferred.open(corrupt_original) && deferred.optimized_size() == text.size());
+    assert(corrupt_original.payload_reads == 0);
+
+    enum Corruption { MAGIC, CACHE_VERSION, TEXT_VERSION, FINGERPRINT, LENGTH,
+                      HEADER_CRC, TEXT_CRC, TEXT_PAYLOAD, WHOLE_CRC };
+    for(auto corruption : {MAGIC, CACHE_VERSION, TEXT_VERSION, FINGERPRINT, LENGTH,
+                           HEADER_CRC, TEXT_CRC, TEXT_PAYLOAD, WHOLE_CRC}) {
+        for(bool corrupt_chapter : {false, true}) {
+            raw = good;
+            switch(corruption) {
+            case MAGIC: raw[header] ^= 1; break;
+            case CACHE_VERSION: raw[header + 8] ^= 1; break;
+            case TEXT_VERSION: raw[header + 10] ^= 1; break;
+            case FINGERPRINT: raw[header + 12] ^= 1; break;
+            case LENGTH: raw[header + 16] ^= 1; break;
+            case HEADER_CRC: raw[header + 28] ^= 1; break;
+            case TEXT_CRC: raw[header + 20] ^= 1; break;
+            case TEXT_PAYLOAD: raw[header + 32 + text.size() - 1] ^= 1; break;
+            case WHOLE_CRC: break;
+            }
+            // Repair independent outer checks to isolate each guard, not just
+            // make all mutations fail at the first checksum comparison.
+            if(corruption != HEADER_CRC) set32(raw, header + 28, reference_crc(raw.data() + header, 28));
+            auto whole = reference_crc(raw.data() + header, zip32(raw, cache + 24));
+            if(corruption == WHOLE_CRC) whole ^= 1;
+            set32(raw, local + 14, whole); set32(raw, cache + 16, whole);
+            if(corrupt_chapter) raw[valid.chapters.front().at] ^= 1;
+            PayloadSource bad(raw);
+            EpubDocument fallback;
+            if(corrupt_chapter) {
+                assert(!fallback.open(bad) && fallback.error() == EpubError::MALFORMED_ZIP);
+                assert(fallback.size() == 0);
+            } else {
+                assert(fallback.open(bad) && !fallback.optimized_size());
+                assert(fallback.size() == text.size());
+            }
+            assert(bad.payload_reads > 0);
+        }
+    }
+    raw = good;
+    PayloadSource failed_cache(raw); failed_cache.fail_cache = true;
+    EpubDocument fallback;
+    assert(fallback.open(failed_cache) && !fallback.optimized_size());
+    assert(failed_cache.payload_reads > 0);
+    raw[valid.chapters.front().at] ^= 1;
+    assert(!fallback.open(failed_cache) && fallback.error() == EpubError::MALFORMED_ZIP);
+
+    PayloadSource missing(original);
+    assert(fallback.open(missing) && !fallback.optimized_size());
+    assert(missing.payload_reads > 0);
+
+    // Local/central package safety is never deferred, even with a valid cache.
+    raw = good;
+    const auto chapter_local = valid.chapters.front().at; // preceding payload boundary
+    for(uint32_t at = 0; at + 30 < chapter_local; ++at) {
+        if(zip32(raw, at) == 0x04034b50u &&
+           at + 30 + zip16(raw, at + 26) + zip16(raw, at + 28) == chapter_local) {
+            raw[at + 14] ^= 1; break;
+        }
+    }
+    PayloadSource bad_metadata(raw);
+    assert(!fallback.open(bad_metadata) && fallback.error() == EpubError::MALFORMED_ZIP);
+    assert(bad_metadata.payload_reads == 0);
+}
+
+void test_cached_required_metadata_guards(const char* input)
+{
+    const char* slash = std::strrchr(input, '/');
+    assert(slash);
+    struct Case { const char* file; EpubError error; };
+    const Case cases[] = {
+        {"required-image-suffix-zip64.epub", EpubError::ZIP64},
+        {"required-image-suffix-local-crc.epub", EpubError::MALFORMED_ZIP},
+        {"unsupported.epub", EpubError::UNSUPPORTED_COMPRESSION},
+        {"declared-large.epub", EpubError::CHAPTER_TOO_LARGE},
+        {"compressed-entry-too-large.epub", EpubError::COMPRESSED_ENTRY_TOO_LARGE},
+        {"payload-overlap.epub", EpubError::MALFORMED_ZIP},
+        {"duplicate-required-name.epub", EpubError::MALFORMED_ZIP},
+        {"local-flags-mismatch.epub", EpubError::MALFORMED_ZIP},
+        {"descriptor-bad-crc.epub", EpubError::MALFORMED_ZIP},
+        {"metadata-too-large.epub", EpubError::METADATA_TOO_LARGE},
+        {"missing-manifest.epub", EpubError::MISSING_MANIFEST_ITEM},
+        {"too-many-spine-items.epub", EpubError::TOO_MANY_SPINE_ITEMS}
+    };
+    const unsigned char normalized[] = "Valid cached text.\n";
+    MemorySource text(normalized, sizeof(normalized) - 1);
+    TxtSaveFooter footer{}; footer.settings = default_settings();
+    for(const auto& test : cases) {
+        char path[1024];
+        std::snprintf(path, sizeof(path), "%.*s%s", int(slash - input + 1), input, test.file);
+        FileSource archive(path);
+        std::vector<unsigned char> raw(archive.size());
+        assert(archive.read_range(0, raw.data(), raw.size()));
+        // The production writer gives the crafted original metadata a matching
+        // fingerprint and valid header/text/member CRCs. Cache trust must not
+        // replace required-entry structural checks, including image suffixes.
+        assert(append_epub_transaction_for_tests(raw, &text, footer).success);
+        if(!std::strcmp(test.file, "payload-overlap.epub")) {
+            // Appending moved the live directory: extend the declared stored
+            // payload to cross the NEW boundary, not the obsolete directory.
+            int matches;
+            const auto chapter = live_entry(raw, "OEBPS/chapter.xhtml", matches);
+            assert(matches == 1);
+            const auto local = zip32(raw, chapter + 42);
+            const auto directory = zip32(raw, raw.size() - 6);
+            const auto length = directory + 1 - entry_data(raw, chapter);
+            set32(raw, chapter + 20, length); set32(raw, chapter + 24, length);
+            set32(raw, local + 18, length); set32(raw, local + 22, length);
+            std::vector<unsigned char> records;
+            for(uint32_t at = directory; at < raw.size() - 22;) {
+                const auto n = zip16(raw, at + 28);
+                const auto size = 46u + n + zip16(raw, at + 30) + zip16(raw, at + 32);
+                if(n < 19 || std::memcmp(raw.data() + at + 46, "META-INF/gbareader/", 19))
+                    records.insert(records.end(), raw.begin() + at, raw.begin() + at + size);
+                at += size;
+            }
+            const auto cache = live_entry(raw, "META-INF/gbareader/cache-v5", matches);
+            assert(matches == 1);
+            const auto header = entry_data(raw, cache);
+            set32(raw, header + 12, reference_crc(records.data(), records.size()));
+            set32(raw, header + 28, reference_crc(raw.data() + header, 28));
+            const auto whole = reference_crc(raw.data() + header, zip32(raw, cache + 24));
+            set32(raw, cache + 16, whole); set32(raw, zip32(raw, cache + 42) + 14, whole);
+        }
+        MemorySource source(raw.data(), raw.size());
+        EpubDocument rejected;
+        const bool opened = rejected.open(source);
+        if(opened) std::fprintf(stderr, "Unexpected cached metadata acceptance: %s\n", test.file);
+        assert(!opened);
+        if(rejected.error() != test.error)
+            std::fprintf(stderr, "%s: %s\n", test.file, epub_error_string(rejected.error()));
+        assert(rejected.error() == test.error && rejected.size() == 0);
+    }
 }
 
 void test_export_and_rollback_failures(const char* input)
@@ -393,6 +584,7 @@ void test_valid_zip_cache_member_and_fallback(const char* input, const char* out
 int main(int argc, char** argv)
 {
     assert(argc == 10);
+    test_cached_required_metadata_guards(argv[1]);
     test_repeated_state_and_cache_regeneration(argv[8], argv[9]);
     test_cache_integrity_guards(argv[6]);
     test_cache_integrity_guards(argv[7]);

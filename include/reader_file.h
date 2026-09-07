@@ -79,6 +79,7 @@ public:
     bool is_open() const { return _open; }
     uint32_t size() const override { return _size; }
     bool byte_at(uint32_t offset, unsigned char& value) const override;
+    bool read_range(uint32_t offset, unsigned char* output, uint32_t count) const override;
     uint32_t optimized_size() const override { return _has_valid_cache ? _epub_cache_size : 0; }
     bool optimized_byte_at(uint32_t offset, unsigned char& value) const override;
     bool saved_footer(TxtSaveFooter& footer) const;
