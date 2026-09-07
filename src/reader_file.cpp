@@ -27,6 +27,8 @@ FATFS fatfs;
 #endif
 constexpr char CACHE_NAME[] = "META-INF/gbareader/cache-v5";
 constexpr char STATE_NAME[] = "META-INF/gbareader/state-v5";
+// Keep the existing owned ZIP path/magic; the internal version field selects
+// v5 (whole-text checks) or v6 (4096-byte blocks, trailing CRC table).
 constexpr uint32_t CACHE_HEADER_SIZE = 32;
 
 bool extension_equal(const char* a, const char* b) {
@@ -180,13 +182,14 @@ template<class Ops> bool append_cache_and_state(
     const uint32_t state_name_size = uint32_t(std::strlen(STATE_NAME));
     const uint32_t added = 46u + cache_name_size + 46u + state_name_size;
     if(!append_offset) append_offset = archive.size();
+    const uint32_t table_bytes = (text.size() / 4096u + (text.size() % 4096u != 0)) * 4u;
     const uint64_t end = uint64_t(append_offset) + 30u + cache_name_size +
-            CACHE_HEADER_SIZE + text.size() + 30u + state_name_size +
+            CACHE_HEADER_SIZE + text.size() + table_bytes + 30u + state_name_size +
             TXT_SAVE_FOOTER_SIZE + retained + added + 22u;
     if(end > EPUB_MAX_ARCHIVE_BYTES) return false;
     const uint32_t cache_local = append_offset;
     const uint32_t cache_data = cache_local + 30u + cache_name_size;
-    const uint32_t cache_bytes = CACHE_HEADER_SIZE + text.size();
+    const uint32_t cache_bytes = CACHE_HEADER_SIZE + text.size() + table_bytes;
     const uint32_t state_local = cache_data + cache_bytes;
     const uint32_t state_data = state_local + 30u + state_name_size;
     const uint32_t central = state_data + TXT_SAVE_FOOTER_SIZE;
@@ -195,26 +198,51 @@ template<class Ops> bool append_cache_and_state(
     // publishing the new directory/EOCD, after the single payload export.
     struct Export {
         Ops& ops;
-        uint32_t at, remaining, checksum = 0xffffffffu;
+        uint32_t at, remaining;
+        unsigned char* table;
+        uint32_t table_at, capacity, used = 0;
+        uint32_t checksum = 0, block_crc = 0xffffffffu, block_used = 0, table_crc = 0xffffffffu;
+        bool flush() {
+            if(!used) return true;
+            if(!write_all(ops, table_at, table, used)) return false;
+            table_at += used; used = 0; return true;
+        }
         static bool accept(void* context, const unsigned char* bytes, uint32_t count) {
             auto& self = *static_cast<Export*>(context);
             if(!count || count > self.remaining || !write_all(self.ops, self.at, bytes, count))
                 return false;
-            self.checksum = crc32_update(self.checksum, bytes, count);
             self.at += count;
             self.remaining -= count;
+            while(count) {
+                uint32_t take = 4096 - self.block_used;
+                if(take > count) take = count;
+                self.block_crc = crc32_update(self.block_crc, bytes, take);
+                self.block_used += take; bytes += take; count -= take;
+                if(self.block_used == 4096 || (!count && !self.remaining)) {
+                    // Reuse finalized block CRCs rather than hash text twice.
+                    self.checksum = self.block_used == 4096 ?
+                            crc32_combine_4096(self.checksum, ~self.block_crc) :
+                            crc32_combine(self.checksum, ~self.block_crc, self.block_used);
+                    put32(self.table + self.used, ~self.block_crc);
+                    self.table_crc = crc32_update(self.table_crc, self.table + self.used, 4);
+                    self.used += 4; self.block_used = 0; self.block_crc = 0xffffffffu;
+                    if(self.used + 4 > self.capacity && !self.flush()) return false;
+                }
+            }
             return true;
         }
-    } output{o, cache_data + CACHE_HEADER_SIZE, text.size()};
-    if(!text.export_text(Export::accept, &output) || output.remaining) return false;
-    const uint32_t text_crc = ~output.checksum;
+    } output{o, cache_data + CACHE_HEADER_SIZE, text.size(), scratch,
+             cache_data + CACHE_HEADER_SIZE + text.size(), cap};
+    if(cap < 4 || !text.export_text(Export::accept, &output) || output.remaining || !output.flush()) return false;
+    const uint32_t text_crc = output.checksum;
     unsigned char header[CACHE_HEADER_SIZE]{};
     std::memcpy(header, "GBAREPC5", 8);
-    put16(header + 8, 5); put16(header + 10, 1);
+    put16(header + 8, 6); put16(header + 10, 1);
     put32(header + 12, fingerprint); put32(header + 16, text.size());
-    put32(header + 20, text_crc); put32(header + 24, text_crc);
+    put32(header + 20, text_crc); put32(header + 24, ~output.table_crc);
     put32(header + 28, crc32_bytes(header, 28));
-    const uint32_t whole_crc = crc32_combine(crc32_bytes(header, sizeof(header)), text_crc, text.size());
+    uint32_t whole_crc = crc32_combine(crc32_bytes(header, sizeof(header)), text_crc, text.size());
+    whole_crc = crc32_combine(whole_crc, ~output.table_crc, table_bytes);
     return local_header(o, cache_local, CACHE_NAME, cache_bytes, whole_crc) &&
            write_all(o, cache_data, header, sizeof(header)) &&
            local_header(o, state_local, STATE_NAME, TXT_SAVE_FOOTER_SIZE, state_crc) &&
@@ -353,7 +381,7 @@ bool ReaderFile::save_footer(const TxtSaveFooter& footer, const ByteSource* opti
     }
     _open = true;
     FatOps ops{_file, filename};
-    bool written = false;
+    bool written = false, made_cache = false;
     if(txt_book_name(filename)) {
         written = replace_txt_footer_transaction(ops, _footer_offset, original,
                                                  _previous_footer, previous, replacement);
@@ -363,6 +391,7 @@ bool ReaderFile::save_footer(const TxtSaveFooter& footer, const ByteSource* opti
         const bool have_layout = zip_layout(*this, layout);
         const bool make_cache = optimized && optimized->size() && have_layout &&
                 optimized->cache_archive_layout(layout.central, layout.size, layout.count);
+        made_cache = make_cache;
         written = make_cache ?
                 append_cache_and_state(ops, *this, layout, *optimized, replacement,
                                        _write_cache, sizeof(_write_cache), original) :
@@ -375,8 +404,10 @@ bool ReaderFile::save_footer(const TxtSaveFooter& footer, const ByteSource* opti
     const bool reopened = open_read_only(filename);
     if(!written || !closed || !reopened) return false;
     TxtSaveFooter verify{};
-    return saved_footer(verify) && verify.byte_offset == footer.byte_offset &&
+    const bool verified = saved_footer(verify) && verify.byte_offset == footer.byte_offset &&
            same_settings(verify.settings, footer.settings) && same_history(verify.history, footer.history);
+    if(verified && made_cache) optimized->cache_persisted();
+    return verified;
 #else
     (void)footer;
     (void)optimized;

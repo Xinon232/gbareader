@@ -41,6 +41,7 @@ public:
     bool cache_archive_layout(uint32_t& central_offset, uint32_t& central_size,
                               uint16_t& entry_count) const override;
     EpubError error() const { return _error; }
+    void cache_persisted() const override { _cache_written = true; }
 
 private:
     struct ZipEntry {
@@ -65,22 +66,32 @@ private:
     bool read_entry(uint32_t central_offset, ZipEntry& entry) const;
     bool validate_local_entry(const ZipEntry& entry, uint32_t& data_offset) const;
     bool load_owned_cache();
+    bool index_original() const;
+    bool load_cache_block(uint32_t offset) const;
     bool fail(EpubError error) const;
 
     const ByteSource* _archive;
-    SpineItem _spine[EPUB_MAX_SPINE_ITEMS];
+    mutable SpineItem _spine[EPUB_MAX_SPINE_ITEMS];
     uint32_t _central_offset;
     uint32_t _central_size;
     int _entry_count;
+    // One bounded central-offset bucket per hash. Collisions use the full scan
+    // (including duplicate detection); this is an accelerator, never authority.
+    uint32_t _entry_lookup[512];
+    uint32_t _source_fingerprint;
     int _spine_count;
-    uint32_t _virtual_size;
+    mutable uint32_t _virtual_size;
     mutable EpubError _error;
     mutable int _cached_spine;
     mutable uint32_t _window_start;
     mutable uint32_t _window_size;
     mutable uint32_t _buffer_size;
-    bool _optimized;
+    mutable bool _optimized;
     uint32_t _cache_data_offset;
+    mutable bool _block_cache;
+    mutable bool _cache_written;
+    mutable uint32_t _verified_block;
+    mutable uint32_t _table_window;
     mutable tinfl_decompressor _inflator;
     mutable unsigned char _input[512];
     union Workspace {

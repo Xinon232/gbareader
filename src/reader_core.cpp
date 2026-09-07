@@ -81,8 +81,10 @@ static Decoded decode(const ByteSource& source, uint32_t offset, unsigned char f
     d.bytes[0] = a;
     for(int i = 1; i < count; ++i) {
         unsigned char c = 0;
+        // A failed lazy read can invalidate the source and clear its size.
+        const bool in_bounds = offset + uint32_t(i) < source.size();
         if(! source.byte_at(offset + uint32_t(i), c)) {
-            if(offset + uint32_t(i) < source.size()) d.source_ok = false;
+            if(in_bounds) d.source_ok = false;
             return d;
         }
         if((c & 0xC0) != 0x80) return d;
@@ -92,8 +94,13 @@ static Decoded decode(const ByteSource& source, uint32_t offset, unsigned char f
     for(int i = 1; i < count; ++i) cp = (cp << 6) | (d.bytes[i] & 0x3F);
     if((count == 3 && cp >= 0xD800 && cp <= 0xDFFF) ||
        (count == 3 && cp < 0x800) || (count == 4 && (cp < 0x10000 || cp > 0x10FFFF))) return d;
-    if(cp == 0x2212 || (cp >= 0xFF01 && cp <= 0xFF5E)) {
-        const uint32_t ascii = cp == 0x2212 ? '-' : cp - 0xFEE0;
+    const bool apostrophe = cp == 0x2018 || cp == 0x2019 || cp == 0x201A;
+    const bool quote = cp == 0x201C || cp == 0x201D || cp == 0x201E;
+    const bool hyphen = cp == 0x2010 || cp == 0x2011 || cp == 0x2212;
+    if(apostrophe || quote || hyphen || (cp >= 0xFF01 && cp <= 0xFF5E)) {
+        // Display bytes and widths only; advance by the original UTF-8 length.
+        // Only spaces are wrap opportunities, so U+2011 gains no hyphen break.
+        const uint32_t ascii = apostrophe ? '\'' : quote ? '"' : hyphen ? '-' : cp - 0xFEE0;
         d.code = ascii;
         d.bytes[0] = static_cast<uint8_t>(ascii);
         d.count = 1;

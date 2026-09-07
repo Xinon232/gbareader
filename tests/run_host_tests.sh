@@ -105,4 +105,15 @@ python3 "$ROOT/references/superfw/res/fonts/generator.py" \
     --output "$OUT/reader-symbols.pack" >/dev/null
 cmp "$ROOT/references/superfw/res/reader-symbols.pack" "$OUT/reader-symbols.pack"
 
+# Exercise the real body bitmap compositor and shipped fonts on a host framebuffer.
+gcc -std=c11 "${CXXFLAGS[@]:1}" -Wno-old-style-declaration -Wno-discarded-qualifiers \
+    -I"$ROOT/references/superfw/src" -I"$ROOT/references/superfw/src/fonts" \
+    -c "$ROOT/src/superfw_font.c" -o "$OUT/font.o"
+g++ "${CXXFLAGS[@]}" -I"$ROOT/references/superfw/src/fonts" \
+    "$ROOT/tests/test_reader_display.cpp" "$ROOT/src/reader_core.cpp" \
+    "$ROOT/src/reader_credits.cpp" "$OUT/font.o" -o "$OUT/test_reader_display"
+"$OUT/test_reader_display" "$ROOT/references/superfw/res/fonts.pack" \
+    "$ROOT/references/superfw/res/reader-symbols.pack"
+
+python3 "$ROOT/tests/test_credits_wiring.py"
 python3 "$ROOT/tests/test_source_contracts.py"

@@ -2,23 +2,26 @@
 
 A focused plain-text e-reader for the Game Boy Advance, built from the proven SD/FatFS and font foundation of [`gba-vocab-trainer-CC` v0.2.5](https://github.com/Xinon232/gba-vocab-trainer-CC/releases/tag/v0.2.5).
 
-Version 0.7.0 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of UTF-8 EPUB 2/3 files directly from a Supercard SD card.
+Version 0.8.0 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of UTF-8 EPUB 2/3 files directly from a Supercard SD card.
 
-## v0.7.0 changes
+## v0.8.0 changes
 
-- Valid saved EPUB caches open directly after ZIP/package, cache-version, source-fingerprint and cached-text integrity checks; original spine chapters are not decompressed again on a valid cache hit.
-- Cache text is checksummed once. Its CRC is combined with the header CRC to verify the complete stored ZIP member without a second text checksum pass.
-- Bounded table-based CRC and block reads reduce cache-validation overhead. Existing v5 cache/state members remain compatible; no book conversion is required for v0.6 caches.
-- Missing, stale or corrupt caches fall back to normal original-chapter processing and validation, then the existing cache-preparation path.
-- Paging, bookmark writes, settings and controls are unchanged.
+- Saved EPUB opening validates ZIP/package metadata, source identity and a small checksum index rather than scanning all cached text. Each 4 KiB text block is verified before use; the restored page does not require reading earlier blocks.
+- A retained checksum window avoids repeated seeks to the index while paging. Fixed-block CRC combination uses a precomputed read-only operator instead of rebuilding it for each block.
+- A bounded central-directory lookup accelerator, combined fingerprint pass and bulk metadata reads reduce repeated directory scans and seeks. Hash collisions fall back to exact duplicate-detecting lookup; required ZIP safety checks remain.
+- Smart single quotes `‘ ’ ‚` display as `'`, smart double quotes `“ ” „` as `"`, and typographic hyphens `‐ ‑` as `-`, matching GBAWriter's plain punctuation. This changes display only, not source bytes or normalized cache text. Ellipses, en/em dashes, guillemets and other symbols stay unchanged.
+- Library `Start` opens credits; `B` or `Start` closes them. The library shows `start: credits` near the bottom.
+- A checksummed display-layout marker preserves current-layout Back history on reopen while rebuilding older, incompatible page boundaries once. Saved byte positions and settings remain intact.
 
-**Integrity policy:** a valid cache is the verified reading copy. Original chapter payload corruption that leaves ZIP metadata unchanged is not detected during a cache-hit open; it is detected when those chapters must be processed again. Basic ZIP structure/bounds and required package metadata checks remain. Original EPUB entries are retained for other readers.
+**Upgrade:** v0.6/v0.7 owned caches remain readable with their old full-text checks. Open the book and press `Start` to save once, then close and reopen it to use the new block cache. The internal cache format is now 6; ZIP member names remain `cache-v5` and `state-v5`. Further saves in the same session remain state-only rather than repeatedly rebuilding the cache.
+
+**Integrity policy:** cache headers, the checksum index, source fingerprint, ZIP/package structure and required-entry bounds are checked upfront. Unread cached-text corruption is detected when its block is needed. A failed block is never displayed: the reader falls back to validated originals, or reports an error if they cannot safely supply the text. The next save can replace a damaged cache. Original chapter payload corruption that leaves ZIP metadata unchanged remains deferred until original chapters are needed. CRCs detect accidental damage, not malicious coordinated checksum replacement. Original EPUB entries remain available to other readers; no permanent sidecars are introduced.
 
 ## Retained v0.6.0 improvements
 
 - ZIP filename validation avoids alternating distant reads for each character.
 - Cache preparation exports normalized text sequentially with bounded buffers and calculates checksums without rereading the normalized book.
-- Invalid-cache fallback retains original-content CRC and complete DEFLATE-stream validation. The v0.7 cache-hit policy is described above.
+- Invalid-cache fallback retains original-content CRC and complete DEFLATE-stream validation. The current cache-hit policy is described above.
 - Newly appended ZIP directories contain only the latest bookmark state. Invalid-cache regeneration replaces the old live cache entry without deleting unknown entries.
 - Transient EPUB save errors reacquire the FatFS handle before rollback, including legacy migration. Existing original bytes are not overwritten by EPUB appends.
 - Unchanged settings preserve Back history, intermediate settings edits do not paginate a hidden preview, and pagination checks line fit before processing the line.
@@ -42,7 +45,7 @@ Physical compaction is deferred: files still grow with saves, and saves are reje
 - Fixed native 16-pixel SuperFW body-font size
 - SuperFW font coverage for supported Latin, Greek, Cyrillic, Japanese, CJK and Hangul text
 - Compact supplemental publishing-symbol font covering smart quotes, dashes, ellipsis, bullets, `€`, `™` and related punctuation/currency glyphs
-- Readable ASCII fallback for Unicode minus and full-width ASCII forms
+- Display-only ASCII forms for smart quotes, typographic hyphens, Unicode minus and full-width ASCII forms
 - Dedicated `gba-vocab-trainer-CC` UI font for menus
 - Line spacing, top margin and bottom margin settings, each adjustable from 1 through 4
 - Fixed 64-page circular Back history, persisted in current-format bookmarks
@@ -71,6 +74,7 @@ Physical compaction is deferred: files still grow with saves, and saves are reje
 
 - `Up` / `Down`: select a `.txt` or `.epub` book
 - `A`: open the selected book
+- `Start`: show credits; `B` or `Start` returns to the library
 
 ### Reader
 
@@ -81,7 +85,7 @@ Physical compaction is deferred: files still grow with saves, and saves are reje
 - `Start`: save the current page, reader settings and up to 64 previous page offsets inside the open TXT or EPUB file. A `save...` message appears while writing, followed temporarily by the honest result: `Saved` or `Save failed`.
 - `Select`: close the book and return to the library without saving
 
-When opening a v0.4.7 bookmark, up to 64 saved previous pages are immediately available. Older bookmarks are still accepted; their Back history is rebuilt incrementally, and an early Back request shows `Loading back...` without blocking the application.
+Current-display-layout bookmarks retain up to 64 previous page offsets. Older or unknown display-layout bookmarks keep their saved byte position but rebuild Back history incrementally, because their glyph widths may differ. An early Back request shows `Loading back...` while reconstruction proceeds.
 
 ### Settings
 
@@ -91,7 +95,7 @@ When opening a v0.4.7 bookmark, up to 64 saved previous pages are immediately av
 
 ## Hardware and files
 
-v0.7.0 uses the Supercard SD access path inherited from the base engine. Copy UTF-8 `.txt` or supported `.epub` files to the **root** of the SD card. The browser indexes up to 64 files and retains filenames up to 255 bytes for opening. Embedded save state retains the current position and reading-layout settings for both formats.
+v0.8.0 uses the Supercard SD access path inherited from the base engine. Copy UTF-8 `.txt` or supported `.epub` files to the **root** of the SD card. The browser indexes up to 64 files and retains filenames up to 255 bytes for opening. Embedded save state retains the current position and reading-layout settings for both formats.
 
 An emulator without the expected Supercard storage interface can validate the ROM header and execute the UI path, but it cannot prove SD/FatFS behavior. Real-hardware verification remains important.
 
@@ -140,7 +144,7 @@ The inherited emulator target is not sufficient release evidence: it can report 
 
 - `reader_core`: host-testable UTF-8 decoding, wrapping, pagination and page history
 - `reader_file`: FatFS library scan, 8-KiB read window, bounded sequential ZIP cache/state appends, transient-error rollback and replaceable trailing TXT save-footer I/O
-- `epub_document`: bounded ZIP/container/OPF parser plus stored/DEFLATE XHTML-to-text conversion, exposed as a virtual concatenated `ByteSource`; uncached open establishes stable text offsets, sequential export retains per-chapter parser/inflater state, and cached open validates package metadata, source fingerprint and cache integrity before directly mapping normalized text without inflating original spine chapters
+- `epub_document`: bounded ZIP/container/OPF parser plus stored/DEFLATE XHTML-to-text conversion, exposed as a virtual concatenated `ByteSource`; uncached open establishes stable text offsets, sequential export retains per-chapter parser/inflater state, and cached open validates package metadata and the checksum index before verifying normalized text blocks on demand without inflating original spine chapters
 - `reader_txt_save`: checksummed, versioned embedded save-footer encoding retained compatibly from TXT support
 - `main`: Butano UI, controls and page presentation
 - `superfw_font`: SuperFW software glyph renderer targeting a double-buffered 8-bit bitmap background

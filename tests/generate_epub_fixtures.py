@@ -27,6 +27,13 @@ def make(name, compression, text):
 make("stored.epub", zipfile.ZIP_STORED, "Stored chapter.")
 make("deflated.epub", zipfile.ZIP_DEFLATED, "Deflated chapter.")
 
+# Every continuation position can be the first byte in a lazy 4096-byte block.
+for codepoint in ("£", "€", "🙂"):
+    width = len(codepoint.encode("utf-8"))
+    for split in range(1, width):
+        make(f"utf8-boundary-{width}-{split}.epub", zipfile.ZIP_STORED,
+             "a" * (4096 - split) + codepoint + "tail")
+
 glyph_text = 'ASCII " £ ¥ © ® – — ‘ ’ “ ” • … € ™ 🙂'
 (out / "glyph-corpus.txt").write_text(glyph_text + "\n", encoding="utf-8")
 
@@ -38,6 +45,12 @@ def custom(name, opf, chapters, compression=zipfile.ZIP_STORED, container_xml=co
             add(z, "OEBPS/book.opf", opf)
         for path, body in chapters:
             add(z, path, body)
+
+# A bounded lookup must compare the ZIP name length, not a NUL-truncated alias.
+custom("nul-required-name.epub", '<package><manifest><item id="c" href="chapter.xhtml"/></manifest><spine><itemref idref="c"/></spine></package>',
+       [("OEBPS/chapter.xhtmlX", "<p>Must not resolve as chapter.xhtml</p>")])
+nul_path = out / "nul-required-name.epub"
+nul_path.write_bytes(nul_path.read_bytes().replace(b"OEBPS/chapter.xhtmlX", b"OEBPS/chapter.xhtml\0"))
 
 ordered_opf = '''<package><manifest>
 <item id="one" href="one.xhtml"/><item id="two" href="two.xhtml"/>

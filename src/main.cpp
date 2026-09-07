@@ -1,4 +1,4 @@
-// GBA Reader v0.7.0 -- streaming Supercard SD TXT/EPUB reader.
+// GBA Reader v0.8.0 -- streaming Supercard SD TXT/EPUB reader.
 
 #include "bn_bg_palette_item.h"
 #include "bn_core.h"
@@ -17,6 +17,7 @@ extern "C" {
 }
 #include "reader_core.h"
 #include "reader_ui_state.h"
+#include "reader_credits.h"
 #include "epub_document.h"
 #include "reader_file.h"
 
@@ -24,7 +25,7 @@ extern "C" {
 
 namespace {
 
-enum class Scene { LIBRARY, READER, SETTINGS };
+using reader::Scene;
 
 constexpr bn::color palette_colors[16] = {
     bn::color(31, 31, 31), bn::color(0, 0, 0), bn::color(12, 12, 12), bn::color(20, 20, 20),
@@ -45,9 +46,10 @@ constexpr int SAVE_OVERLAY_SPRITE_CAPACITY = 16;
 constexpr int LIBRARY_VISIBLE_ROWS = 4;
 constexpr int LIBRARY_DISPLAY_CHARACTERS = 15;
 constexpr int LIBRARY_WORST_CASE_SPRITES =
-        int(sizeof("GBA Reader v0.7.0") - 1) +
+        int(sizeof("GBA Reader v0.8.0") - 1) +
         LIBRARY_VISIBLE_ROWS * (2 + LIBRARY_DISPLAY_CHARACTERS) +
-        int(sizeof("UP/DOWN select   A open") - 1);
+        int(sizeof("UP/DOWN select   A open") - 1) +
+        int(sizeof("start: credits") - 1);
 static_assert(UI_SPRITE_CAPACITY <= 128);
 static_assert(LIBRARY_WORST_CASE_SPRITES < 128);
 
@@ -192,9 +194,20 @@ int main()
     const char* library_status = nullptr;
     reader::SaveMessageTimer save_message_timer{};
     bool pending_back = false;
+    reader::CreditsInputGate credits_gate{};
 
     while(true) {
-        if(scene == Scene::LIBRARY) {
+        const Scene previous_scene = scene;
+        const bool any_held = bn::keypad::up_held() || bn::keypad::down_held() ||
+                bn::keypad::left_held() || bn::keypad::right_held() ||
+                bn::keypad::a_held() || bn::keypad::b_held() ||
+                bn::keypad::start_held() || bn::keypad::select_held() ||
+                bn::keypad::l_held() || bn::keypad::r_held();
+        const bool credits_consumed = reader::handle_credits_input(
+                scene, credits_gate, bn::keypad::start_pressed(), bn::keypad::b_pressed(), any_held);
+        if(credits_consumed) {
+            if(scene != previous_scene) redraw_ui = true;
+        } else if(scene == Scene::LIBRARY) {
             if(bn::keypad::up_pressed() && selected > 0) { --selected; library_status = nullptr; redraw_ui = true; }
             if(bn::keypad::down_pressed() && selected + 1 < reader::library_count()) { ++selected; library_status = nullptr; redraw_ui = true; }
             if(bn::keypad::a_pressed() && reader::library_count()) {
@@ -222,10 +235,9 @@ int main()
                 if(page_open) {
                     history_rebuild = {};
                     if(saved_page_open) {
-                        history = footer.history;
-                        history_rebuild = footer.history_rebuild;
-                        if(history.lazy && history_rebuild.state == reader::HistoryRebuildState::IDLE)
-                            reader::begin_history_rebuild(page.start_offset, history_rebuild);
+                        // Preserve current-layout fast Back; only legacy/unknown
+                        // display layouts need a one-time lazy boundary rebuild.
+                        reader::restore_saved_history(footer, history, history_rebuild);
                     }
                     pending_back = false;
                     reader::cancel_save_message(save_message_timer);
@@ -372,7 +384,7 @@ int main()
             sprites.clear();
             ui.set_center_alignment();
             if(scene == Scene::LIBRARY) {
-                add_text(ui, 0, -68, "GBA Reader v0.7.0", sprites);
+                add_text(ui, 0, -68, "GBA Reader v0.8.0", sprites);
                 if(! storage_ok) add_text(ui, 0, -48, "Supercard SD not ready", sprites);
                 else if(! reader::library_count()) add_text(ui, 0, -48, "No TXT/EPUB in root", sprites);
                 else if(library_status) add_text(ui, 0, -48, library_status, sprites);
@@ -388,7 +400,12 @@ int main()
                     label += display_name;
                     add_text(ui, 0, -44 + (i - first) * 16, label.data(), sprites);
                 }
+                add_text(ui, 0, 50, "start: credits", sprites);
                 add_text(ui, 0, 68, "UP/DOWN select   A open", sprites);
+            } else if(scene == Scene::CREDITS) {
+                add_text(ui, 0, -62, "Credits", sprites);
+                reader::draw_credits(reinterpret_cast<uint8_t*>(painter.page().data()));
+                add_text(ui, 0, 68, "B/START close", sprites);
             } else if(scene == Scene::SETTINGS) {
                 add_text(ui, 0, -62, "Reader settings", sprites);
                 const char* labels[3] = { "Line spacing", "Top margin", "Bottom margin" };

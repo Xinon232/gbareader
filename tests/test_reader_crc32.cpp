@@ -34,6 +34,13 @@ int main()
             assert(~crc32_update(~first, bytes.data() + split, n - split) == expected);
         }
     }
+    uint32_t combined = 0;
+    for(size_t at = 0; at + 4096 <= bytes.size(); at += 4096) {
+        const auto block = reference(bytes.data() + at, 4096);
+        assert(crc32_combine_4096(combined, block) == crc32_combine(combined, block, 4096));
+        combined = crc32_combine_4096(combined, block);
+        assert(combined == reference(bytes.data(), at + 4096));
+    }
     // All byte values and unaligned buffers, including both nibbles of each byte.
     for(unsigned i = 0; i < 256; ++i) bytes[i + 1] = i;
     assert(crc32_bytes(bytes.data() + 1, 256) == 0x29058c73u);

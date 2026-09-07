@@ -69,9 +69,9 @@ assert "step_history_rebuild" in core
 assert "reader::step_history_rebuild" in main
 assert 'show_overlay(save_ui, save_sprites, "Loading back...")' in main
 
-assert "GBA Reader v0.7.0" in main
-assert "GBA Reader v0.7.0" in makefile
-assert "release/v0.7.0" in workflow
+assert "GBA Reader v0.8.0" in main
+assert "GBA Reader v0.8.0" in makefile
+assert "release/v0.8.0" in workflow
 assert "pull_request:" in workflow and "      - main" in workflow
 assert "contents: read" in workflow
 assert "tests/fatfs/run.py" in workflow
@@ -94,7 +94,8 @@ assert "idrefs[EPUB_MAX_SPINE_ITEMS]" not in (root / "src/epub_document.cpp").re
 epub_source = (root / "src/epub_document.cpp").read_text()
 parse_zip = epub_source[epub_source.index("bool EpubDocument::parse_zip()"):epub_source.index("int EpubDocument::find_entry")]
 assert "central_char" not in parse_zip, "local comparison must not reread central names"
-assert "static_cast<unsigned char>(central_name[n])" in parse_zip
+assert "std::memcmp(central_name,local_name,nl)" in parse_zip
+assert "read_bytes(*_archive,lo+30,local_name,nl)" in parse_zip
 # Settings have no live preview: pause reconstruction and defer layout until exit.
 settings_entry = main[main.index("} else if(bn::keypad::down_pressed())"):main.index("} else if(bn::keypad::start_pressed())")]
 assert "history_rebuild = {}" not in settings_entry, "settings entry must preserve reconstruction"

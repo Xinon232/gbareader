@@ -42,6 +42,8 @@ public:
     virtual uint32_t optimized_size() const { return 0; }
     virtual bool optimized_byte_at(uint32_t, unsigned char&) const { return false; }
     virtual bool cache_archive_layout(uint32_t&, uint32_t&, uint16_t&) const { return false; }
+    // Called only after a newly written cache transaction has been verified.
+    virtual void cache_persisted() const {}
 };
 
 class MemorySource final : public ByteSource {

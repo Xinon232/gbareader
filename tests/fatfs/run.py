@@ -79,6 +79,32 @@ for version,action in [(1,'cache'),(2,'state'),(3,'state')]:
  label='success-'+str(version);save=invoke(success,'book.epub',action,version,RUN/(label+'-save'));v=verify(success,label,version)
  rows.append(dict(case=label,save=save,verification=v))
  if version==1:shutil.copyfile(success,RUN/'cached.img')
+# Same live EpubDocument must upgrade/rebuild only once, not on every save.
+import struct, zlib
+for mode in ['fresh', 'legacy', 'fallback']:
+ image=RUN/('repeat-'+mode+'.img');shutil.copyfile(base if mode=='fresh' else RUN/'cached.img',image)
+ if mode!='fresh':
+  book=RUN/('repeat-'+mode+'.epub');cmd(['mcopy','-o','-i',image,'::book.epub',book])
+  raw=bytearray(book.read_bytes());eocd=len(raw)-22;p=struct.unpack_from('<I',raw,eocd+16)[0]
+  while True:
+   nl,xl,cl=struct.unpack_from('<HHH',raw,p+28)
+   if raw[p+46:p+46+nl]==b'META-INF/gbareader/cache-v5':break
+   p+=46+nl+xl+cl
+  lo=struct.unpack_from('<I',raw,p+42)[0];nl,xl=struct.unpack_from('<HH',raw,lo+26);data=lo+30+nl+xl
+  text_size=struct.unpack_from('<I',raw,data+16)[0]
+  if mode=='legacy':
+   struct.pack_into('<H',raw,data+8,5)
+   struct.pack_into('<I',raw,data+24,struct.unpack_from('<I',raw,data+20)[0])
+   struct.pack_into('<I',raw,data+28,zlib.crc32(raw[data:data+28]))
+   length=32+text_size;crc=zlib.crc32(raw[data:data+length])
+   struct.pack_into('<III',raw,lo+14,crc,length,length)
+   struct.pack_into('<III',raw,p+16,crc,length,length)
+  else:raw[data+32+text_size-1]^=1
+  book.write_bytes(raw);cmd(['mcopy','-o','-i',image,book,'::book.epub'])
+ label='success-repeat-'+mode
+ save=invoke(image,'book.epub','repeat-fallback' if mode=='fallback' else 'repeat',2,RUN/(label+'-save'))
+ v=verify(image,label,2)
+ rows.append(dict(case=label,save=save,verification=v))
 # Bounded fixed fault ordinals are test selectors, not a performance survey.
 faults=[('r',1,'o'),('r',2,'o'),('w',1,'o'),('w',2,'o'),('w',3,'o'),('s',1,'o'),('s',2,'o'),('w',2,'p'),('s',1,'p'),('w',3,'c'),('s',1,'c')]
 for phase in ['cache','state','txt']:

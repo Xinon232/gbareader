@@ -102,8 +102,67 @@ void test_v3_ascii_footer_restarts_incomplete_rebuild_safely()
 
 }
 
+static void test_display_layout_marker_and_history_restore()
+{
+    TxtSaveFooter input{};
+    input.byte_offset = 4321;
+    input.settings = {2, 3, 4};
+    input.history.count = 2;
+    input.history.offsets[0] = 100;
+    input.history.offsets[1] = 200;
+    input.history_rebuild.state = HistoryRebuildState::BUILDING;
+    input.history_rebuild.anchor = 4321;
+    unsigned char bytes[TXT_SAVE_FOOTER_SIZE]{};
+    make_txt_save_footer(input, bytes);
+    assert(!std::memcmp(bytes + 725, ";L=1", 4));
+    TxtSaveFooter parsed{};
+    assert(parse_txt_save_footer(bytes, sizeof(bytes), parsed));
+    assert(parsed.display_layout == CURRENT_DISPLAY_LAYOUT);
+    PageHistory history{};
+    PageHistoryRebuild rebuild{};
+    restore_saved_history(parsed, history, rebuild);
+    assert(!std::memcmp(&history, &parsed.history, sizeof(history)));
+    assert(!std::memcmp(&rebuild, &parsed.history_rebuild, sizeof(rebuild)));
+    for(int state = 0; state < 4; ++state) {
+        input.history_rebuild.state = HistoryRebuildState(state);
+        input.history_rebuild.initialized = true;
+        input.history_rebuild.scan.next_offset = 888;
+        input.history_rebuild.rebuilt.count = 1;
+        input.history_rebuild.rebuilt.offsets[0] = 50;
+        restore_saved_history(input, history, rebuild);
+        assert(!std::memcmp(&history, &input.history, sizeof(history)));
+        assert(!std::memcmp(&rebuild, &input.history_rebuild, sizeof(rebuild)));
+    }
+    // The marker is covered by the existing checksum.
+    bytes[728] = '2';
+    assert(!parse_txt_save_footer(bytes, sizeof(bytes), parsed));
+    bytes[728] = '1';
+
+    // Historical v3 reserved bytes were spaces. Repair its checksum, not its history.
+    std::memset(bytes + 725, ' ', 4);
+    uint32_t checksum = 2166136261u;
+    for(int i = 0; i < TXT_SAVE_FOOTER_SIZE; ++i)
+        if(i < 717 || i >= 725) checksum = (checksum ^ bytes[i]) * 16777619u;
+    const char hex[] = "0123456789ABCDEF";
+    for(int i = 7; i >= 0; --i) { bytes[717 + i] = hex[checksum & 15]; checksum >>= 4; }
+    assert(parse_txt_save_footer(bytes, sizeof(bytes), parsed));
+    assert(parsed.display_layout == 0 && parsed.byte_offset == input.byte_offset);
+    assert(same_settings(parsed.settings, input.settings));
+    restore_saved_history(parsed, history, rebuild);
+    assert(history.count == 0 && history.lazy && history.lazy_anchor == input.byte_offset);
+    assert(rebuild.state == HistoryRebuildState::BUILDING && rebuild.anchor == input.byte_offset);
+    assert(!rebuild.initialized);
+
+    parsed.display_layout = CURRENT_DISPLAY_LAYOUT + 1;
+    restore_saved_history(parsed, history, rebuild);
+    assert(history.count == 0 && rebuild.anchor == input.byte_offset);
+    assert(parse_txt_save_footer(legacy_v1_footer, TXT_SAVE_FOOTER_V1_SIZE, parsed));
+    assert(parsed.display_layout == 0);
+}
+
 int main()
 {
+    test_display_layout_marker_and_history_restore();
     test_v2_round_trip_preserves_full_history_ring();
     test_v1_footer_remains_readable_and_requests_lazy_history();
     test_checksum_rejects_corruption();

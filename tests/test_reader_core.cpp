@@ -77,6 +77,25 @@ static void test_bom_crlf_paragraphs_and_wrap()
     assert(page.next_offset > page.start_offset);
 }
 
+static void test_truncated_utf8_at_physical_eof()
+{
+    const char* codepoints[] = {u8"£", u8"€", u8"🙂"};
+    for(const char* codepoint : codepoints) {
+        for(uint32_t count = 1; count < std::strlen(codepoint); ++count) {
+            const auto* bytes = reinterpret_cast<const unsigned char*>(codepoint);
+            MemorySource source(bytes, count);
+            Page page{}; PageHistory history{};
+            assert(open_first_page(source, default_settings(), mono_width, history, page));
+            assert(page.start_offset == 0 && page.next_offset == count && page.eof);
+            assert(page.line_count == 1 && std::strlen(page.lines[0].text) == count);
+            // Preserve the existing malformed-sequence representation: the lead
+            // byte uses replacement-glyph width, remaining continuation bytes '?'.
+            assert(static_cast<unsigned char>(page.lines[0].text[0]) == bytes[0]);
+            for(uint32_t i = 1; i < count; ++i) assert(page.lines[0].text[i] == '?');
+        }
+    }
+}
+
 static void test_invalid_utf8_fallback()
 {
     const unsigned char text[] = {'A', 0xC0, 0xAF, 'B'};
@@ -270,8 +289,22 @@ static void test_page_history_is_circular()
     assert(history.count == 0);
 }
 
+static void test_display_punctuation_preserves_source_offsets()
+{
+    const unsigned char text[] = u8"‘’‚“”„‐‑ …–—«»•£€";
+    MemorySource source(text, sizeof(text) - 1);
+    Page page{};
+    assert(layout_page(source, 0, default_settings(), mono_width, page));
+    assert(std::strcmp(page.lines[0].text, u8"'''\"\"\"-- …–—«»•£€") == 0);
+    assert(page.next_offset == sizeof(text) - 1 && page.eof);
+    unsigned char original[sizeof(text) - 1];
+    assert(source.read_range(0, original, sizeof(original)));
+    assert(std::memcmp(original, text, sizeof(original)) == 0);
+}
+
 int main()
 {
+    test_display_punctuation_preserves_source_offsets();
     test_page_does_not_read_unfittable_line();
     Settings original = default_settings(), changed = original;
     assert(same_settings(original, changed));
@@ -283,6 +316,7 @@ int main()
         assert(same_settings(original, changed));
     }
     test_bom_crlf_paragraphs_and_wrap();
+    test_truncated_utf8_at_physical_eof();
     test_invalid_utf8_fallback();
     test_arabic_is_not_supported();
     test_readable_fallbacks_for_unsupported_equivalents();

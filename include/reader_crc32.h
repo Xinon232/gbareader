@@ -10,7 +10,7 @@ inline constexpr uint32_t table[16] = {
     0xedb88320u, 0xf00f9344u, 0xd6d6a3e8u, 0xcb61b38cu,
     0x9b64c2b0u, 0x86d3d2d4u, 0xa00ae278u, 0xbdbdf21cu
 };
-inline uint32_t matrix_times(const uint32_t* matrix, uint32_t vector)
+inline constexpr uint32_t matrix_times(const uint32_t* matrix, uint32_t vector)
 {
     uint32_t sum = 0;
     while(vector) {
@@ -20,10 +20,31 @@ inline uint32_t matrix_times(const uint32_t* matrix, uint32_t vector)
     }
     return sum;
 }
-inline void matrix_square(uint32_t* square, const uint32_t* matrix)
+inline constexpr void matrix_square(uint32_t* square, const uint32_t* matrix)
 {
     for(int i = 0; i < 32; ++i) square[i] = matrix_times(matrix, matrix[i]);
 }
+// 4096 bytes are 2^15 bits. Build the shift operator at compile time:
+// 128 bytes of read-only ROM, no runtime squaring or additional RAM per block.
+struct BlockShift { uint32_t rows[32]{}; };
+inline constexpr BlockShift make_block_shift()
+{
+    BlockShift matrix{};
+    matrix.rows[0] = 0xEDB88320u;
+    for(int i = 1; i < 32; ++i) matrix.rows[i] = uint32_t(1) << (i - 1);
+    for(int power = 0; power < 15; ++power) {
+        BlockShift next{};
+        matrix_square(next.rows, matrix.rows);
+        matrix = next;
+    }
+    return matrix;
+}
+inline constexpr BlockShift block_shift = make_block_shift();
+}
+
+inline uint32_t crc32_combine_4096(uint32_t first, uint32_t second)
+{
+    return crc32_detail::matrix_times(crc32_detail::block_shift.rows, first) ^ second;
 }
 
 // Updates take/return an unfinalized state; bytes/combine use finalized CRCs.
