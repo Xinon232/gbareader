@@ -103,28 +103,193 @@ template<class Ops> bool local_header(Ops&o,uint32_t at,const char* name,uint32_
 template<class Ops> bool central_header(Ops&o,uint32_t at,const char* name,uint32_t bytes,uint32_t checksum,uint32_t local){unsigned char h[46]{};uint16_t n=uint16_t(std::strlen(name));put32(h,0x02014b50u);put16(h+4,20);put16(h+6,20);put32(h+16,checksum);put32(h+20,bytes);put32(h+24,bytes);put16(h+28,n);put32(h+42,local);return write_all(o,at,h,46)&&write_all(o,at+46,reinterpret_cast<const unsigned char*>(name),n);}
 template<class Ops> bool final_eocd(Ops&o,uint32_t at,uint32_t central,uint32_t size,uint16_t count){unsigned char h[22]{};put32(h,0x06054b50u);put16(h+8,count);put16(h+10,count);put32(h+12,size);put32(h+16,central);return write_all(o,at,h,22);}
 
-template<class Ops> bool append_state(Ops&o,const ByteSource& archive,const ZipLayout& old,const unsigned char footer[TXT_SAVE_FOOTER_SIZE],unsigned char* scratch,uint32_t cap){
-    if(old.count==0xffff) return false;
-    const uint32_t base=archive.size(), state_local=base;
-    const uint32_t state_crc=crc(footer,TXT_SAVE_FOOTER_SIZE), after=state_local+30u+uint32_t(std::strlen(STATE_NAME))+TXT_SAVE_FOOTER_SIZE, central=after;
-    const uint64_t end=uint64_t(central)+old.size+46u+std::strlen(STATE_NAME)+22u;if(end>0xffffffffu)return false;
-    return local_header(o,state_local,STATE_NAME,TXT_SAVE_FOOTER_SIZE,state_crc)&&write_all(o,state_local+30u+uint32_t(std::strlen(STATE_NAME)),footer,TXT_SAVE_FOOTER_SIZE)&&copy_source(o,central,archive,old.central,old.size,scratch,cap)&&central_header(o,central+old.size,STATE_NAME,TXT_SAVE_FOOTER_SIZE,state_crc,state_local)&&final_eocd(o,central+old.size+46u+uint32_t(std::strlen(STATE_NAME)),central,old.size+46u+uint32_t(std::strlen(STATE_NAME)),uint16_t(old.count+1))&&o.truncate()&&o.sync();
-}
-
-template<class Ops> bool append_cache_and_state(Ops&o,const ByteSource&archive,const ZipLayout&old,const ByteSource&text,const unsigned char footer[TXT_SAVE_FOOTER_SIZE],unsigned char*scratch,uint32_t cap){
-    if(!text.size()||old.count>0xfffd) return false;
-    uint32_t fingerprint;if(!central_fingerprint(archive,old,fingerprint))return false;
-    uint32_t text_crc_run=0xffffffffu;for(uint32_t at=0;at<text.size();){uint32_t take=text.size()-at>cap?cap:text.size()-at;if(!text.read_range(at,scratch,take))return false;text_crc_run=crc_update(text_crc_run,scratch,take);at+=take;}const uint32_t text_crc=~text_crc_run;
-    unsigned char header[CACHE_HEADER_SIZE]{};std::memcpy(header,"GBAREPC5",8);put16(header+8,5);put16(header+10,1);put32(header+12,fingerprint);put32(header+16,text.size());put32(header+20,text_crc);put32(header+24,text_crc);put32(header+28,crc(header,28));
-    const uint32_t cache_bytes=CACHE_HEADER_SIZE+text.size();
-    uint32_t c=crc_update(0xffffffffu,header,sizeof(header));for(uint32_t at=0;at<text.size();){uint32_t take=text.size()-at>cap?cap:text.size()-at;if(!text.read_range(at,scratch,take))return false;c=crc_update(c,scratch,take);at+=take;}const uint32_t whole_crc=~c;
-    const uint32_t base=archive.size(), cache_local=base, cache_data=cache_local+30u+uint32_t(std::strlen(CACHE_NAME)), state_local=cache_data+cache_bytes, state_data=state_local+30u+uint32_t(std::strlen(STATE_NAME));const uint32_t central=state_data+TXT_SAVE_FOOTER_SIZE;const uint32_t state_crc=crc(footer,TXT_SAVE_FOOTER_SIZE);const uint32_t added=46u+uint32_t(std::strlen(CACHE_NAME))+46u+uint32_t(std::strlen(STATE_NAME));if(uint64_t(central)+old.size+added+22u>0xffffffffu)return false;
-    if(!local_header(o,cache_local,CACHE_NAME,cache_bytes,whole_crc)||!write_all(o,cache_data,header,sizeof(header))||!copy_source(o,cache_data+sizeof(header),text,0,text.size(),scratch,cap)||!local_header(o,state_local,STATE_NAME,TXT_SAVE_FOOTER_SIZE,state_crc)||!write_all(o,state_data,footer,TXT_SAVE_FOOTER_SIZE)||!copy_source(o,central,archive,old.central,old.size,scratch,cap)||!central_header(o,central+old.size,CACHE_NAME,cache_bytes,whole_crc,cache_local)||!central_header(o,central+old.size+46u+uint32_t(std::strlen(CACHE_NAME)),STATE_NAME,TXT_SAVE_FOOTER_SIZE,state_crc,state_local)||!final_eocd(o,central+old.size+added,central,old.size+added,uint16_t(old.count+2))||!o.truncate()||!o.sync()) return false;
+bool superseded_entry(const ByteSource& source, uint32_t at, uint16_t length, bool replace_cache, bool& skip)
+{
+    skip = false;
+    if(length != sizeof(STATE_NAME) - 1) return true;
+    unsigned char name[sizeof(STATE_NAME) - 1];
+    if(!source_read(source, at, name, sizeof(name))) return false;
+    static_assert(sizeof(CACHE_NAME) == sizeof(STATE_NAME));
+    skip = !std::memcmp(name, STATE_NAME, sizeof(name)) ||
+           (replace_cache && !std::memcmp(name, CACHE_NAME, sizeof(name)));
     return true;
 }
 
+// Select only exact superseded names; unknown application and source members
+// remain byte-for-byte in the live directory. Old local records stay on disk.
+template<class Ops> bool retained_directory(
+        Ops& o, const ByteSource& archive, const ZipLayout& old, uint32_t destination,
+        unsigned char* scratch, uint32_t cap, uint32_t& bytes, uint16_t& count, bool copy, bool replace_cache = false)
+{
+    bytes = 0; count = 0;
+    uint32_t at = old.central;
+    for(uint16_t i = 0; i < old.count; ++i) {
+        uint16_t length;
+        uint32_t record;
+        bool skip;
+        if(!central_record(archive, at, old.central + old.size, length, record) ||
+           !superseded_entry(archive, at + 46, length, replace_cache, skip)) return false;
+        if(!skip) {
+            if(copy && !copy_source(o, destination + bytes, archive, at, record, scratch, cap))
+                return false;
+            bytes += record;
+            ++count;
+        }
+        at += record;
+    }
+    return at == old.central + old.size;
+}
+
+template<class Ops> bool append_state(
+        Ops& o, const ByteSource& archive, const ZipLayout& old,
+        const unsigned char footer[TXT_SAVE_FOOTER_SIZE], unsigned char* scratch, uint32_t cap,
+        uint32_t append_offset = 0)
+{
+    uint32_t retained;
+    uint16_t count;
+    if(!retained_directory(o, archive, old, 0, scratch, cap, retained, count, false) ||
+       count >= 0xfffe) return false;
+    const uint32_t name_size = uint32_t(std::strlen(STATE_NAME));
+    if(!append_offset) append_offset = archive.size();
+    const uint64_t end = uint64_t(append_offset) + 30u + name_size + TXT_SAVE_FOOTER_SIZE +
+                         retained + 46u + name_size + 22u;
+    if(end > EPUB_MAX_ARCHIVE_BYTES) return false;
+    const uint32_t local = append_offset, data = local + 30u + name_size;
+    const uint32_t central = data + TXT_SAVE_FOOTER_SIZE;
+    const uint32_t checksum = crc(footer, TXT_SAVE_FOOTER_SIZE);
+    return local_header(o, local, STATE_NAME, TXT_SAVE_FOOTER_SIZE, checksum) &&
+           write_all(o, data, footer, TXT_SAVE_FOOTER_SIZE) &&
+           retained_directory(o, archive, old, central, scratch, cap, retained, count, true) &&
+           central_header(o, central + retained, STATE_NAME, TXT_SAVE_FOOTER_SIZE, checksum, local) &&
+           final_eocd(o, central + retained + 46u + name_size, central,
+                      retained + 46u + name_size, uint16_t(count + 1)) && o.truncate() && o.sync();
+}
+
+// Combine the CRCs of header and payload without rereading exported text.
+uint32_t matrix_times(const uint32_t* matrix, uint32_t vector)
+{
+    uint32_t sum = 0;
+    while(vector) {
+        if(vector & 1) sum ^= *matrix;
+        vector >>= 1;
+        ++matrix;
+    }
+    return sum;
+}
+void matrix_square(uint32_t* square, const uint32_t* matrix)
+{
+    for(int i = 0; i < 32; ++i) square[i] = matrix_times(matrix, matrix[i]);
+}
+uint32_t combine_crc(uint32_t first, uint32_t second, uint32_t length)
+{
+    if(!length) return first;
+    uint32_t odd[32], even[32];
+    odd[0] = 0xEDB88320u;
+    uint32_t row = 1;
+    for(int i = 1; i < 32; ++i) { odd[i] = row; row <<= 1; }
+    matrix_square(even, odd);
+    matrix_square(odd, even);
+    do {
+        matrix_square(even, odd);
+        if(length & 1) first = matrix_times(even, first);
+        length >>= 1;
+        if(!length) break;
+        matrix_square(odd, even);
+        if(length & 1) first = matrix_times(odd, first);
+        length >>= 1;
+    } while(length);
+    return first ^ second;
+}
+
+template<class Ops> bool append_cache_and_state(
+        Ops& o, const ByteSource& archive, const ZipLayout& old, const ByteSource& text,
+        const unsigned char footer[TXT_SAVE_FOOTER_SIZE], unsigned char* scratch, uint32_t cap,
+        uint32_t append_offset = 0)
+{
+    uint32_t retained;
+    uint16_t count;
+    if(!text.size() ||
+       !retained_directory(o, archive, old, 0, scratch, cap, retained, count, false, true) ||
+       count > 0xfffc) return false;
+    uint32_t fingerprint;
+    if(!central_fingerprint(archive, old, fingerprint)) return false;
+    const uint32_t cache_name_size = uint32_t(std::strlen(CACHE_NAME));
+    const uint32_t state_name_size = uint32_t(std::strlen(STATE_NAME));
+    const uint32_t added = 46u + cache_name_size + 46u + state_name_size;
+    if(!append_offset) append_offset = archive.size();
+    const uint64_t end = uint64_t(append_offset) + 30u + cache_name_size +
+            CACHE_HEADER_SIZE + text.size() + 30u + state_name_size +
+            TXT_SAVE_FOOTER_SIZE + retained + added + 22u;
+    if(end > EPUB_MAX_ARCHIVE_BYTES) return false;
+    const uint32_t cache_local = append_offset;
+    const uint32_t cache_data = cache_local + 30u + cache_name_size;
+    const uint32_t cache_bytes = CACHE_HEADER_SIZE + text.size();
+    const uint32_t state_local = cache_data + cache_bytes;
+    const uint32_t state_data = state_local + 30u + state_name_size;
+    const uint32_t central = state_data + TXT_SAVE_FOOTER_SIZE;
+    const uint32_t state_crc = crc(footer, TXT_SAVE_FOOTER_SIZE);
+    // Nothing before the original EOF is written. Headers are finalized before
+    // publishing the new directory/EOCD, after the single payload export.
+    struct Export {
+        Ops& ops;
+        uint32_t at, remaining, checksum = 0xffffffffu;
+        static bool accept(void* context, const unsigned char* bytes, uint32_t count) {
+            auto& self = *static_cast<Export*>(context);
+            if(!count || count > self.remaining || !write_all(self.ops, self.at, bytes, count))
+                return false;
+            self.checksum = crc_update(self.checksum, bytes, count);
+            self.at += count;
+            self.remaining -= count;
+            return true;
+        }
+    } output{o, cache_data + CACHE_HEADER_SIZE, text.size()};
+    if(!text.export_text(Export::accept, &output) || output.remaining) return false;
+    const uint32_t text_crc = ~output.checksum;
+    unsigned char header[CACHE_HEADER_SIZE]{};
+    std::memcpy(header, "GBAREPC5", 8);
+    put16(header + 8, 5); put16(header + 10, 1);
+    put32(header + 12, fingerprint); put32(header + 16, text.size());
+    put32(header + 20, text_crc); put32(header + 24, text_crc);
+    put32(header + 28, crc(header, 28));
+    const uint32_t whole_crc = combine_crc(crc(header, sizeof(header)), text_crc, text.size());
+    return local_header(o, cache_local, CACHE_NAME, cache_bytes, whole_crc) &&
+           write_all(o, cache_data, header, sizeof(header)) &&
+           local_header(o, state_local, STATE_NAME, TXT_SAVE_FOOTER_SIZE, state_crc) &&
+           write_all(o, state_data, footer, TXT_SAVE_FOOTER_SIZE) &&
+           retained_directory(o, archive, old, central, scratch, cap, retained, count, true, true) &&
+           central_header(o, central + retained, CACHE_NAME, cache_bytes, whole_crc, cache_local) &&
+           central_header(o, central + retained + 46u + cache_name_size, STATE_NAME,
+                          TXT_SAVE_FOOTER_SIZE, state_crc, state_local) &&
+           final_eocd(o, central + retained + added, central, retained + added,
+                      uint16_t(count + 2)) && o.truncate() && o.sync();
+}
+
+template<class Ops> bool finish_epub_append(Ops& ops, bool written, uint32_t original)
+{
+    if(!written) {
+        // A returned I/O error may latch the handle. Reacquire it before seeking;
+        // never truncate at a stale position when recovery or seek fails.
+        (void)(ops.recover() && ops.seek(original) && ops.truncate() && ops.sync());
+    }
+    return written;
+}
+
 #ifdef __DEVKITARM__
-struct FatOps { FIL& f; bool seek(uint32_t p){return f_lseek(&f,p)==FR_OK;} bool write(const unsigned char*p,uint32_t n){UINT w=0;return f_write(&f,p,n,&w)==FR_OK&&w==n;} bool truncate(){return f_truncate(&f)==FR_OK;} bool sync(){return f_sync(&f)==FR_OK;} };
+struct FatOps {
+    FIL& f;
+    const char* name;
+    bool seek(uint32_t at) { return f_lseek(&f, at) == FR_OK; }
+    bool write(const unsigned char* bytes, uint32_t count) {
+        UINT written = 0;
+        return f_write(&f, bytes, count, &written) == FR_OK && written == count;
+    }
+    bool truncate() { return f_truncate(&f) == FR_OK; }
+    bool sync() { return f_sync(&f) == FR_OK; }
+    bool recover() {
+        (void)f_close(&f);
+        return f_open(&f, name, FA_READ | FA_WRITE | FA_OPEN_EXISTING) == FR_OK;
+    }
+};
 bool same_history(const PageHistory&a,const PageHistory&b){if(a.count!=b.count)return false;for(int i=0;i<a.count;++i)if(a.offsets[(a.head+i)%PAGE_HISTORY_MAX]!=b.offsets[(b.head+i)%PAGE_HISTORY_MAX])return false;return true;}
 #endif
 }
@@ -182,16 +347,144 @@ unsigned char b[TXT_SAVE_FOOTER_SIZE];UINT n=0;if(f_lseek(&_file,_footer_offset)
 (void)footer;return false;
 #endif
 }
-bool ReaderFile::save_footer(const TxtSaveFooter& footer,const ByteSource* optimized){if(!_open||!supported_book_name(_name))return false;
+bool ReaderFile::save_footer(const TxtSaveFooter& footer, const ByteSource* optimized)
+{
+    if(!_open || !supported_book_name(_name)) return false;
 #ifdef __DEVKITARM__
-unsigned char replacement[TXT_SAVE_FOOTER_SIZE];make_txt_save_footer(footer,replacement);char filename[LIBRARY_NAME_MAX]{};std::memcpy(filename,_name,sizeof(filename));const uint32_t original=_physical_size, previous=_footer_size;if(previous){UINT n=0;if(f_lseek(&_file,_footer_offset)!=FR_OK||f_read(&_file,_previous_footer,previous,&n)!=FR_OK||n!=previous)return false;}_cache_size=0;if(f_close(&_file)!=FR_OK){_open=false;open_read_only(filename);return false;}_open=false;if(f_open(&_file,filename,FA_READ|FA_WRITE|FA_OPEN_EXISTING)!=FR_OK){open_read_only(filename);return false;}_open=true;FatOps ops{_file};bool written=false;if(txt_book_name(_name)){written=replace_txt_footer_transaction(ops,_footer_offset,original,_previous_footer,previous,replacement);}else{ZipLayout z{};const bool have_layout=zip_layout(*this,z);const bool make_cache=optimized&&optimized->size()&&have_layout&&optimized->cache_archive_layout(z.central,z.size,z.count);written=make_cache?append_cache_and_state(ops,*this,z,*optimized,replacement,_write_cache,sizeof(_write_cache)):(have_layout&&append_state(ops,*this,z,replacement,_write_cache,sizeof(_write_cache)));}if(!written){(void)ops.seek(original);(void)ops.truncate();(void)ops.sync();}const bool closed=f_close(&_file)==FR_OK;_open=false;const bool reopened=open_read_only(filename);if(!written||!closed||!reopened)return false;TxtSaveFooter verify{};return saved_footer(verify)&&verify.byte_offset==footer.byte_offset&&verify.settings.line_spacing==footer.settings.line_spacing&&verify.settings.top_margin==footer.settings.top_margin&&verify.settings.bottom_margin==footer.settings.bottom_margin&&same_history(verify.history,footer.history);
+    unsigned char replacement[TXT_SAVE_FOOTER_SIZE];
+    make_txt_save_footer(footer, replacement);
+    char filename[LIBRARY_NAME_MAX]{};
+    std::memcpy(filename, _name, sizeof(filename));
+    const uint32_t original = _physical_size, previous = _footer_size;
+    if(previous) {
+        UINT count = 0;
+        if(f_lseek(&_file, _footer_offset) != FR_OK ||
+           f_read(&_file, _previous_footer, previous, &count) != FR_OK || count != previous)
+            return false;
+    }
+    _cache_size = 0;
+    if(f_close(&_file) != FR_OK) {
+        _open = false;
+        open_read_only(filename);
+        return false;
+    }
+    _open = false;
+    if(f_open(&_file, filename, FA_READ | FA_WRITE | FA_OPEN_EXISTING) != FR_OK) {
+        open_read_only(filename);
+        return false;
+    }
+    _open = true;
+    FatOps ops{_file, filename};
+    bool written = false;
+    if(txt_book_name(filename)) {
+        written = replace_txt_footer_transaction(ops, _footer_offset, original,
+                                                 _previous_footer, previous, replacement);
+        if(!written) (void)(ops.seek(original) && ops.truncate() && ops.sync());
+    } else {
+        ZipLayout layout{};
+        const bool have_layout = zip_layout(*this, layout);
+        const bool make_cache = optimized && optimized->size() && have_layout &&
+                optimized->cache_archive_layout(layout.central, layout.size, layout.count);
+        written = make_cache ?
+                append_cache_and_state(ops, *this, layout, *optimized, replacement,
+                                       _write_cache, sizeof(_write_cache), original) :
+                (have_layout && append_state(ops, *this, layout, replacement,
+                                             _write_cache, sizeof(_write_cache), original));
+        written = finish_epub_append(ops, written, original);
+    }
+    const bool closed = f_close(&_file) == FR_OK;
+    _open = false;
+    const bool reopened = open_read_only(filename);
+    if(!written || !closed || !reopened) return false;
+    TxtSaveFooter verify{};
+    return saved_footer(verify) && verify.byte_offset == footer.byte_offset &&
+           same_settings(verify.settings, footer.settings) && same_history(verify.history, footer.history);
 #else
-(void)footer;(void)optimized;return false;
+    (void)footer;
+    (void)optimized;
+    return false;
 #endif
 }
 
 #ifndef __DEVKITARM__
-bool write_epub_cache_file_for_tests(const char* input,const char* output,const EpubDocument& normalized){std::FILE*f=std::fopen(input,"rb");if(!f)return false;std::fseek(f,0,SEEK_END);long n=std::ftell(f);if(n<0){std::fclose(f);return false;}std::vector<unsigned char> raw(static_cast<size_t>(n), 0);std::rewind(f);if(std::fread(raw.data(),1,raw.size(),f)!=raw.size()){std::fclose(f);return false;}std::fclose(f);class V final:public ByteSource{public:std::vector<unsigned char>&d;V(std::vector<unsigned char>&x):d(x){}uint32_t size()const override{return d.size();}bool byte_at(uint32_t o,unsigned char&v)const override{if(o>=d.size())return false;v=d[o];return true;}} source(raw);uint32_t archive_size=source.size();if(raw.size()>=TXT_SAVE_FOOTER_V2_SIZE+LEGACY_CACHE_TRAILER_SIZE){BookStorageLayout legacy{};const uint32_t n=TXT_SAVE_FOOTER_V2_SIZE+LEGACY_CACHE_TRAILER_SIZE;if(inspect_book_tail("legacy.epub",source.size(),raw.data()+raw.size()-n,n,legacy)&&legacy.book_size<source.size())archive_size=legacy.book_size;}class P final:public ByteSource{public:const ByteSource&source;uint32_t n;P(const ByteSource&s,uint32_t x):source(s),n(x){}uint32_t size()const override{return n;}bool byte_at(uint32_t o,unsigned char&v)const override{return o<n&&source.byte_at(o,v);}} archive(source,archive_size);ZipLayout z{};if(!zip_layout(archive,z))return false;unsigned char footer[TXT_SAVE_FOOTER_SIZE]{};make_txt_save_footer(TxtSaveFooter{},footer);struct O{std::vector<unsigned char>&d;uint32_t p=0;bool seek(uint32_t x){p=x;if(p>d.size())d.resize(p);return true;}bool write(const unsigned char*x,uint32_t n){if(uint64_t(p)+n>0xffffffffu)return false;if(p+n>d.size())d.resize(p+n);std::memcpy(d.data()+p,x,n);p+=n;return true;}bool truncate(){d.resize(p);return true;}bool sync(){return true;}} ops{raw};unsigned char scratch[512];if(!append_cache_and_state(ops,archive,z,normalized,footer,scratch,sizeof(scratch)))return false;f=std::fopen(output,"wb");if(!f)return false;bool ok=std::fwrite(raw.data(),1,raw.size(),f)==raw.size()&&std::fclose(f)==0;return ok;}
+EpubAppendTestResult append_epub_transaction_for_tests(
+        std::vector<unsigned char>& raw, const ByteSource* text, const TxtSaveFooter& state,
+        EpubTestFault fault, int nth, uint32_t append_offset)
+{
+    EpubAppendTestResult result{};
+    struct Faults {
+        EpubAppendTestResult& result;
+        EpubTestFault fault;
+        int nth;
+        bool latched = false;
+        bool hit(EpubTestFault kind) {
+            const int call = ++result.calls[int(kind)];
+            if(fault == kind && call == nth) {
+                result.fault_hit = true;
+                latched = true;
+                return true;
+            }
+            return false;
+        }
+    } faults{result, fault, nth};
+    class Archive final : public ByteSource {
+    public:
+        const std::vector<unsigned char>& bytes;
+        uint32_t length;
+        Faults& faults;
+        Archive(const std::vector<unsigned char>& data, Faults& f) :
+                bytes(data), length(data.size()), faults(f) {}
+        uint32_t size() const override { return length; }
+        bool byte_at(uint32_t at, unsigned char& value) const override {
+            return read_range(at, &value, 1);
+        }
+        bool read_range(uint32_t at, unsigned char* out, uint32_t count) const override {
+            if(faults.hit(EpubTestFault::READ) || at > length || count > length - at) return false;
+            std::memcpy(out, bytes.data() + at, count); return true;
+        }
+    } archive(raw, faults);
+    const uint32_t physical_size = uint32_t(raw.size());
+    const uint32_t tail_size = physical_size < TXT_SAVE_FOOTER_V2_SIZE + LEGACY_CACHE_TRAILER_SIZE ?
+            physical_size : TXT_SAVE_FOOTER_V2_SIZE + LEGACY_CACHE_TRAILER_SIZE;
+    BookStorageLayout legacy{};
+    if(inspect_book_tail("legacy.epub", physical_size, raw.data() + physical_size - tail_size,
+                         tail_size, legacy)) archive.length = legacy.book_size;
+    if(!append_offset) append_offset = physical_size;
+    struct Ops {
+        std::vector<unsigned char>& bytes;
+        Faults& faults;
+        uint32_t pos = 0;
+        bool seek(uint32_t at) {
+            if(faults.hit(EpubTestFault::SEEK) || faults.latched) return false;
+            pos = at; return true;
+        }
+        bool write(const unsigned char* data, uint32_t count) {
+            const bool bad = faults.hit(EpubTestFault::WRITE);
+            if(faults.latched && !bad) return false;
+            const uint32_t take = bad ? count / 2 : count;
+            if(uint64_t(pos) + take > 0xffffffffu) return false;
+            if(pos + take > bytes.size()) bytes.resize(pos + take);
+            std::memcpy(bytes.data() + pos, data, take); pos += take; return !bad;
+        }
+        bool truncate() {
+            if(faults.hit(EpubTestFault::TRUNCATE) || faults.latched) return false;
+            bytes.resize(pos); return true;
+        }
+        bool sync() { return !faults.hit(EpubTestFault::SYNC) && !faults.latched; }
+        bool recover() { faults.latched = false; return true; }
+    } ops{raw, faults};
+    ZipLayout layout{};
+    if(!zip_layout(archive, layout)) return result;
+    unsigned char footer[TXT_SAVE_FOOTER_SIZE], scratch[512];
+    make_txt_save_footer(state, footer);
+    const bool written = text ?
+            append_cache_and_state(ops, archive, layout, *text, footer, scratch, sizeof(scratch), append_offset) :
+            append_state(ops, archive, layout, footer, scratch, sizeof(scratch), append_offset);
+    result.success = finish_epub_append(ops, written, physical_size);
+    return result;
+}
+
+bool write_epub_cache_file_for_tests(const char* input,const char* output,const EpubDocument& normalized){std::FILE*f=std::fopen(input,"rb");if(!f)return false;std::fseek(f,0,SEEK_END);long n=std::ftell(f);if(n<0){std::fclose(f);return false;}std::vector<unsigned char> raw(static_cast<size_t>(n), 0);std::rewind(f);if(std::fread(raw.data(),1,raw.size(),f)!=raw.size()){std::fclose(f);return false;}std::fclose(f);class V final:public ByteSource{public:std::vector<unsigned char>&d;V(std::vector<unsigned char>&x):d(x){}uint32_t size()const override{return d.size();}bool byte_at(uint32_t o,unsigned char&v)const override{if(o>=d.size())return false;v=d[o];return true;}} source(raw);uint32_t archive_size=source.size();if(raw.size()>=TXT_SAVE_FOOTER_V2_SIZE+LEGACY_CACHE_TRAILER_SIZE){BookStorageLayout legacy{};const uint32_t n=TXT_SAVE_FOOTER_V2_SIZE+LEGACY_CACHE_TRAILER_SIZE;if(inspect_book_tail("legacy.epub",source.size(),raw.data()+raw.size()-n,n,legacy)&&legacy.book_size<source.size())archive_size=legacy.book_size;}class P final:public ByteSource{public:const ByteSource&source;uint32_t n;P(const ByteSource&s,uint32_t x):source(s),n(x){}uint32_t size()const override{return n;}bool byte_at(uint32_t o,unsigned char&v)const override{return o<n&&source.byte_at(o,v);}} archive(source,archive_size);ZipLayout z{};if(!zip_layout(archive,z))return false;unsigned char footer[TXT_SAVE_FOOTER_SIZE]{};make_txt_save_footer(TxtSaveFooter{},footer);struct O{std::vector<unsigned char>&d;uint32_t p=0;bool seek(uint32_t x){p=x;if(p>d.size())d.resize(p);return true;}bool write(const unsigned char*x,uint32_t n){if(uint64_t(p)+n>0xffffffffu)return false;if(p+n>d.size())d.resize(p+n);std::memcpy(d.data()+p,x,n);p+=n;return true;}bool truncate(){d.resize(p);return true;}bool sync(){return true;}} ops{raw};unsigned char scratch[512];if(!append_cache_and_state(ops,archive,z,normalized,footer,scratch,sizeof(scratch),uint32_t(raw.size())))return false;f=std::fopen(output,"wb");if(!f)return false;bool ok=std::fwrite(raw.data(),1,raw.size(),f)==raw.size()&&std::fclose(f)==0;return ok;}
 bool corrupt_epub_cache_file_for_tests(const char*path){std::FILE*f=std::fopen(path,"r+b");if(!f)return false;for(long p=0;;++p){if(std::fseek(f,p,SEEK_SET)||std::fgetc(f)==EOF)break;if(std::fseek(f,p,SEEK_SET))break;unsigned char b[8];if(std::fread(b,1,8,f)!=8)break;if(!std::memcmp(b,"GBAREPC5",8)){std::fseek(f,p+32,SEEK_SET);int x=std::fgetc(f);std::fseek(f,p+32,SEEK_SET);std::fputc(x^1,f);return std::fclose(f)==0;}}std::fclose(f);return false;}
 FooterWriteTestResult footer_write_transaction_for_tests(uint32_t old_size,int first_limit,bool fail_sync){
     unsigned char old[TXT_SAVE_FOOTER_SIZE]{}, replacement[TXT_SAVE_FOOTER_SIZE];

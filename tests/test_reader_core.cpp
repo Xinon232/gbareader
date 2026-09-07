@@ -51,6 +51,15 @@ private:
     uint32_t _size;
 };
 
+static void test_page_does_not_read_unfittable_line()
+{
+    const unsigned char text[] = "a\nb\nc\nd\ne\nf\ng\nh\ni\nUNREADABLE";
+    FaultSource source(text, sizeof(text) - 1, 19);
+    Page page{};
+    assert(layout_page(source, 0, default_settings(), mono_width, page));
+    assert(page.line_count == 9 && page.next_offset == 18 && !page.eof);
+}
+
 static void test_bom_crlf_paragraphs_and_wrap()
 {
     const unsigned char text[] =
@@ -263,6 +272,16 @@ static void test_page_history_is_circular()
 
 int main()
 {
+    test_page_does_not_read_unfittable_line();
+    Settings original = default_settings(), changed = original;
+    assert(same_settings(original, changed));
+    const SettingField fields[] = {SettingField::LINE_SPACING, SettingField::TOP_MARGIN, SettingField::BOTTOM_MARGIN};
+    for(SettingField field : fields) {
+        adjust_setting(changed, field, 1);
+        assert(!same_settings(original, changed));
+        adjust_setting(changed, field, -1);
+        assert(same_settings(original, changed));
+    }
     test_bom_crlf_paragraphs_and_wrap();
     test_invalid_utf8_fallback();
     test_arabic_is_not_supported();

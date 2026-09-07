@@ -3,11 +3,17 @@ name: Build GBA ROM
 on:
   push:
     branches:
-      - release/v0.5.0
+      - main
+      - release/v0.6.0
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -24,6 +30,18 @@ jobs:
           path: _butano
       - name: Run host tests
         run: bash tests/run_host_tests.sh
+      - name: Run host tests with sanitizers
+        env:
+          EXTRA_CXXFLAGS: -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer
+        run: bash tests/run_host_tests.sh
+      - name: Install FAT image test tools
+        run: apt-get update && apt-get install -y --no-install-recommends dosfstools mtools
+      - name: Test real FatFS transient-error recovery
+        run: python3 tests/fatfs/run.py
+      - name: Test legacy EPUB migration recovery
+        env:
+          GBAREADER_FATFS_FIXTURE: legacy-v047.epub
+        run: python3 tests/fatfs/run.py
       - name: Build complete ROM
         env:
           DEVKITPRO: /opt/devkitpro
@@ -34,14 +52,6 @@ jobs:
       - name: Upload complete ROM
         uses: actions/upload-artifact@v4
         with:
-          name: GBAReader-v0.5.0
+          name: GBAReader-${{ github.sha }}
           path: gbareader.gba
           if-no-files-found: error
-      - name: Publish v0.5.0 ROM release
-        if: startsWith(github.ref, 'refs/heads/release/v0.5.0')
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v0.5.0
-          name: GBAReader v0.5.0
-          generate_release_notes: true
-          files: gbareader.gba

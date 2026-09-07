@@ -79,7 +79,10 @@ g++ "${CXXFLAGS[@]}" "$ROOT/tests/test_reader_file.cpp" "$ROOT/src/reader_file.c
     "$ROOT/src/epub_document.cpp" "$ROOT/src/miniz_tinfl.c" \
     -o "$OUT/test_reader_file"
 "$OUT/test_reader_file" "$OUT/fixtures/ordered.epub" "$OUT/fixtures/cached.epub" \
-    "$OUT/fixtures/legacy-v047.epub" "$OUT/fixtures/legacy-v047-migrated.epub"
+    "$OUT/fixtures/legacy-v047.epub" "$OUT/fixtures/legacy-v047-migrated.epub" \
+    "$OUT/fixtures/unterminated-xhtml-tag.epub" \
+    "$OUT/fixtures/stored.epub" "$OUT/fixtures/deflated.epub" \
+    "$OUT/fixtures/owned-neighbors.epub" "$OUT/fixtures/neighbors-cached.epub"
 
 python3 "$ROOT/tests/test_standard_zip_cache.py" "$OUT/fixtures" "$OUT/fixtures/cached.epub" "$OUT/fixtures/ordered.epub"
 python3 "$ROOT/tests/test_glyph_coverage.py" "$OUT/fixtures"

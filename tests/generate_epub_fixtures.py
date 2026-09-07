@@ -47,6 +47,13 @@ custom("ordered.epub", ordered_opf, [
     ("OEBPS/two.xhtml", "<html><head><style>hidden</style></head><body><h1>Second</h1><p>A &amp; &lt; &gt; &quot; &apos; &nbsp; &#65; &#x41; &bogus;</p><ul><li>Item</li></ul><script>hidden</script></body></html>"),
 ])
 
+# Similar and unknown app-owned names are not superseded by exact cache/state replacement.
+(out / "owned-neighbors.epub").write_bytes((out / "ordered.epub").read_bytes())
+with zipfile.ZipFile(out / "owned-neighbors.epub", "a") as z:
+    for name in ("META-INF/gbareader/cache-v5.bak", "META-INF/gbareader/state-v5.bak",
+                 "META-INF/gbareader/other-v5"):
+        add(z, name, b"Preserve unknown member exactly.")
+
 # Exact v0.4.7 layout: cache payload, duplicate directory/EOCD, 32-byte trailer,
 # then the v2 bookmark footer. v0.5 must expose the pre-trailer archive.
 def fnv(data, skip_start, skip_size):

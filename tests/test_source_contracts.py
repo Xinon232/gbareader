@@ -69,10 +69,14 @@ assert "step_history_rebuild" in core
 assert "reader::step_history_rebuild" in main
 assert 'show_overlay(save_ui, save_sprites, "Loading back...")' in main
 
-assert "GBA Reader v0.5.0" in main
-assert "GBA Reader v0.5.0" in makefile
-assert "release/v0.5.0" in workflow
-assert "GBAReader-v0.5.0" in workflow
+assert "GBA Reader v0.6.0" in main
+assert "GBA Reader v0.6.0" in makefile
+assert "release/v0.6.0" in workflow
+assert "pull_request:" in workflow and "      - main" in workflow
+assert "contents: read" in workflow
+assert "tests/fatfs/run.py" in workflow
+assert "GBAReader-${{ github.sha }}" in workflow
+assert "Publish v0.5.0" not in workflow
 
 assert "EPUB_MAX_ZIP_ENTRIES" not in epub_header
 assert "TOO_MANY_ENTRIES" not in epub_header
@@ -86,4 +90,16 @@ assert 'reader_font_base_addr' in (root / "references/superfw/src/fonts/font_ren
 assert 'ientry == 0xFFFF' in (root / "references/superfw/src/fonts/font_render.c").read_text()
 assert 'reader-symbols.pack' in (root / "src/superfw_font_pack.s").read_text()
 assert "idrefs[EPUB_MAX_SPINE_ITEMS]" not in (root / "src/epub_document.cpp").read_text()
+# ZIP local-name validation reuses the already buffered central bytes.
+epub_source = (root / "src/epub_document.cpp").read_text()
+parse_zip = epub_source[epub_source.index("bool EpubDocument::parse_zip()"):epub_source.index("int EpubDocument::find_entry")]
+assert "central_char" not in parse_zip, "local comparison must not reread central names"
+assert "static_cast<unsigned char>(central_name[n])" in parse_zip
+# Settings have no live preview: pause reconstruction and defer layout until exit.
+settings_entry = main[main.index("} else if(bn::keypad::down_pressed())"):main.index("} else if(bn::keypad::start_pressed())")]
+assert "history_rebuild = {}" not in settings_entry, "settings entry must preserve reconstruction"
+assert "settings_before = settings" in settings_entry
+settings_ui = main[main.index("if(bn::keypad::up_pressed() && settings_row"):main.index("if(scene == Scene::READER && reader::tick_save_message")]
+assert "reader::layout_page" not in settings_ui, "no intermediate settings layout"
+assert "if(!reader::same_settings(settings_before, settings))" in settings_ui
 print("PASS: source contracts")

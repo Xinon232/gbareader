@@ -25,8 +25,11 @@ struct Settings {
 enum class SettingField : uint8_t { LINE_SPACING, TOP_MARGIN, BOTTOM_MARGIN };
 
 Settings default_settings();
+bool same_settings(const Settings& a, const Settings& b);
 void clamp_settings(Settings& settings);
 void adjust_setting(Settings& settings, SettingField field, int delta);
+
+using TextSink = bool (*)(void* context, const unsigned char* bytes, uint32_t count);
 
 class ByteSource {
 public:
@@ -35,6 +38,7 @@ public:
     virtual bool byte_at(uint32_t offset, unsigned char& value) const = 0;
     // Bulk reads let cache writers avoid one ReaderFile seek/cache lookup per byte.
     virtual bool read_range(uint32_t offset, unsigned char* output, uint32_t count) const;
+    virtual bool export_text(TextSink sink, void* context) const;
     virtual uint32_t optimized_size() const { return 0; }
     virtual bool optimized_byte_at(uint32_t, unsigned char&) const { return false; }
     virtual bool cache_archive_layout(uint32_t&, uint32_t&, uint16_t&) const { return false; }

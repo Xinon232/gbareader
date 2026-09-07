@@ -35,6 +35,7 @@ public:
     uint32_t size() const override { return _virtual_size; }
     bool byte_at(uint32_t offset, unsigned char& value) const override;
     bool read_range(uint32_t offset, unsigned char* output, uint32_t count) const override;
+    bool export_text(TextSink sink, void* context) const override;
     uint32_t optimized_size() const override { return _optimized ? _virtual_size : 0; }
     bool optimized_byte_at(uint32_t offset, unsigned char& value) const override;
     bool cache_archive_layout(uint32_t& central_offset, uint32_t& central_size,
@@ -58,7 +59,8 @@ private:
     bool parse_zip();
     bool build_spine();
     bool load_entry(const ZipEntry& entry, uint32_t uncompressed_limit) const;
-    bool stream_chapter(int spine_index, uint32_t window_start, bool count_only) const;
+    bool stream_chapter(int spine_index, uint32_t window_start, bool count_only,
+                        TextSink sink = nullptr, void* context = nullptr, bool validate_only = false) const;
     int find_entry(const char* name, ZipEntry& entry) const;
     bool read_entry(uint32_t central_offset, ZipEntry& entry) const;
     bool validate_local_entry(const ZipEntry& entry, uint32_t& data_offset) const;

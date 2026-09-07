@@ -12,7 +12,26 @@ bool ByteSource::read_range(uint32_t offset, unsigned char* output, uint32_t cou
     return true;
 }
 
+bool ByteSource::export_text(TextSink sink, void* context) const
+{
+    if(!sink) return false;
+    unsigned char block[512];
+    for(uint32_t at = 0; at < size();) {
+        uint32_t take = size() - at;
+        if(take > sizeof(block)) take = sizeof(block);
+        if(!read_range(at, block, take) || !sink(context, block, take)) return false;
+        at += take;
+    }
+    return true;
+}
+
 Settings default_settings() { return { 1, 1, 1 }; }
+
+bool same_settings(const Settings& a, const Settings& b)
+{
+    return a.line_spacing == b.line_spacing && a.top_margin == b.top_margin &&
+           a.bottom_margin == b.bottom_margin;
+}
 
 void clamp_settings(Settings& s)
 {
@@ -202,18 +221,14 @@ bool layout_page(const ByteSource& source, uint32_t offset, const Settings& inpu
     int used_height = settings.top_margin;
     bool source_ok = true;
     while(cursor < source.size() && result.line_count < PAGE_MAX_LINES) {
-        const uint32_t line_start = cursor;
-        if(! make_line(source, cursor, glyph_width, result.lines[result.line_count], source_ok)) break;
         int gap_before = 0;
         if(result.line_count > 0) {
             gap_before = settings.line_spacing;
             if(result.lines[result.line_count - 1].paragraph_break)
                 gap_before += FONT_HEIGHT + settings.line_spacing;
         }
-        if(used_height + gap_before + FONT_HEIGHT > bottom_limit) {
-            cursor = line_start;
-            break;
-        }
+        if(used_height + gap_before + FONT_HEIGHT > bottom_limit) break;
+        if(!make_line(source, cursor, glyph_width, result.lines[result.line_count], source_ok)) break;
         used_height += gap_before + FONT_HEIGHT;
         ++result.line_count;
     }

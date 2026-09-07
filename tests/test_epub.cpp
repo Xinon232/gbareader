@@ -70,13 +70,53 @@ private:
     std::vector<char> _optimized;
 };
 
+class SingleReadSource final : public ByteSource {
+public:
+    explicit SingleReadSource(const ByteSource& source) : source(source), seen(source.size(), false) {}
+    uint32_t size() const override { return source.size(); }
+    bool byte_at(uint32_t offset, unsigned char& value) const override {
+        if(offset >= size() || (armed && seen[offset])) return false;
+        if(armed) seen[offset] = true;
+        return source.byte_at(offset, value);
+    }
+    const ByteSource& source;
+    mutable std::vector<bool> seen;
+    bool armed = false;
+};
+
+static bool collect_text(void* context, const unsigned char* bytes, uint32_t count)
+{
+    assert(count > 0 && count <= EPUB_TEXT_WINDOW_BYTES);
+    auto& text = *static_cast<std::vector<unsigned char>*>(context);
+    text.insert(text.end(), bytes, bytes + count);
+    return true;
+}
+
+static void test_sequential_export(const char* path, uint32_t count = 40000, unsigned char repeated = 'w')
+{
+    FileSource raw(path);
+    SingleReadSource archive(raw);
+    EpubDocument book;
+    assert(book.open(archive));
+    archive.armed = true;
+    std::vector<unsigned char> text;
+    assert(book.export_text(collect_text, &text));
+    assert(text.size() == count + 1 && text.back() == '\n');
+    for(uint32_t i = 0; i < count; ++i) assert(text[i] == repeated);
+    archive.armed = false;
+    assert(!book.export_text([](void*, const unsigned char*, uint32_t) { return false; }, nullptr));
+}
+
 static void expect_text(const char* path, const char* expected)
 {
     FileSource archive(path);
     EpubDocument epub;
     if(! epub.open(archive)) std::fprintf(stderr, "%s: %s\n", path, epub_error_string(epub.error()));
     assert(epub.error() == EpubError::NONE);
-    assert(epub.error() == EpubError::NONE);
+    std::vector<unsigned char> exported;
+    assert(epub.export_text(collect_text, &exported));
+    assert(exported.size() == std::strlen(expected));
+    assert(!std::memcmp(exported.data(), expected, exported.size()));
     if(epub.size() != std::strlen(expected)) std::fprintf(stderr, "%s: size %u expected %zu\n", path, epub.size(), std::strlen(expected));
     assert(epub.size() == std::strlen(expected));
     for(uint32_t i = 0; i < epub.size(); ++i) {
@@ -134,6 +174,10 @@ int main(int argc, char** argv)
     assert(optimized_book.byte_at(7, optimized_value) && optimized_value == 'n');
     assert(optimized.archive_reads == 0);
     assert(optimized.optimized_reads == 1);
+    std::vector<unsigned char> optimized_text;
+    assert(optimized_book.export_text(collect_text, &optimized_text));
+    assert(optimized_text.size() == optimized_book.size());
+    assert(!std::memcmp(optimized_text.data(), "Cached normalized text.\n", optimized_text.size()));
 
     expect_text(argv[1], "Stored chapter.\n");
     expect_text(argv[2], "Deflated chapter.\n");
@@ -148,6 +192,11 @@ int main(int argc, char** argv)
     assert(central_offset + central_size < ordered.size());
     const uint32_t boundary = 31; // start of the second spine chapter in the virtual stream.
     unsigned char value = 0; assert(book.byte_at(boundary - 1, value) && value == '\n');
+    assert(book.byte_at(boundary, value) && value == 'F');
+    // Export overwrites the shared text workspace. Even a rejected first chunk
+    // must invalidate a previously cached different spine chapter.
+    assert(!book.export_text([](void*, const unsigned char*, uint32_t) { return false; }, nullptr));
+    assert(book.error() == EpubError::NONE);
     assert(book.byte_at(boundary, value) && value == 'F');
     PageHistory history{}; Page resumed{};
     assert(open_page_at(book, boundary, default_settings(), nullptr, history, resumed));
@@ -196,6 +245,9 @@ int main(int argc, char** argv)
     expect_text(argv[44], "Many assets, readable text.\n");
     expect_text(argv[45], "Image skipped, text readable.\n");
 
+    test_sequential_export(argv[46]);
+    test_sequential_export(argv[13], 65530, 'x');
+    test_sequential_export(argv[62], 5 * 1024 * 1024, 'z');
     expect_repeated_text(argv[46], 'w', 40000);
     FileSource window_archive(argv[46]); EpubDocument window_book; assert(window_book.open(window_archive));
     assert(window_book.byte_at(33000, value) && value == 'w');

@@ -25,6 +25,9 @@ cached = Path(sys.argv[2])
 original = Path(sys.argv[3])
 with zipfile.ZipFile(cached) as z:
     assert z.testzip() is None
+    assert z.namelist().count("META-INF/gbareader/cache-v5") == 1
+    assert z.namelist().count("META-INF/gbareader/state-v5") == 1
+    assert len(z.infolist()) == len(zipfile.ZipFile(original).infolist()) + 2
     cache = z.getinfo("META-INF/gbareader/cache-v5")
     state = z.getinfo("META-INF/gbareader/state-v5")
     assert cache.compress_type == state.compress_type == zipfile.ZIP_STORED
@@ -33,4 +36,10 @@ assert cached.read_bytes().endswith(b"PK\x05\x06" + cached.read_bytes()[-18:])
 actual = cached.read_bytes()
 actual_eocd = actual.rfind(b"PK\x05\x06")
 assert actual_eocd + 22 + int.from_bytes(actual[actual_eocd + 20:actual_eocd + 22], "little") == len(actual)
+with zipfile.ZipFile(root / "neighbors-cached.epub") as z:
+    assert z.testzip() is None
+    for name in ("META-INF/gbareader/cache-v5.bak", "META-INF/gbareader/state-v5.bak",
+                 "META-INF/gbareader/other-v5"):
+        assert z.namelist().count(name) == 1
+        assert z.read(name) == b"Preserve unknown member exactly."
 print("PASS: standard ZIP cache-member fixture")

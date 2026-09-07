@@ -7,6 +7,8 @@
 
 #ifdef __DEVKITARM__
 #include "ff.h"
+#else
+#include <vector>
 #endif
 
 namespace reader {
@@ -41,6 +43,11 @@ const char* save_result_string(bool saved);
 
 #ifndef __DEVKITARM__
 class EpubDocument;
+enum class EpubTestFault { READ, SEEK, WRITE, TRUNCATE, SYNC, NONE };
+struct EpubAppendTestResult { bool success; bool fault_hit; int calls[5]; };
+EpubAppendTestResult append_epub_transaction_for_tests(
+        std::vector<unsigned char>& raw, const ByteSource* text, const TxtSaveFooter& footer,
+        EpubTestFault fault = EpubTestFault::NONE, int nth = 0, uint32_t append_offset = 0);
 bool write_epub_cache_file_for_tests(const char* input, const char* output,
                                      const EpubDocument& normalized);
 bool corrupt_epub_cache_file_for_tests(const char* path);
