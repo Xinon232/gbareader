@@ -4,6 +4,14 @@
 
 namespace reader {
 
+bool ByteSource::read_range(uint32_t offset, unsigned char* output, uint32_t count) const
+{
+    if(!output || offset > size() || count > size() - offset) return false;
+    for(uint32_t index = 0; index < count; ++index)
+        if(!byte_at(offset + index, output[index])) return false;
+    return true;
+}
+
 Settings default_settings() { return { 1, 1, 1 }; }
 
 void clamp_settings(Settings& s)
@@ -43,11 +51,10 @@ struct Decoded {
     bool source_ok;
 };
 
-static Decoded decode(const ByteSource& source, uint32_t offset)
+static Decoded decode(const ByteSource& source, uint32_t offset, unsigned char first)
 {
     Decoded d{ '?', {'?'}, 1, 1, true };
-    unsigned char a = 0;
-    if(! source.byte_at(offset, a)) return { 0, {0}, 0, 0, false };
+    unsigned char a = first;
     if(a < 0x80) return { a, {a}, 1, 1, true };
     int count = (a >= 0xC2 && a <= 0xDF) ? 2 : (a >= 0xE0 && a <= 0xEF) ? 3 :
                 (a >= 0xF0 && a <= 0xF4) ? 4 : 0;
@@ -146,7 +153,7 @@ static bool make_line(const ByteSource& source, uint32_t& cursor, GlyphWidth wid
                 continue;
             }
         }
-        Decoded d = decode(source, cursor);
+        Decoded d = decode(source, cursor, raw);
         if(! d.source_ok) { source_ok = false; return false; }
         int glyph_width = width_fn ? width_fn(d.code) : 8;
         if(glyph_width < 1) glyph_width = 8;

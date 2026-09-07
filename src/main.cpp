@@ -1,4 +1,4 @@
-// GBA Reader v0.4.7 -- streaming Supercard SD TXT/EPUB reader.
+// GBA Reader v0.5.0 -- streaming Supercard SD TXT/EPUB reader.
 
 #include "bn_bg_palette_item.h"
 #include "bn_core.h"
@@ -45,7 +45,7 @@ constexpr int SAVE_OVERLAY_SPRITE_CAPACITY = 16;
 constexpr int LIBRARY_VISIBLE_ROWS = 4;
 constexpr int LIBRARY_DISPLAY_CHARACTERS = 15;
 constexpr int LIBRARY_WORST_CASE_SPRITES =
-        int(sizeof("GBA Reader v0.4.7") - 1) +
+        int(sizeof("GBA Reader v0.5.0") - 1) +
         LIBRARY_VISIBLE_ROWS * (2 + LIBRARY_DISPLAY_CHARACTERS) +
         int(sizeof("UP/DOWN select   A open") - 1);
 static_assert(UI_SPRITE_CAPACITY <= 128);
@@ -222,12 +222,26 @@ int main()
                     history_rebuild = {};
                     if(saved_page_open) {
                         history = footer.history;
-                        if(history.lazy)
+                        history_rebuild = footer.history_rebuild;
+                        if(history.lazy && history_rebuild.state == reader::HistoryRebuildState::IDLE)
                             reader::begin_history_rebuild(page.start_offset, history_rebuild);
                     }
                     pending_back = false;
                     reader::cancel_save_message(save_message_timer);
                     save_sprites.clear();
+                    // Build the immutable ZIP cache after a usable first page exists.  This is
+                    // intentionally not part of later bookmark saves, which append state only.
+                    if(active_source == &epub && !epub.optimized_size()) {
+                        show_overlay(save_ui, save_sprites, "Preparing cache...");
+                        bn::core::update();
+                        reader::TxtSaveFooter cache_state{page.start_offset, settings, history,
+                                                          history_rebuild};
+                        if(file.save_footer(cache_state, &epub)) {
+                            epub.close();
+                            if(epub.open(file)) active_source = &epub;
+                        }
+                        save_sprites.clear();
+                    }
                     scene = Scene::READER;
                     sprites.clear();
                     redraw_page = true;
@@ -275,7 +289,7 @@ int main()
                 redraw_ui = true;
             } else if(bn::keypad::start_pressed()) {
                 pending_back = false;
-                reader::TxtSaveFooter footer{page.start_offset, settings, history};
+                reader::TxtSaveFooter footer{page.start_offset, settings, history, history_rebuild};
                 reader::cancel_save_message(save_message_timer);
                 show_saving_overlay(save_ui, save_sprites);
                 bn::core::update();
@@ -292,7 +306,12 @@ int main()
                 scene = Scene::LIBRARY; redraw_ui = true;
             }
 
-            if(scene == Scene::READER &&
+            const bool idle_frame = !bn::keypad::up_pressed() && !bn::keypad::down_pressed() &&
+                                    !bn::keypad::left_pressed() && !bn::keypad::right_pressed() &&
+                                    !bn::keypad::a_pressed() && !bn::keypad::b_pressed() &&
+                                    !bn::keypad::start_pressed() && !bn::keypad::select_pressed() &&
+                                    !bn::keypad::l_pressed() && !bn::keypad::r_pressed();
+            if(scene == Scene::READER && idle_frame &&
                history_rebuild.state == reader::HistoryRebuildState::BUILDING)
                 reader::step_history_rebuild(
                         *active_source, settings, glyph_width, history_rebuild);
@@ -351,7 +370,7 @@ int main()
             sprites.clear();
             ui.set_center_alignment();
             if(scene == Scene::LIBRARY) {
-                add_text(ui, 0, -68, "GBA Reader v0.4.7", sprites);
+                add_text(ui, 0, -68, "GBA Reader v0.5.0", sprites);
                 if(! storage_ok) add_text(ui, 0, -48, "Supercard SD not ready", sprites);
                 else if(! reader::library_count()) add_text(ui, 0, -48, "No TXT/EPUB in root", sprites);
                 else if(library_status) add_text(ui, 0, -48, library_status, sprites);

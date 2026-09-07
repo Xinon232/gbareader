@@ -33,6 +33,8 @@ public:
     virtual ~ByteSource() = default;
     virtual uint32_t size() const = 0;
     virtual bool byte_at(uint32_t offset, unsigned char& value) const = 0;
+    // Bulk reads let cache writers avoid one ReaderFile seek/cache lookup per byte.
+    virtual bool read_range(uint32_t offset, unsigned char* output, uint32_t count) const;
     virtual uint32_t optimized_size() const { return 0; }
     virtual bool optimized_byte_at(uint32_t, unsigned char&) const { return false; }
     virtual bool cache_archive_layout(uint32_t&, uint32_t&, uint16_t&) const { return false; }

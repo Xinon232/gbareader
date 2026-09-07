@@ -34,6 +34,9 @@ public:
     void close();
     uint32_t size() const override { return _virtual_size; }
     bool byte_at(uint32_t offset, unsigned char& value) const override;
+    bool read_range(uint32_t offset, unsigned char* output, uint32_t count) const override;
+    uint32_t optimized_size() const override { return _optimized ? _virtual_size : 0; }
+    bool optimized_byte_at(uint32_t offset, unsigned char& value) const override;
     bool cache_archive_layout(uint32_t& central_offset, uint32_t& central_size,
                               uint16_t& entry_count) const override;
     EpubError error() const { return _error; }
@@ -59,6 +62,7 @@ private:
     int find_entry(const char* name, ZipEntry& entry) const;
     bool read_entry(uint32_t central_offset, ZipEntry& entry) const;
     bool validate_local_entry(const ZipEntry& entry, uint32_t& data_offset) const;
+    bool load_owned_cache();
     bool fail(EpubError error) const;
 
     const ByteSource* _archive;
@@ -74,6 +78,7 @@ private:
     mutable uint32_t _window_size;
     mutable uint32_t _buffer_size;
     bool _optimized;
+    uint32_t _cache_data_offset;
     mutable tinfl_decompressor _inflator;
     mutable unsigned char _input[512];
     union Workspace {

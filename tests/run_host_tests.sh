@@ -26,11 +26,6 @@ g++ "${CXXFLAGS[@]}" \
     -o "$OUT/test_reader_txt_save"
 "$OUT/test_reader_txt_save"
 
-g++ "${CXXFLAGS[@]}" "$ROOT/tests/test_reader_file.cpp" "$ROOT/src/reader_file.cpp" \
-    "$ROOT/src/reader_txt_save.cpp" "$ROOT/src/reader_core.cpp" \
-    -o "$OUT/test_reader_file"
-"$OUT/test_reader_file"
-
 python3 "$ROOT/tests/generate_epub_fixtures.py" "$OUT/fixtures"
 g++ "${CXXFLAGS[@]}" \
     "$ROOT/tests/test_epub.cpp" "$ROOT/src/epub_document.cpp" "$ROOT/src/miniz_tinfl.c" \
@@ -79,6 +74,14 @@ g++ "${CXXFLAGS[@]}" \
     "$OUT/fixtures/appended-cache-compatible.epub" \
     "$OUT/fixtures/glyph-corpus.epub"
 
+g++ "${CXXFLAGS[@]}" "$ROOT/tests/test_reader_file.cpp" "$ROOT/src/reader_file.cpp" \
+    "$ROOT/src/reader_txt_save.cpp" "$ROOT/src/reader_core.cpp" \
+    "$ROOT/src/epub_document.cpp" "$ROOT/src/miniz_tinfl.c" \
+    -o "$OUT/test_reader_file"
+"$OUT/test_reader_file" "$OUT/fixtures/ordered.epub" "$OUT/fixtures/cached.epub" \
+    "$OUT/fixtures/legacy-v047.epub" "$OUT/fixtures/legacy-v047-migrated.epub"
+
+python3 "$ROOT/tests/test_standard_zip_cache.py" "$OUT/fixtures" "$OUT/fixtures/cached.epub" "$OUT/fixtures/ordered.epub"
 python3 "$ROOT/tests/test_glyph_coverage.py" "$OUT/fixtures"
 python3 "$ROOT/references/superfw/res/fonts/generator.py" \
     --font-files "$ROOT/references/superfw/res/fonts/unscii-16-full.hex" \

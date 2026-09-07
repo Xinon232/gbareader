@@ -3,11 +3,11 @@ name: Build GBA ROM
 on:
   push:
     branches:
-      - release/v0.4.7
+      - release/v0.5.0
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -34,6 +34,14 @@ jobs:
       - name: Upload complete ROM
         uses: actions/upload-artifact@v4
         with:
-          name: GBAReader-v0.4.7
+          name: GBAReader-v0.5.0
           path: gbareader.gba
           if-no-files-found: error
+      - name: Publish v0.5.0 ROM release
+        if: startsWith(github.ref, 'refs/heads/release/v0.5.0')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.5.0
+          name: GBAReader v0.5.0
+          generate_release_notes: true
+          files: gbareader.gba

@@ -47,6 +47,42 @@ custom("ordered.epub", ordered_opf, [
     ("OEBPS/two.xhtml", "<html><head><style>hidden</style></head><body><h1>Second</h1><p>A &amp; &lt; &gt; &quot; &apos; &nbsp; &#65; &#x41; &bogus;</p><ul><li>Item</li></ul><script>hidden</script></body></html>"),
 ])
 
+# Exact v0.4.7 layout: cache payload, duplicate directory/EOCD, 32-byte trailer,
+# then the v2 bookmark footer. v0.5 must expose the pre-trailer archive.
+def fnv(data, skip_start, skip_size):
+    value = 2166136261
+    for index, byte in enumerate(data):
+        if not skip_start <= index < skip_start + skip_size:
+            value = ((value ^ byte) * 16777619) & 0xffffffff
+    return value
+
+legacy_base = bytearray((out / "ordered.epub").read_bytes())
+eocd = legacy_base.rfind(b"PK\x05\x06")
+central_size, central_offset = struct.unpack_from("<II", legacy_base, eocd + 12)
+central = legacy_base[central_offset:central_offset + central_size]
+cache = b"legacy normalized text"
+legacy = bytearray(legacy_base)
+legacy.extend(cache)
+new_central = len(legacy)
+legacy.extend(central)
+new_eocd = bytearray(legacy_base[eocd:eocd + 22])
+struct.pack_into("<I", new_eocd, 16, new_central)
+legacy.extend(new_eocd)
+archive_size = len(legacy)
+trailer = bytearray(32)
+trailer[:8] = b"GBARCHE1"
+struct.pack_into("<IIIII", trailer, 8, 32, len(legacy_base), len(cache), archive_size, zlib.crc32(cache) & 0xffffffff)
+struct.pack_into("<I", trailer, 28, fnv(trailer, 28, 4))
+legacy.extend(trailer)
+footer = bytearray(384)
+footer[:15] = b"\n[GBAR-SAVE:2]\n"
+struct.pack_into("<II", footer, 16, 384, 42)
+footer[24:28] = bytes((1, 1, 1, 0))
+footer[383] = 10
+struct.pack_into("<I", footer, 28, fnv(footer, 28, 4))
+legacy.extend(footer)
+(out / "legacy-v047.epub").write_bytes(legacy)
+
 custom("missing-container.epub", ordered_opf, [], container_xml=None)
 custom("missing-rootfile.epub", ordered_opf, [], container_xml="<container/>")
 custom("missing-manifest.epub", '<package><manifest></manifest><spine><itemref idref="nope"/></spine></package>', [])

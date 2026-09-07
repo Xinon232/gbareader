@@ -13,23 +13,6 @@ namespace reader {
 
 constexpr int LIBRARY_MAX_FILES = 64;
 constexpr int LIBRARY_NAME_MAX = 256;
-constexpr int EPUB_CACHE_TRAILER_SIZE = 32;
-
-struct EpubCacheInfo {
-    uint32_t cache_start;
-    uint32_t text_size;
-    uint32_t book_size;
-    uint32_t text_crc32;
-};
-
-void make_epub_cache_trailer(uint32_t cache_start, uint32_t text_size,
-                             uint32_t book_size, uint32_t text_crc32,
-                             unsigned char output[EPUB_CACHE_TRAILER_SIZE]);
-bool parse_epub_cache_trailer(const unsigned char* input, int size,
-                              uint32_t payload_size, EpubCacheInfo& info);
-bool validate_epub_cache_payload(const ByteSource& source, uint32_t cache_start,
-                                 uint32_t text_size, uint32_t expected_crc32);
-
 struct BookStorageLayout {
     uint32_t book_size;
     uint32_t footer_offset;
@@ -57,10 +40,15 @@ bool book_size_without_footer(const char* name, uint32_t physical_size,
 const char* save_result_string(bool saved);
 
 #ifndef __DEVKITARM__
+class EpubDocument;
+bool write_epub_cache_file_for_tests(const char* input, const char* output,
+                                     const EpubDocument& normalized);
+bool corrupt_epub_cache_file_for_tests(const char* path);
 struct FooterWriteTestResult {
     uint32_t physical_size;
     bool success;
     bool old_footer_restored;
+    bool old_footer_parseable;
 };
 FooterWriteTestResult footer_write_transaction_for_tests(uint32_t existing_footer_size,
                                                          int first_write_limit,
@@ -95,7 +83,9 @@ private:
 #endif
     mutable uint32_t _cache_start;
     mutable int _cache_size;
-    mutable unsigned char _cache[512];
+    // 8 KiB EWRAM read window amortizes FatFS sector traffic during EPUB parsing.
+    static constexpr uint32_t FILE_WINDOW_BYTES = 8 * 1024;
+    mutable unsigned char _cache[FILE_WINDOW_BYTES];
     unsigned char _write_cache[512];
     unsigned char _previous_footer[TXT_SAVE_FOOTER_SIZE];
     uint32_t _size;

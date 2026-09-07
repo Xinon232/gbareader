@@ -2,9 +2,9 @@
 
 A focused plain-text e-reader for the Game Boy Advance, built from the proven SD/FatFS and font foundation of [`gba-vocab-trainer-CC` v0.2.5](https://github.com/Xinon232/gba-vocab-trainer-CC/releases/tag/v0.2.5).
 
-Version 0.4.7 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of UTF-8 EPUB 2/3 files directly from a Supercard SD card.
+Version 0.5.0 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of UTF-8 EPUB 2/3 files directly from a Supercard SD card.
 
-## v0.4.7 features
+## v0.5.0 features
 
 - Case-insensitive `.txt` and `.epub` browser for files in the SD-card root
 - EPUB discovery uses FAT long filenames up to 255 bytes and indexes up to 64 books
@@ -24,9 +24,9 @@ Version 0.4.7 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of
 - Dedicated `gba-vocab-trainer-CC` UI font for menus
 - Line spacing, top margin and bottom margin settings, each adjustable from 1 through 4
 - Fixed 64-page circular Back history, persisted in current-format bookmarks
-- Checksummed embedded TXT/EPUB save footer preserves reading position, settings and up to 64 previous page offsets without sidecars; repeat saves replace the footer instead of growing the book
-- The first successful EPUB save appends a normalized-text cache plus a fresh copy of the ZIP central directory/end record without rewriting any original bytes; later opens verify the compact text sequentially, then use direct cached reads instead of reparsing and inflating every chapter
-- Later EPUB saves replace only the bookmark footer, preserving the cache without further file growth; interrupted first-cache writes restore the exact prior footer/file length
+- Checksummed embedded save state preserves reading position, settings and up to 64 previous page offsets without sidecars
+- The first successful EPUB save writes normalized text and state as stored `META-INF/gbareader/*-v5` ZIP members, retaining ordinary EPUB/ZIP validity
+- Later EPUB saves append a replacement v5 state member; failed TXT footer replacement restores the exact previous footer and file length
 - Saved page history makes Back immediate after reopening a current-format bookmark; older bookmarks rebuild Back history incrementally without a blocking full-book scan
 - Save completion is reported as `Saved` or `Save failed`, then disappears automatically while controls remain responsive
 - Runs of three or more spaces collapse to one space, and repeated newlines collapse to one line break
@@ -38,7 +38,7 @@ Version 0.4.7 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of
 - **Arabic is not supported.** Arabic code points are rendered as `?`; no shaping or bidirectional path is included.
 - **Text size is fixed.** v0.4.2 keeps the native 16-pixel SuperFW bitmap body font.
 - **This is not full EPUB compliance.** Images are skipped completely, including image-only spine pages. CSS presentation, JavaScript, embedded fonts, audio, video, SVG presentation and DRM are unsupported and ignored or rejected as appropriate. Arabic is unsupported.
-- TXT and EPUB books can be saved manually with embedded trailing application data. Original EPUB bytes are never rewritten. On the first successful EPUB save, GBAReader appends normalized text, a duplicate central directory and fresh ZIP end record, then a compact cache trailer and bookmark footer. Keeping a valid ZIP end near the file end preserves compatibility with ordinary EPUB/ZIP readers even for caches larger than 64 KiB.
+- TXT uses a trailing save footer. EPUB v0.5 state and cache are ZIP members, not post-EOCD data. A bounded detector recognizes a valid v0.4.7 cache trailer plus v1/v2 footer, exposes its original pre-trailer archive and bookmark, and rewrites it as v0.5 ZIP members on the next successful save.
 - ZIP64 and multi-disk archives are rejected. Required metadata and spine text must be unencrypted and use stored (0) or DEFLATE (8) compression; unsupported methods or encryption on recognized, ignored image assets do not prevent reading.
 - The ZIP central directory is validated as a stream, so image-heavy EPUBs are not rejected merely for containing more than 128 archive members. Remaining compile-time limits are 256 readable spine documents, 255-byte archive paths, 64 KiB uncompressed metadata, 32 MiB uncompressed XHTML per spine document, 16 MiB compressed required entry and 128 MiB archive. XHTML is inflated and converted through a 32 KiB dictionary and 16 KiB visible-text window, never a whole-chapter allocation. Ignored images, fonts and other non-spine assets are not subject to the XHTML limit. Each applicable limit has a distinct user-facing error; text is never silently truncated.
 - EPUB package metadata and XHTML must be UTF-8. UTF-16 XML/XHTML is outside this release's bounded parser scope.
@@ -69,7 +69,7 @@ When opening a v0.4.7 bookmark, up to 64 saved previous pages are immediately av
 
 ## Hardware and files
 
-v0.4.7 uses the Supercard SD access path inherited from the base engine. Copy UTF-8 `.txt` or supported `.epub` files to the **root** of the SD card. The browser indexes up to 64 files and retains filenames up to 255 bytes for opening. Embedded save footers retain the current position and reading-layout settings for both formats.
+v0.5.0 uses the Supercard SD access path inherited from the base engine. Copy UTF-8 `.txt` or supported `.epub` files to the **root** of the SD card. The browser indexes up to 64 files and retains filenames up to 255 bytes for opening. Embedded save state retains the current position and reading-layout settings for both formats.
 
 An emulator without the expected Supercard storage interface can validate the ROM header and execute the UI path, but it cannot prove SD/FatFS behavior. Real-hardware verification remains important.
 

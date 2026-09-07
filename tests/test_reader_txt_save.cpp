@@ -8,6 +8,8 @@ using namespace reader;
 
 namespace {
 
+int mono_width(uint32_t cp) { return cp == ' ' ? 4 : (cp < 0x80 ? 8 : 16); }
+
 const unsigned char legacy_v1_footer[] =
     "\n[GBAR-SAVE:1;O= 0000123456;S=1;T=1;B=1;C=59AAEAA4                                             \n";
 static_assert(sizeof(legacy_v1_footer) == TXT_SAVE_FOOTER_V1_SIZE + 1);
@@ -57,7 +59,9 @@ void test_v1_footer_remains_readable_and_requests_lazy_history()
 
 void test_checksum_rejects_corruption()
 {
-    TxtSaveFooter input{123456, {1, 1, 1}, {}};
+    TxtSaveFooter input{};
+    input.byte_offset = 123456;
+    input.settings = {1, 1, 1};
     unsigned char bytes[TXT_SAVE_FOOTER_SIZE]{};
     make_txt_save_footer(input, bytes);
     bytes[100] ^= 1;
@@ -67,6 +71,35 @@ void test_checksum_rejects_corruption()
     assert(! parse_txt_save_footer(bytes, sizeof(bytes), output));
 }
 
+void test_v3_ascii_footer_restarts_incomplete_rebuild_safely()
+{
+    unsigned char text[12000];
+    for(uint32_t i = 0; i < sizeof(text); ++i) text[i] = (i % 5 == 4) ? '\n' : 'a';
+    MemorySource source(text, sizeof(text));
+    TxtSaveFooter input{};
+    input.byte_offset = 4321;
+    input.settings = {2, 3, 4};
+    input.history.count = 2;
+    input.history.offsets[0] = 100;
+    input.history.offsets[1] = 200;
+    input.history_rebuild.anchor = 4321;
+    input.history_rebuild.scan.start_offset = 300;
+    input.history_rebuild.state = HistoryRebuildState::BUILDING;
+    input.history_rebuild.initialized = true;
+    unsigned char bytes[TXT_SAVE_FOOTER_SIZE]{};
+    make_txt_save_footer(input, bytes);
+    for(unsigned char byte : bytes) assert(byte == '\n' || (byte >= ' ' && byte <= '~'));
+    TxtSaveFooter output{};
+    assert(parse_txt_save_footer(bytes, sizeof(bytes), output));
+    assert(output.history_rebuild.state == HistoryRebuildState::BUILDING);
+    assert(output.history_rebuild.anchor == 4321);
+    assert(!output.history_rebuild.initialized);
+    while(output.history_rebuild.state == HistoryRebuildState::BUILDING)
+        assert(step_history_rebuild(source, output.settings, mono_width, output.history_rebuild) !=
+               HistoryRebuildState::FAILED);
+    assert(output.history_rebuild.state == HistoryRebuildState::READY);
+}
+
 }
 
 int main()
@@ -74,5 +107,6 @@ int main()
     test_v2_round_trip_preserves_full_history_ring();
     test_v1_footer_remains_readable_and_requests_lazy_history();
     test_checksum_rejects_corruption();
-    std::puts("PASS: TXT save footer v2 history");
+    test_v3_ascii_footer_restarts_incomplete_rebuild_safely();
+    std::puts("PASS: TXT save footer v3 history");
 }

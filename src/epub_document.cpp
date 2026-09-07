@@ -40,6 +40,24 @@ uint32_t crc32_bytes(const unsigned char* data, uint32_t size)
     return ~crc;
 }
 
+uint32_t crc32_update(uint32_t crc, const unsigned char* data, uint32_t size)
+{
+    for(uint32_t i = 0; i < size; ++i) {
+        crc ^= data[i];
+        for(int bit = 0; bit < 8; ++bit)
+            crc = (crc >> 1) ^ (0xEDB88320u & uint32_t(0 - int32_t(crc & 1)));
+    }
+    return crc;
+}
+
+constexpr char CACHE_NAME[] = "META-INF/gbareader/cache-v5";
+constexpr unsigned char CACHE_MAGIC[] = {'G','B','A','R','E','P','C','5'};
+constexpr uint32_t CACHE_HEADER_SIZE = 32;
+constexpr uint16_t CACHE_FORMAT_VERSION = 5;
+constexpr uint16_t TEXT_FORMAT_VERSION = 1;
+uint16_t read16_mem(const unsigned char* p) { return uint16_t(p[0] | (uint16_t(p[1]) << 8)); }
+uint32_t read32_mem(const unsigned char* p) { return uint32_t(p[0]) | (uint32_t(p[1]) << 8) | (uint32_t(p[2]) << 16) | (uint32_t(p[3]) << 24); }
+
 constexpr uint16_t ZIP_RELEVANT_FLAGS = 0x284Fu;
 constexpr uint16_t ZIP_ENCRYPTION_FLAGS = 0x2041u;
 
@@ -417,7 +435,7 @@ const char* epub_error_string(EpubError e)
 }
 
 EpubDocument::EpubDocument() { close(); }
-void EpubDocument::close() { _archive=nullptr;_central_offset=0;_central_size=0;_entry_count=0;_spine_count=0;_virtual_size=0;_error=EpubError::NONE;_cached_spine=-1;_window_start=0;_window_size=0;_buffer_size=0;_optimized=false; }
+void EpubDocument::close() { _archive=nullptr;_central_offset=0;_central_size=0;_entry_count=0;_spine_count=0;_virtual_size=0;_error=EpubError::NONE;_cached_spine=-1;_window_start=0;_window_size=0;_buffer_size=0;_optimized=false;_cache_data_offset=0; }
 bool EpubDocument::fail(EpubError e) const { _error=e; return false; }
 
 bool EpubDocument::open(const ByteSource& archive)
@@ -428,6 +446,8 @@ bool EpubDocument::open(const ByteSource& archive)
     }
     if(archive.size()>EPUB_MAX_ARCHIVE_BYTES)return fail(EpubError::ARCHIVE_TOO_LARGE);
     if(!parse_zip()||!build_spine()){_virtual_size=0;return false;}
+    // Invalid cache metadata or payload never invalidates the original EPUB.
+    (void) load_owned_cache();
     _error=EpubError::NONE; return true;
 }
 
@@ -440,6 +460,40 @@ bool EpubDocument::cache_archive_layout(uint32_t& central_offset, uint32_t& cent
     central_size = _central_size;
     entry_count = static_cast<uint16_t>(_entry_count);
     return true;
+}
+
+bool EpubDocument::load_owned_cache()
+{
+    ZipEntry cache{};
+    const int status = find_entry(CACHE_NAME, cache);
+    if(status <= 0 || cache.method != 0 || cache.flags || cache.uncompressed_size < CACHE_HEADER_SIZE)
+        return false;
+    uint32_t data = 0;
+    if(!validate_local_entry(cache, data)) { _error = EpubError::NONE; return false; }
+    unsigned char header[CACHE_HEADER_SIZE];
+    if(!read_bytes(*_archive, data, header, sizeof(header)) ||
+       std::memcmp(header, CACHE_MAGIC, sizeof(CACHE_MAGIC)) ||
+       read16_mem(header + 8) != CACHE_FORMAT_VERSION || read16_mem(header + 10) != TEXT_FORMAT_VERSION) { _error = EpubError::NONE; return false; }
+    const uint32_t length = read32_mem(header + 16);
+    if(!length || length != cache.uncompressed_size - CACHE_HEADER_SIZE || read32_mem(header + 28) != crc32_bytes(header, 28)) { _error = EpubError::NONE; return false; }
+    uint32_t fingerprint = 0xFFFFFFFFu, p = _central_offset;
+    for(int i = 0; i < _entry_count; ++i) {
+        uint16_t nl, xl, cl;
+        if(!read16(*_archive,p+28,nl)||!read16(*_archive,p+30,xl)||!read16(*_archive,p+32,cl)||nl>=EPUB_MAX_PATH) { _error=EpubError::NONE; return false; }
+        const uint32_t record=46u+nl+xl+cl; char name[EPUB_MAX_PATH];
+        if(!read_bytes(*_archive,p+46,reinterpret_cast<unsigned char*>(name),nl)) { _error=EpubError::NONE; return false; }
+        name[nl]=0;
+        if(std::strncmp(name,"META-INF/gbareader/",19)) {
+            uint32_t at=p,left=record; unsigned char block[512];
+            while(left) { const uint32_t take=left>sizeof(block)?sizeof(block):left; if(!read_bytes(*_archive,at,block,take)) { _error=EpubError::NONE; return false; } fingerprint=crc32_update(fingerprint,block,take);at+=take;left-=take; }
+        }
+        p+=record;
+    }
+    if(read32_mem(header+12)!=~fingerprint) { _error=EpubError::NONE; return false; }
+    uint32_t crc=0xFFFFFFFFu,at=data+CACHE_HEADER_SIZE,left=length; unsigned char block[512];
+    while(left) { const uint32_t take=left>sizeof(block)?sizeof(block):left; if(!read_bytes(*_archive,at,block,take)) { _error=EpubError::NONE; return false; } crc=crc32_update(crc,block,take);at+=take;left-=take; }
+    if(~crc!=read32_mem(header+20)) { _error=EpubError::NONE; return false; }
+    _cache_data_offset=data+CACHE_HEADER_SIZE; _virtual_size=length; _optimized=true; return true;
 }
 
 bool EpubDocument::parse_zip()
@@ -673,7 +727,21 @@ bool EpubDocument::stream_chapter(int i,uint32_t window_start,bool count_only) c
 
 bool EpubDocument::byte_at(uint32_t offset,unsigned char& value) const
 {
-    if(_optimized)return offset<_virtual_size&&_archive->optimized_byte_at(offset,value);
+    if(_optimized)return offset<_virtual_size&&(_cache_data_offset ? _archive->byte_at(_cache_data_offset+offset,value) : _archive->optimized_byte_at(offset,value));
     if(offset>=_virtual_size)return false;int lo=0,hi=_spine_count-1;while(lo<=hi){int mid=(lo+hi)/2;const SpineItem&s=_spine[mid];if(offset<s.start)hi=mid-1;else if(offset>=s.start+s.size)lo=mid+1;else{uint32_t local=offset-s.start;if(_cached_spine!=mid||local<_window_start||local>=_window_start+_window_size){uint32_t start=(local/EPUB_TEXT_WINDOW_BYTES)*EPUB_TEXT_WINDOW_BYTES;if(!stream_chapter(mid,start,false))return false;}if(local<_window_start||local>=_window_start+_window_size)return fail(EpubError::MALFORMED_ZIP);value=_workspace.stream.text[local-_window_start];return true;}}return fail(EpubError::MALFORMED_ZIP);
+}
+
+bool EpubDocument::optimized_byte_at(uint32_t offset, unsigned char& value) const
+{
+    return _optimized && byte_at(offset, value);
+}
+
+bool EpubDocument::read_range(uint32_t offset, unsigned char* output, uint32_t count) const
+{
+    if(!output || offset > _virtual_size || count > _virtual_size - offset) return false;
+    if(_optimized) return _archive->read_range(_cache_data_offset + offset, output, count);
+    for(uint32_t index = 0; index < count; ++index)
+        if(!byte_at(offset + index, output[index])) return false;
+    return true;
 }
 }

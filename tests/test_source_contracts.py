@@ -40,17 +40,23 @@ assert "SAVE_MESSAGE_FRAMES = 90" in (root / "include/reader_ui_state.h").read_t
 assert "--timer.frames_remaining" in ui_source
 assert "bn::core::update();\n                const bool saved = file.save_footer(" in main
 assert "active_source == &epub ? active_source : nullptr" in main
-assert "reader::TxtSaveFooter footer{page.start_offset, settings, history};" in main
+assert "reader::TxtSaveFooter footer{page.start_offset, settings, history, history_rebuild};" in main
 
 # Version-2 saves carry the circular page history; version 1 remains readable.
 assert "TXT_SAVE_FOOTER_V1_SIZE = 96" in save_header
-assert "TXT_SAVE_FOOTER_SIZE = 384" in save_header
+assert "TXT_SAVE_FOOTER_SIZE = 800" in save_header
 assert "PageHistory history;" in save_header
 assert "V2_HISTORY_AT" in save_source
 assert "parse_v1" in save_source
-assert "same_history(verified.history, footer.history)" in file_source
-assert "candidate_sizes[] = {TXT_SAVE_FOOTER_SIZE, TXT_SAVE_FOOTER_V1_SIZE}" in file_source
-assert "layout.has_valid_cache && validate_epub_cache_payload(" in file_source
+# EPUB caches are standard ZIP members; no private trailer or post-EOCD bytes remain.
+assert "META-INF/gbareader/cache-v5" in file_source
+assert "META-INF/gbareader/state-v5" in file_source
+assert "GBAREPC5" in file_source
+assert "append_cache_and_state" in file_source
+assert "local_header" in file_source
+assert "final_eocd" in file_source
+assert "EPUB_CACHE_TRAILER" not in file_source
+assert "write_epub_cache_transaction" not in file_source
 
 # Back navigation never performs a synchronous scan from byte zero.
 previous = core[core.index("bool previous_page"):core.index("void begin_history_rebuild")]
@@ -60,10 +66,10 @@ assert "step_history_rebuild" in core
 assert "reader::step_history_rebuild" in main
 assert 'show_overlay(save_ui, save_sprites, "Loading back...")' in main
 
-assert "GBA Reader v0.4.7" in main
-assert "GBA Reader v0.4.7" in makefile
-assert "release/v0.4.7" in workflow
-assert "GBAReader-v0.4.7" in workflow
+assert "GBA Reader v0.5.0" in main
+assert "GBA Reader v0.5.0" in makefile
+assert "release/v0.5.0" in workflow
+assert "GBAReader-v0.5.0" in workflow
 
 assert "EPUB_MAX_ZIP_ENTRIES" not in epub_header
 assert "TOO_MANY_ENTRIES" not in epub_header
