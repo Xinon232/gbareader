@@ -32,6 +32,13 @@ bool extension_equal(const char* a, const char* b) {
     while(*a && *b) { char x=*a++, y=*b++; if(x>='A'&&x<='Z') x=char(x+'a'-'A'); if(x!=y) return false; }
     return !*a && !*b;
 }
+// Avoid hosted strncpy: Butano's final ROM link intentionally provides only its
+// small string shim set. This always terminates the fixed library-name buffers.
+[[maybe_unused]] void copy_book_name(char* destination, const char* source) {
+    int i = 0;
+    while(source[i] && i < LIBRARY_NAME_MAX - 1) { destination[i] = source[i]; ++i; }
+    destination[i] = 0;
+}
 void put16(unsigned char* p,uint16_t v){p[0]=unsigned(v);p[1]=unsigned(v>>8);}
 void put32(unsigned char* p,uint32_t v){p[0]=unsigned(v);p[1]=unsigned(v>>8);p[2]=unsigned(v>>16);p[3]=unsigned(v>>24);}
 uint16_t get16(const unsigned char* p){return uint16_t(p[0]|uint16_t(p[1])<<8);}
@@ -140,7 +147,7 @@ bool inspect_book_tail(const char*name,uint32_t physical,const unsigned char*tai
 
 bool storage_init(){name_count=0;
 #ifdef __DEVKITARM__
-REG_WAITCNT=0x40c0;set_supercard_mode(MAPPED_SDRAM,true,true);t_card_info info;if(sdcard_init(&info)||f_mount(&fatfs,"0:",1)!=FR_OK)return false;DIR d;FILINFO e;if(f_opendir(&d,"/")!=FR_OK)return false;while(name_count<LIBRARY_MAX_FILES&&f_readdir(&d,&e)==FR_OK&&e.fname[0])if(!(e.fattrib&AM_DIR)&&supported_book_name(e.fname)){std::strncpy(names[name_count],e.fname,LIBRARY_NAME_MAX-1);names[name_count][LIBRARY_NAME_MAX-1]=0;++name_count;}f_closedir(&d);return true;
+REG_WAITCNT=0x40c0;set_supercard_mode(MAPPED_SDRAM,true,true);t_card_info info;if(sdcard_init(&info)||f_mount(&fatfs,"0:",1)!=FR_OK)return false;DIR d;FILINFO e;if(f_opendir(&d,"/")!=FR_OK)return false;while(name_count<LIBRARY_MAX_FILES&&f_readdir(&d,&e)==FR_OK&&e.fname[0])if(!(e.fattrib&AM_DIR)&&supported_book_name(e.fname)){copy_book_name(names[name_count],e.fname);++name_count;}f_closedir(&d);return true;
 #else
 return false;
 #endif
@@ -150,7 +157,7 @@ ReaderFile::ReaderFile():_cache_start(0),_cache_size(0),_size(0),_physical_size(
 ReaderFile::~ReaderFile(){close();}
 bool ReaderFile::open_read_only(const char*filename){close();
 #ifdef __DEVKITARM__
-if(!supported_book_name(filename)||f_open(&_file,filename,FA_READ|FA_OPEN_EXISTING)!=FR_OK)return false;_physical_size=uint32_t(f_size(&_file));_size=_physical_size;_footer_offset=_physical_size;_open=true;std::strncpy(_name,filename,LIBRARY_NAME_MAX-1);_name[LIBRARY_NAME_MAX-1]=0;if(txt_book_name(_name)){uint32_t n=_physical_size<TXT_SAVE_FOOTER_SIZE?_physical_size:TXT_SAVE_FOOTER_SIZE;unsigned char tail[TXT_SAVE_FOOTER_SIZE];UINT got=0;if(n&& (f_lseek(&_file,_physical_size-n)!=FR_OK||f_read(&_file,tail,n,&got)!=FR_OK||got!=n)){close();return false;}BookStorageLayout l{};if(!inspect_book_tail(_name,_physical_size,tail,n,l)){close();return false;}_size=l.book_size;_footer_offset=l.footer_offset;_footer_size=l.footer_size;_has_footer=l.has_valid_footer;}else{uint32_t n=_physical_size<uint32_t(TXT_SAVE_FOOTER_SIZE+LEGACY_CACHE_TRAILER_SIZE)?_physical_size:uint32_t(TXT_SAVE_FOOTER_SIZE+LEGACY_CACHE_TRAILER_SIZE);unsigned char tail[TXT_SAVE_FOOTER_SIZE+LEGACY_CACHE_TRAILER_SIZE];UINT got=0;if(n&&(f_lseek(&_file,_physical_size-n)!=FR_OK||f_read(&_file,tail,n,&got)!=FR_OK||got!=n)){close();return false;}BookStorageLayout l{};if(!inspect_book_tail(_name,_physical_size,tail,n,l)){close();return false;}_size=l.book_size;ZipLayout z{};if(zip_layout(*this,z)){if(l.book_size!=_physical_size&&l.has_valid_footer){_footer_offset=l.footer_offset;_footer_size=l.footer_size;_has_footer=true;}uint32_t data,size;if(find_state(*this,z,data,size)){_footer_offset=data;_footer_size=size;_has_footer=true;}}else{_size=_physical_size;}_cache_size=0;}return true;
+if(!supported_book_name(filename)||f_open(&_file,filename,FA_READ|FA_OPEN_EXISTING)!=FR_OK)return false;_physical_size=uint32_t(f_size(&_file));_size=_physical_size;_footer_offset=_physical_size;_open=true;copy_book_name(_name,filename);if(txt_book_name(_name)){uint32_t n=_physical_size<TXT_SAVE_FOOTER_SIZE?_physical_size:TXT_SAVE_FOOTER_SIZE;unsigned char tail[TXT_SAVE_FOOTER_SIZE];UINT got=0;if(n&& (f_lseek(&_file,_physical_size-n)!=FR_OK||f_read(&_file,tail,n,&got)!=FR_OK||got!=n)){close();return false;}BookStorageLayout l{};if(!inspect_book_tail(_name,_physical_size,tail,n,l)){close();return false;}_size=l.book_size;_footer_offset=l.footer_offset;_footer_size=l.footer_size;_has_footer=l.has_valid_footer;}else{uint32_t n=_physical_size<uint32_t(TXT_SAVE_FOOTER_SIZE+LEGACY_CACHE_TRAILER_SIZE)?_physical_size:uint32_t(TXT_SAVE_FOOTER_SIZE+LEGACY_CACHE_TRAILER_SIZE);unsigned char tail[TXT_SAVE_FOOTER_SIZE+LEGACY_CACHE_TRAILER_SIZE];UINT got=0;if(n&&(f_lseek(&_file,_physical_size-n)!=FR_OK||f_read(&_file,tail,n,&got)!=FR_OK||got!=n)){close();return false;}BookStorageLayout l{};if(!inspect_book_tail(_name,_physical_size,tail,n,l)){close();return false;}_size=l.book_size;ZipLayout z{};if(zip_layout(*this,z)){if(l.book_size!=_physical_size&&l.has_valid_footer){_footer_offset=l.footer_offset;_footer_size=l.footer_size;_has_footer=true;}uint32_t data,size;if(find_state(*this,z,data,size)){_footer_offset=data;_footer_size=size;_has_footer=true;}}else{_size=_physical_size;}_cache_size=0;}return true;
 #else
 (void)filename;return false;
 #endif

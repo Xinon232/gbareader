@@ -483,7 +483,7 @@ bool EpubDocument::load_owned_cache()
         const uint32_t record=46u+nl+xl+cl; char name[EPUB_MAX_PATH];
         if(!read_bytes(*_archive,p+46,reinterpret_cast<unsigned char*>(name),nl)) { _error=EpubError::NONE; return false; }
         name[nl]=0;
-        if(std::strncmp(name,"META-INF/gbareader/",19)) {
+        if(std::memcmp(name,"META-INF/gbareader/",19)) {
             uint32_t at=p,left=record; unsigned char block[512];
             while(left) { const uint32_t take=left>sizeof(block)?sizeof(block):left; if(!read_bytes(*_archive,at,block,take)) { _error=EpubError::NONE; return false; } fingerprint=crc32_update(fingerprint,block,take);at+=take;left-=take; }
         }

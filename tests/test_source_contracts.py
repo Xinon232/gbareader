@@ -57,6 +57,9 @@ assert "local_header" in file_source
 assert "final_eocd" in file_source
 assert "EPUB_CACHE_TRAILER" not in file_source
 assert "write_epub_cache_transaction" not in file_source
+# Butano's ROM link omits these hosted C-string routines; use bounded local comparisons/copies.
+assert "std::strncpy" not in file_source
+assert "std::strncmp" not in (root / "src/epub_document.cpp").read_text(encoding="utf-8")
 
 # Back navigation never performs a synchronous scan from byte zero.
 previous = core[core.index("bool previous_page"):core.index("void begin_history_rebuild")]
