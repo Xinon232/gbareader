@@ -3,12 +3,16 @@
 import pathlib, subprocess, shutil, json, hashlib, sys, zipfile, datetime, shlex, tempfile, os
 ROOT=pathlib.Path(__file__).resolve().parent
 SOURCE=pathlib.Path(sys.argv[1]).resolve() if len(sys.argv)>1 else ROOT.parents[1]
+SCOPED = os.environ.get('GBAREADER_FATFS_LIBRARY') == '1'
 for tool in ['gcc', 'g++', 'mkfs.fat', 'mcopy', 'fsck.fat']:
  if not shutil.which(tool): raise SystemExit('Required test dependency missing: '+tool)
 RUN=pathlib.Path(tempfile.mkdtemp(prefix='gbareader-fatfs-', dir=os.environ.get('TMPDIR')))
 SNAP=RUN/'snapshot';SNAP.mkdir();LOG=RUN/'commands.log'
 def cmd(args,check=True):
- args=list(map(str,args));p=subprocess.run(args,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=120)
+ args=list(map(str,args))
+ if SCOPED:
+  args=[('::/gbareader/'+a[2:]) if a in ('::book.epub','::legacy.txt') else a for a in args]
+ p=subprocess.run(args,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=120)
  with LOG.open('a') as f:f.write('$ '+shlex.join(args)+'\n'+p.stdout+'\nexit='+str(p.returncode)+'\n')
  if check and p.returncode:raise RuntimeError(p.stdout)
  return p
@@ -31,8 +35,13 @@ fixture=RUN/'fixtures'/os.environ.get('GBAREADER_FATFS_FIXTURE', 'window-cross.e
 legacy=RUN/'legacy.txt';legacy.write_bytes(b'Original text body.\n'+b'\n[GBAR-SAVE:1;O= 0000123456;S=1;T=1;B=1;C=59AAEAA4                                             \n')
 base=RUN/'base.img'
 with base.open('wb') as f:f.truncate(32*1024*1024)
-cmd(['mkfs.fat','-F','16',base]);cmd(['mcopy','-i',base,fixture,'::book.epub']);cmd(['mcopy','-i',base,legacy,'::legacy.txt'])
+cmd(['mkfs.fat','-F','16',base])
+if SCOPED:
+ cmd(['mmd','-i',base,'::/gbareader'])
+ cmd(['mcopy','-i',base,legacy,'::outside.txt'])
+cmd(['mcopy','-i',base,fixture,'::book.epub']);cmd(['mcopy','-i',base,legacy,'::legacy.txt'])
 def invoke(image,book,action,version,prefix,kind='-',ordinal=0,policy='o'):
+ if SCOPED: book='/gbareader/'+book
  p=cmd([RUN/'harness',image,book,action,version,kind,ordinal,policy,prefix],False)
  try:r=json.loads(p.stdout)
  except ValueError:r={'returncode':p.returncode,'output':p.stdout}

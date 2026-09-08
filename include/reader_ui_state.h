@@ -2,8 +2,13 @@
 
 namespace reader {
 
-enum class Scene { LIBRARY, READER, SETTINGS, CREDITS };
+enum class Scene { LIBRARY, READER, SETTINGS, CREDITS, CONTROLS };
+constexpr int CONTROLS_PAGE_COUNT = 5;
+constexpr int LIBRARY_VISIBLE_ROWS = 4;
+int library_first_row(int selected, int count);
 struct CreditsInputGate { bool waiting_for_release; };
+bool handle_controls_input(Scene& scene, CreditsInputGate& gate, int& page,
+                           bool select, bool back, bool left, bool right, bool held);
 // Returns true when this frame must not reach the normal scene dispatcher.
 bool handle_credits_input(Scene& scene, CreditsInputGate& gate,
                           bool start_pressed, bool b_pressed, bool any_held);

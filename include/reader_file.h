@@ -15,6 +15,7 @@ namespace reader {
 
 constexpr int LIBRARY_MAX_FILES = 64;
 constexpr int LIBRARY_NAME_MAX = 256;
+constexpr int LIBRARY_PATH_MAX = LIBRARY_NAME_MAX + sizeof("/gbareader/") - 1;
 struct BookStorageLayout {
     uint32_t book_size;
     uint32_t footer_offset;
@@ -31,6 +32,8 @@ bool inspect_book_tail(const char* name, uint32_t physical_size,
                        BookStorageLayout& layout);
 
 bool storage_init();
+bool scan_library();
+bool library_path(int index, char (&path)[LIBRARY_PATH_MAX]);
 int library_count();
 const char* library_name(int index);
 bool supported_book_name(const char* name);
@@ -105,7 +108,7 @@ private:
     bool _has_footer;
     bool _has_valid_cache;
     bool _open;
-    char _name[LIBRARY_NAME_MAX];
+    char _name[LIBRARY_PATH_MAX];
 
     bool physical_byte_at(uint32_t offset, unsigned char& value) const;
 };

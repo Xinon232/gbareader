@@ -1,15 +1,21 @@
-# GBA Reader
+# gbareader v1.0.0
 
-A focused plain-text e-reader for the Game Boy Advance, built from the proven SD/FatFS and font foundation of [`gba-vocab-trainer-CC` v0.2.5](https://github.com/Xinon232/gba-vocab-trainer-CC/releases/tag/v0.2.5).
+Read TXT and EPUB books on your Game Boy Advance. Save your place and return to it later. Put your books in `/gbareader` on your Supercard SD card; they appear directly on the home screen.
 
-Version 0.8.0 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of UTF-8 EPUB 2/3 files directly from a Supercard SD card.
+The app uses the SD/FatFS and font foundation of [`gba-vocab-trainer-CC` v0.2.5](https://github.com/Xinon232/gba-vocab-trainer-CC/releases/tag/v0.2.5). The home-screen title is `gbareader V1.0`; this work retains the v0.8.0 reading and embedded-save engine.
 
-## v0.8.0 changes
+Version 1.0.0 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of UTF-8 EPUB 2/3 files directly from a Supercard SD card.
+
+## v1.0.0 changes
+
+Home now lists books directly from `/gbareader`, with Controls and Credits always accessible. The reading engine is retained from v0.8.0. See [release notes and known limitations](RELEASE_NOTES.md). This is a **hardware-unverified prerelease**; no physical Supercard/SD test was performed.
+
+## Retained v0.8.0 changes
 
 - Saved EPUB opening validates ZIP/package metadata, source identity and a small checksum index rather than scanning all cached text. Each 4 KiB text block is verified before use; the restored page does not require reading earlier blocks.
 - A retained checksum window avoids repeated seeks to the index while paging. Fixed-block CRC combination uses a precomputed read-only operator instead of rebuilding it for each block.
 - A bounded central-directory lookup accelerator, combined fingerprint pass and bulk metadata reads reduce repeated directory scans and seeks. Hash collisions fall back to exact duplicate-detecting lookup; required ZIP safety checks remain.
-- Smart single quotes `‘ ’ ‚` display as `'`, smart double quotes `“ ” „` as `"`, and typographic hyphens `‐ ‑` as `-`, matching GBAWriter's plain punctuation. This changes display only, not source bytes or normalized cache text. Ellipses, en/em dashes, guillemets and other symbols stay unchanged.
+- Smart single quotes `‘ ’ ‚` display as `'`, smart double quotes `“ ” „` as `"`, and typographic hyphens `‐ ‑` as `-`, matching gbawriter's plain punctuation. This changes display only, not source bytes or normalized cache text. Ellipses, en/em dashes, guillemets and other symbols stay unchanged.
 - Library `Start` opens credits; `B` or `Start` closes them. The library shows `start: credits` near the bottom.
 - A checksummed display-layout marker preserves current-layout Back history on reopen while rebuilding older, incompatible page boundaries once. Saved byte positions and settings remain intact.
 
@@ -31,7 +37,7 @@ Physical compaction is deferred: files still grow with saves, and saves are reje
 
 ## Features
 
-- Case-insensitive `.txt` and `.epub` browser for files in the SD-card root
+- Case-insensitive `.txt` and `.epub` list directly on Home, restricted to `/gbareader` on the SD-card root; no card-wide browser or demo fallback
 - EPUB discovery uses FAT long filenames up to 255 bytes and indexes up to 64 books
 - Buffered FatFS access; books are streamed instead of loaded into GBA RAM
 - Direct EPUB ZIP reading with stored and raw-DEFLATE entries; processed required entries receive CRC-32 verification, while valid-cache opens use the integrity policy above; nothing is extracted to SD
@@ -51,7 +57,7 @@ Physical compaction is deferred: files still grow with saves, and saves are reje
 - Fixed 64-page circular Back history, persisted in current-format bookmarks
 - Checksummed embedded save state preserves reading position, settings and up to 64 previous page offsets without sidecars
 - The first successful EPUB save writes normalized text and state as stored `META-INF/gbareader/*-v5` ZIP members, retaining ordinary EPUB/ZIP validity
-- Later EPUB saves append a replacement v5 state member; failed TXT footer replacement restores the exact previous footer and file length
+- Later EPUB saves append a replacement v5 state member. TXT footer replacement attempts to restore the previous footer and file length on failure; persistent write failure or interruption can lose the bookmark even where original body text is preserved
 - Saved page history makes Back immediate after reopening a current-format bookmark; older bookmarks rebuild Back history incrementally without a blocking full-book scan
 - Save completion is reported as `Saved` or `Save failed`, then disappears automatically while controls remain responsive
 - Runs of three or more spaces collapse to one space, and repeated newlines collapse to one line break
@@ -70,10 +76,15 @@ Physical compaction is deferred: files still grow with saves, and saves are reje
 
 ## Controls
 
+Read TXT and EPUB books, save your reading position, and resume later. Place UTF-8 `.txt` and supported `.epub` files directly in `/gbareader` on the SD-card root, then restart the app. It lists up to 64 files, not subfolders. A missing or empty folder shows instructions; Controls and Credits remain available. This reader has no text editing, typing or user-facing export controls.
+
+See [the full controls PDF](docs/gbareader-full-controls.pdf).
+
 ### Library
 
 - `Up` / `Down`: select a `.txt` or `.epub` book
 - `A`: open the selected book
+- `Select`: show Controls. `Left` / `Right` changes help pages; `B` returns Home.
 - `Start`: show credits; `B` or `Start` returns to the library
 
 ### Reader
@@ -91,11 +102,11 @@ Current-display-layout bookmarks retain up to 64 previous page offsets. Older or
 
 - `Up` / `Down`: select line spacing, top margin or bottom margin
 - `Left` / `Right`: change the selected value
-- `B` or `Start`: apply the displayed settings and return to the reader. To retain them for a TXT book, press `Start` again from the reader.
+- `B` or `Start`: apply the displayed settings and return to the reader. To retain them in either TXT or EPUB, press `Start` again from the reader. Font size is fixed at 16 pixels.
 
 ## Hardware and files
 
-v0.8.0 uses the Supercard SD access path inherited from the base engine. Copy UTF-8 `.txt` or supported `.epub` files to the **root** of the SD card. The browser indexes up to 64 files and retains filenames up to 255 bytes for opening. Embedded save state retains the current position and reading-layout settings for both formats.
+The app uses the Supercard SD access path inherited from the base engine. Create a **gbareader** folder at the SD-card root and copy UTF-8 `.txt` or supported `.epub` files directly into it. Home indexes up to 64 files and retains filenames up to 255 bytes for opening; long displayed names are clipped by pixel width without changing their bytes. Embedded save state retains the current position and reading-layout settings for both formats. No `.sav` or permanent settings sidecar is used. Initial EPUB cache preparation writes initial state automatically. Later position, Back history and settings changes require a successful Reader `Start` save before leaving with `Select`.
 
 An emulator without the expected Supercard storage interface can validate the ROM header and execute the UI path, but it cannot prove SD/FatFS behavior. Real-hardware verification remains important.
 

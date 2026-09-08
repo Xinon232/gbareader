@@ -18,6 +18,7 @@ extern "C" {
 #include "reader_core.h"
 #include "reader_ui_state.h"
 #include "reader_credits.h"
+#include "reader_controls.h"
 #include "epub_document.h"
 #include "reader_file.h"
 
@@ -43,13 +44,12 @@ reader::Settings settings;
 
 constexpr int UI_SPRITE_CAPACITY = 127;
 constexpr int SAVE_OVERLAY_SPRITE_CAPACITY = 16;
-constexpr int LIBRARY_VISIBLE_ROWS = 4;
-constexpr int LIBRARY_DISPLAY_CHARACTERS = 15;
+constexpr int LIBRARY_VISIBLE_ROWS = reader::LIBRARY_VISIBLE_ROWS;
 constexpr int LIBRARY_WORST_CASE_SPRITES =
-        int(sizeof("GBA Reader v0.8.0") - 1) +
-        LIBRARY_VISIBLE_ROWS * (2 + LIBRARY_DISPLAY_CHARACTERS) +
+        int(sizeof("gbareader V1.0") - 1) +
+        int(sizeof("files: /gbareader") - 1) +
         int(sizeof("UP/DOWN select   A open") - 1) +
-        int(sizeof("start: credits") - 1);
+        int(sizeof("Select: Controls") - 1) + int(sizeof("Start: Credits") - 1);
 static_assert(UI_SPRITE_CAPACITY <= 128);
 static_assert(LIBRARY_WORST_CASE_SPRITES < 128);
 
@@ -139,25 +139,6 @@ void show_save_result(bn::sprite_text_generator& generator,
     show_overlay(generator, sprites, reader::save_result_string(saved));
 }
 
-void library_display_name(const char* name, char* output)
-{
-    int input = 0;
-    int out = 0;
-    int characters = 0;
-    while(name[input] && characters < LIBRARY_DISPLAY_CHARACTERS) {
-        unsigned char lead = static_cast<unsigned char>(name[input]);
-        int bytes = lead < 0x80 ? 1 : (lead & 0xE0) == 0xC0 ? 2 :
-                    (lead & 0xF0) == 0xE0 ? 3 : (lead & 0xF8) == 0xF0 ? 4 : 1;
-        int available = 1;
-        while(available < bytes && name[input + available] &&
-              (static_cast<unsigned char>(name[input + available]) & 0xC0) == 0x80) ++available;
-        if(available != bytes) bytes = 1;
-        for(int i = 0; i < bytes; ++i) output[out++] = name[input++];
-        ++characters;
-    }
-    output[out] = 0;
-}
-
 }
 
 int main()
@@ -167,6 +148,7 @@ int main()
     bn::palette_bitmap_bg_painter painter(background);
     painter.fill(0);
     painter.flip_page_later();
+    bn::core::update(); // Commit the initial flip before the first Home redraw.
 
     bn::sprite_font ui_font(
             bn::sprite_items::ui_variable_8x16_font,
@@ -195,6 +177,7 @@ int main()
     reader::SaveMessageTimer save_message_timer{};
     bool pending_back = false;
     reader::CreditsInputGate credits_gate{};
+    int controls_page = 0;
 
     while(true) {
         const Scene previous_scene = scene;
@@ -203,16 +186,21 @@ int main()
                 bn::keypad::a_held() || bn::keypad::b_held() ||
                 bn::keypad::start_held() || bn::keypad::select_held() ||
                 bn::keypad::l_held() || bn::keypad::r_held();
-        const bool credits_consumed = reader::handle_credits_input(
+        const int previous_controls_page = controls_page;
+        const bool credits_consumed = reader::handle_controls_input(
+                scene, credits_gate, controls_page, bn::keypad::select_pressed(),
+                bn::keypad::b_pressed(), bn::keypad::left_pressed(),
+                bn::keypad::right_pressed(), any_held) || reader::handle_credits_input(
                 scene, credits_gate, bn::keypad::start_pressed(), bn::keypad::b_pressed(), any_held);
         if(credits_consumed) {
-            if(scene != previous_scene) redraw_ui = true;
+            if(scene != previous_scene || controls_page != previous_controls_page) redraw_ui = true;
         } else if(scene == Scene::LIBRARY) {
             if(bn::keypad::up_pressed() && selected > 0) { --selected; library_status = nullptr; redraw_ui = true; }
             if(bn::keypad::down_pressed() && selected + 1 < reader::library_count()) { ++selected; library_status = nullptr; redraw_ui = true; }
             if(bn::keypad::a_pressed() && reader::library_count()) {
                 library_status = nullptr;
-                if(! file.open_read_only(reader::library_name(selected))) {
+                char path[reader::LIBRARY_PATH_MAX];
+                if(!reader::library_path(selected, path) || !file.open_read_only(path)) {
                     library_status = "Book open failed";
                     redraw_ui = true;
                 } else {
@@ -384,24 +372,32 @@ int main()
             sprites.clear();
             ui.set_center_alignment();
             if(scene == Scene::LIBRARY) {
-                add_text(ui, 0, -68, "GBA Reader v0.8.0", sprites);
-                if(! storage_ok) add_text(ui, 0, -48, "Supercard SD not ready", sprites);
-                else if(! reader::library_count()) add_text(ui, 0, -48, "No TXT/EPUB in root", sprites);
-                else if(library_status) add_text(ui, 0, -48, library_status, sprites);
-                int first = selected > 1 ? selected - 1 : 0;
-                if(first + LIBRARY_VISIBLE_ROWS > reader::library_count())
-                    first = reader::library_count() > LIBRARY_VISIBLE_ROWS ?
-                            reader::library_count() - LIBRARY_VISIBLE_ROWS : 0;
+                add_text(ui, 0, -68, "gbareader V1.0", sprites);
+                add_text(ui, 0, -48, "files: /gbareader", sprites);
+                auto* pixels = reinterpret_cast<uint8_t*>(painter.page().data());
+                if(!storage_ok || !reader::library_count()) {
+                    const char* status = !storage_ok ? "SD or folder unavailable." : "No TXT/EPUB files found.";
+                    draw_text_idx8_bus16_range(status, pixels + 56 * 240 + 8, 0, 224, 240, 1);
+                    draw_text_idx8_bus16_range("Put TXT/EPUB in /gbareader", pixels + 78 * 240 + 8, 0, 224, 240, 1);
+                    draw_text_idx8_bus16_range("on SD root, then restart.", pixels + 94 * 240 + 8, 0, 224, 240, 1);
+                } else if(library_status) {
+                    draw_text_idx8_bus16_range(library_status, pixels + 64 * 240 + 8, 0, 224, 240, 1);
+                }
+                const int first = reader::library_first_row(selected, reader::library_count());
                 for(int i = first; ! library_status && i < reader::library_count() &&
                                    i < first + LIBRARY_VISIBLE_ROWS; ++i) {
-                    bn::string<68> label = i == selected ? "> " : "  ";
-                    char display_name[LIBRARY_DISPLAY_CHARACTERS * 4 + 1];
-                    library_display_name(reader::library_name(i), display_name);
-                    label += display_name;
-                    add_text(ui, 0, -44 + (i - first) * 16, label.data(), sprites);
+                    const int y = 52 + (i - first) * 16;
+                    draw_text_idx8_bus16_range(i == selected ? ">" : " ", pixels + y * 240 + 8, 0, 12, 240, 1);
+                    draw_text_idx8_bus16_range(reader::library_name(i), pixels + y * 240 + 22, 0, 210, 240, 1);
                 }
-                add_text(ui, 0, 50, "start: credits", sprites);
-                add_text(ui, 0, 68, "UP/DOWN select   A open", sprites);
+                add_text(ui, 0, 44, "UP/DOWN select   A open", sprites);
+                ui.set_left_alignment();
+                add_text(ui, -104, 68, "Select: Controls", sprites);
+                add_text(ui, 8, 68, "Start: Credits", sprites);
+            } else if(scene == Scene::CONTROLS) {
+                add_text(ui, 0, -62, reader::controls_titles[controls_page], sprites);
+                reader::draw_controls(reinterpret_cast<uint8_t*>(painter.page().data()), controls_page);
+                add_text(ui, 0, 68, "LEFT/RIGHT page   B back", sprites);
             } else if(scene == Scene::CREDITS) {
                 add_text(ui, 0, -62, "Credits", sprites);
                 reader::draw_credits(reinterpret_cast<uint8_t*>(painter.page().data()));

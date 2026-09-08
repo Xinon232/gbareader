@@ -37,9 +37,9 @@ bool extension_equal(const char* a, const char* b) {
 }
 // Avoid hosted strncpy: Butano's final ROM link intentionally provides only its
 // small string shim set. This always terminates the fixed library-name buffers.
-[[maybe_unused]] void copy_book_name(char* destination, const char* source) {
+template<unsigned N> void copy_book_name(char (&destination)[N], const char* source) {
     int i = 0;
-    while(source[i] && i < LIBRARY_NAME_MAX - 1) { destination[i] = source[i]; ++i; }
+    while(source[i] && i < int(N) - 1) { destination[i] = source[i]; ++i; }
     destination[i] = 0;
 }
 void put16(unsigned char* p,uint16_t v){p[0]=unsigned(v);p[1]=unsigned(v>>8);}
@@ -285,8 +285,15 @@ bool same_history(const PageHistory&a,const PageHistory&b){if(a.count!=b.count)r
 #endif
 }
 
-bool txt_book_name(const char* name){int n=0;while(name&&name[n]&&n<LIBRARY_NAME_MAX)++n;return n>4&&n<LIBRARY_NAME_MAX&&extension_equal(name+n-4,".txt");}
-bool supported_book_name(const char* name){int n=0;while(name&&name[n]&&n<LIBRARY_NAME_MAX)++n;return n<LIBRARY_NAME_MAX&&(txt_book_name(name)||(n>5&&extension_equal(name+n-5,".epub")));}
+const char* library_basename(const char* name) {
+    if(!name) return name;
+    const char prefix[] = "/gbareader/";
+    unsigned i = 0;
+    while(prefix[i] && name[i] == prefix[i]) ++i;
+    return prefix[i] ? name : name + i;
+}
+bool txt_book_name(const char* name){name=library_basename(name);int n=0;while(name&&name[n]&&n<LIBRARY_NAME_MAX)++n;return n>4&&n<LIBRARY_NAME_MAX&&extension_equal(name+n-4,".txt");}
+bool supported_book_name(const char* name){name=library_basename(name);int n=0;while(name&&name[n]&&n<LIBRARY_NAME_MAX)++n;return n<LIBRARY_NAME_MAX&&(txt_book_name(name)||(n>5&&extension_equal(name+n-5,".epub")));}
 const char* save_result_string(bool saved){return saved?"Saved":"Save failed";}
 bool book_size_without_footer(const char* name,uint32_t physical,const unsigned char*tail,uint32_t tail_size,uint32_t&logical,bool&valid,uint32_t&footer){logical=physical;valid=false;footer=0;if(!txt_book_name(name)||!tail)return false;const int sizes[]={TXT_SAVE_FOOTER_SIZE,TXT_SAVE_FOOTER_V2_SIZE,TXT_SAVE_FOOTER_V1_SIZE};for(int s:sizes)if(physical>=uint32_t(s)&&tail_size>=uint32_t(s)){const unsigned char*p=tail+tail_size-s;if(looks_like_txt_save_footer(p,s)){TxtSaveFooter f{};valid=parse_txt_save_footer(p,s,f);footer=s;logical=physical-footer;return true;}}return false;}
 bool inspect_book_tail(const char*name,uint32_t physical,const unsigned char*tail,uint32_t tail_size,BookStorageLayout&l){
@@ -303,12 +310,42 @@ bool inspect_book_tail(const char*name,uint32_t physical,const unsigned char*tai
 
 bool storage_init(){name_count=0;
 #ifdef __DEVKITARM__
-REG_WAITCNT=0x40c0;set_supercard_mode(MAPPED_SDRAM,true,true);t_card_info info;if(sdcard_init(&info)||f_mount(&fatfs,"0:",1)!=FR_OK)return false;DIR d;FILINFO e;if(f_opendir(&d,"/")!=FR_OK)return false;while(name_count<LIBRARY_MAX_FILES&&f_readdir(&d,&e)==FR_OK&&e.fname[0])if(!(e.fattrib&AM_DIR)&&supported_book_name(e.fname)){copy_book_name(names[name_count],e.fname);++name_count;}f_closedir(&d);return true;
+REG_WAITCNT=0x40c0;set_supercard_mode(MAPPED_SDRAM,true,true);t_card_info info;if(sdcard_init(&info)||f_mount(&fatfs,"0:",1)!=FR_OK)return false;return scan_library();
 #else
 return false;
 #endif
 }
+bool scan_library() {
+    name_count = 0;
+#ifdef __DEVKITARM__
+    DIR directory; FILINFO entry;
+    if(f_opendir(&directory, "/gbareader") != FR_OK) return false;
+    bool ok = true;
+    while(name_count < LIBRARY_MAX_FILES) {
+        if(f_readdir(&directory, &entry) != FR_OK) { ok = false; break; }
+        if(!entry.fname[0]) break;
+        if(!(entry.fattrib & AM_DIR) && supported_book_name(entry.fname))
+            copy_book_name(names[name_count++], entry.fname);
+    }
+    if(f_closedir(&directory) != FR_OK) ok = false;
+    if(!ok) name_count = 0;
+    return ok;
+#else
+    return false;
+#endif
+}
 int library_count(){return name_count;}const char* library_name(int i){return i>=0&&i<name_count?names[i]:nullptr;}
+bool library_path(int index, char (&path)[LIBRARY_PATH_MAX]) {
+    path[0] = 0;
+    const char* name = library_name(index);
+    if(!name) return false;
+    const char prefix[] = "/gbareader/";
+    std::memcpy(path, prefix, sizeof(prefix) - 1);
+    int at = sizeof(prefix) - 1;
+    while(*name) path[at++] = *name++;
+    path[at] = 0;
+    return true;
+}
 ReaderFile::ReaderFile():_cache_start(0),_cache_size(0),_size(0),_physical_size(0),_footer_size(0),_footer_offset(0),_epub_cache_start(0),_epub_cache_size(0),_has_footer(false),_has_valid_cache(false),_open(false),_name{}{}
 ReaderFile::~ReaderFile(){close();}
 bool ReaderFile::open_read_only(const char*filename){close();
@@ -359,7 +396,7 @@ bool ReaderFile::save_footer(const TxtSaveFooter& footer, const ByteSource* opti
 #ifdef __DEVKITARM__
     unsigned char replacement[TXT_SAVE_FOOTER_SIZE];
     make_txt_save_footer(footer, replacement);
-    char filename[LIBRARY_NAME_MAX]{};
+    char filename[LIBRARY_PATH_MAX]{};
     std::memcpy(filename, _name, sizeof(filename));
     const uint32_t original = _physical_size, previous = _footer_size;
     if(previous) {

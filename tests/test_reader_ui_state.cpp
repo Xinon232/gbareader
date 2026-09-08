@@ -35,6 +35,38 @@ static void test_credits_input()
 
 int main()
 {
+    assert(library_first_row(0, 0) == 0);
+    for(int count : {1, 2, 3, 4, 5, 64}) {
+        for(int selected = 0; selected < count; ++selected) {
+            const int first = library_first_row(selected, count);
+            assert(first >= 0 && first <= selected && selected < first + 4);
+            assert(first == 0 || first + 4 <= count);
+        }
+    }
+    assert(library_first_row(63, 64) == 60);
+    Scene s = Scene::LIBRARY;
+    CreditsInputGate gate{};
+    int p = 0;
+    assert(handle_controls_input(s, gate, p, true, false, false, false, true));
+    assert(s == Scene::CONTROLS && p == 0);
+    handle_controls_input(s, gate, p, false, false, false, true, true);
+    assert(p == 0); // Entry release tail is swallowed.
+    handle_controls_input(s, gate, p, false, false, false, false, false);
+    for(int i = 1; i < CONTROLS_PAGE_COUNT; ++i) {
+        handle_controls_input(s, gate, p, false, false, false, true, true);
+        assert(p == i);
+    }
+    handle_controls_input(s, gate, p, false, false, false, true, true);
+    assert(p == CONTROLS_PAGE_COUNT - 1);
+    handle_controls_input(s, gate, p, false, false, true, false, true);
+    assert(p == CONTROLS_PAGE_COUNT - 2);
+    handle_controls_input(s, gate, p, false, true, false, false, true);
+    assert(s == Scene::LIBRARY && gate.waiting_for_release);
+    for(Scene other : {Scene::READER, Scene::SETTINGS, Scene::CREDITS}) {
+        s = other;
+        assert(!handle_controls_input(s, gate, p, true, false, false, false, true));
+        assert(s == other);
+    }
     test_credits_input();
     SaveMessageTimer timer{};
     assert(! save_message_visible(timer));

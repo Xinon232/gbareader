@@ -1,68 +1,37 @@
-# GBA Reader v0.8.0 — block cache, punctuation and credits
+# gbareader v1.0.0 — home library and controls
 
-## Faster saved-EPUB opening
+Read TXT and EPUB books on your Game Boy Advance. Save your place and return to it later.
 
-- New caches verify text in 4 KiB blocks as needed, rather than reading and checksumming the entire book before showing the saved page.
-- ZIP/package safety checks, source fingerprint, cache header and the small checksum index remain validated upfront. The ZIP member CRC is reconstructed from the block checksums without scanning text.
-- A retained checksum window avoids repeatedly seeking to the end of the cache during page turns. Fixed-block CRC combination uses a 128-byte read-only operator; no whole-book or whole-index allocation is added.
-- Bounded central-directory lookup, a combined source-fingerprint pass and bulk metadata reads reduce repeated directory scans and seeks. Hash collisions retain exact duplicate-detecting lookup. The document object grows by a bounded 2,064 bytes; its existing text/inflater workspace is reused.
+## What changed
 
-## GBAWriter-style punctuation
+- Home lists supported UTF-8 `.txt` and text-only `.epub` books directly from `/gbareader` at the SD-card root. There is no intermediate load menu, card-wide browser or root-folder fallback.
+- Home shows `gbareader V1.0`, the folder path, and accessible Controls and Credits, including when the library is empty or unavailable.
+- Five in-app Controls pages and the attached full-controls PDF explain file placement, reading, settings and saving. This reader has no typing, editing or user-facing export controls.
+- The v0.8.0 parser, block cache, pagination, history, settings and embedded-save algorithms are retained; storage changes are limited to library discovery and complete folder-prefixed paths. The inherited 64-file index and 255-byte basename limits are implementation limits, not SD-card capacity limits.
 
-Display-only substitutions use the same plain punctuation glyphs as GBAWriter:
+## Downloads and setup
 
-- `‘ ’ ‚` → `'`
-- `“ ” „` → `"`
-- `‐ ‑` → `-`
+Download **gbareader.gba** and **gbareader-full-controls.pdf** below. Create `/gbareader` at the root of your Supercard SD card and put supported books directly inside, then restart the app. Keep backups before using embedded saves.
 
-Original TXT/EPUB text and normalized cache bytes are not rewritten. Source byte offsets remain valid. Ellipses, en/em dashes, guillemets, bullets, currency and other symbols are unchanged. A checksummed display-layout marker preserves new-layout Back history on reopen while rebuilding older page boundaries once, keeping the saved reading position and settings.
+Reader `Start` saves position, settings and Back history inside the open book; Reader `Select` closes without saving. Initial EPUB cache preparation writes initial state automatically; later position/history/settings changes require a successful Reader `Start` save. TXT uses a trailing bookmark footer; EPUB uses internal ZIP cache/state members, not permanent `.sav` or settings sidecars.
 
-## Credits
+## Verification and known limitations
 
-Press **Start on the library screen** to show:
+**This is a hardware-unverified prerelease. No physical Supercard/SD test was performed.** Emulator results do not prove physical storage compatibility or power-loss safety.
+
+- The exact attached ROM passed 29 unpatched, unseeded emulator checkpoints covering home, all five Controls pages, Credits, boundaries and repeated returns. Its unavailable-storage home was tested, not a real mounted SD folder.
+- Host and ASan/UBSan regression suites passed, including real-font framebuffer checks and scoped library/path tests. Production FatFS image tests exercised successful saves and transient-error recovery; long ASCII and 255-byte BMP UTF-8 TXT/EPUB basenames were verified with fresh remounts.
+- Inherited TXT limitations remain: persistent write failure and interrupted footer replacement can lose a valid old-or-new bookmark. The exercised cases preserved original text/body and clean filesystem checks, but bookmark recovery is not guaranteed. These are not fixed by v1.0.0.
+- Three selected sync-error ordinals in the retained FAT fault campaign were not reached; the campaign is not 39 clean passes. Exhaustive faults, torn sectors, out-of-space, arbitrary power loss and physical hardware behavior remain unverified. Supplementary-plane FAT filenames remain unverified because fixture tooling could not create the intended name.
+- EPUB remains a bounded text-only subset, not full EPUB support. Physical EPUB compaction is deferred; appended saves remain subject to the inherited 128 MiB archive limit.
+
+The supplied ROM is the exact frozen emulator-verified artifact, not a replacement CI build. Its visible title is `gbareader V1.0`; the inherited ROM header is `GBA READER`. The Makefile's v0.8.0 comment describes inherited build metadata, not the published release version. CI results for the final commit are available in the repository Actions tab and are separate from exact-ROM verification.
+
+## SHA-256
 
 ```text
-Made by Halim Jarrar
-(C) 2026
-halim-jarrar.de
-monday@halim-jarrar.de
+b2d53dd0096f1fc89b3893057806e6a85ac9c016e8a88c3a380d07f762077e73  gbareader.gba
+98f735a63883463f5bfb2fec1dc316bf4854639637ae7ed83e3db3058666b514  gbareader-full-controls.pdf
 ```
 
-The library indicates `start: credits` near the bottom. **B or Start** closes credits. Start still saves normally while reading; existing reading/settings controls are retained.
-
-## Upgrading an already-saved EPUB
-
-**Open the book, press Start to save once, then close and reopen it.** That one save upgrades an existing v0.6/v0.7 owned cache to block validation. Until then, the old cache stays readable with its original full-text checks. Subsequent saves in the same session remain state-only, not repeated full-cache writes.
-
-The internal cache-format field is now 6; the existing `META-INF/gbareader/cache-v5` and `state-v5` member names remain. Original EPUB entries remain available to other readers. State and cache stay inside the EPUB, with no permanent sidecars.
-
-## Integrity trade-off
-
-Damage in an unread cached-text block is detected when the block is requested, not at initial open. A failed block is never displayed: the reader switches to validated original chapters, or fails safely if the originals cannot supply compatible text. Saving after successful fallback can replace the damaged cache. As in v0.7, original chapter payload damage with unchanged ZIP metadata is checked only when original chapters are needed. CRCs protect against accidental corruption, not coordinated malicious checksum replacement.
-
-## Measurements
-
-Production ReaderFile/FatFS and EPUB code were compiled on the host and run on FAT16 images. Four synthetic same-content books were saved independently by v0.7 and v0.8, followed by five alternating-order reopens per version. Median open-plus-resume times:
-
-- One chapter: **3.354 → 0.418 ms**.
-- 32 chapters: **5.019 → 1.811 ms**.
-- 32 chapters with image payloads: **8.414 → 2.926 ms**.
-- 128 chapters, approximately 4.77 MB normalized text: **89.036 → 14.271 ms**.
-
-Opening read 48–73% fewer disk bytes in these fixtures. All 40 reopens hit their cache; the next 50 pages had identical text hashes and source offsets, with no writes or image changes. Paging used the same or fewer disk requests, with a small additional block-checksum CPU cost. These are synthetic host measurements with fixed-width test glyphs, **not GBA/Supercard timing promises**; wall-clock results vary with host load, book layout and physical storage.
-
-A separate instrumented 5 MiB fixture requests only its 5,124-byte checksum table during cache open, with no original chapter or cached-text payload requests until text is demanded.
-
-## Validation and limits
-
-- Full host regression and ASan/UBSan suites, including real-font punctuation pixels, wrapping/source offsets, exact credits framebuffer and input-state tests.
-- Lazy block reads, checksum-index/header/outer-CRC guards, late corruption/fallback, length mismatch, short reads, duplicate/path/bounds checks and cache migration.
-- Production FatFS successful saves, same-object repeated saves and exercised transient-error recovery, with both normal and legacy fixtures, parser readback, independent ZIP CRC checks and read-only filesystem checks.
-- Separate sector-backed late-cache-corruption test: identical pages after fallback, no implicit writes, then an explicit save restores a valid standard ZIP while preserving original entries.
-- Complete devkitARM/Butano ROM build, GBA header and memory-placement/frame-budget checks, independent code review and exact-release-ROM emulator UI verification.
-
-Physical Supercard hardware testing remains separate. Persistent storage failure, arbitrary power loss and torn sectors are not guaranteed recoverable. Physical EPUB compaction remains deferred: saves append data and remain subject to the existing 128 MiB archive limit. Keep backups of your books.
-
-## Download
-
-Use the attached complete **gbareader.gba** ROM. Copy supported TXT/EPUB books to the root of the Supercard SD card.
+Made by Halim Jarrar. Existing GPL and third-party notices remain in the repository.

@@ -5,8 +5,16 @@ root = Path(__file__).resolve().parents[1]
 main = (root / 'src/main.cpp').read_text()
 assert 'reader::handle_credits_input(' in main
 assert 'reader::draw_credits(' in main
-assert '"start: credits"' in main
-assert 'int(sizeof("start: credits") - 1)' in main
+assert '"Start: Credits"' in main
+assert '"Select: Controls"' in main
+assert '"gbareader V1.0"' in main
+assert '"files: /gbareader"' in main
+assert 'reader::library_path(selected, path)' in main
+assert 'reader::handle_controls_input(' in main
+assert 'reader::draw_controls(' in main
+assert 'No TXT/EPUB in root' not in main
+initial = main[main.index('int main()'):main.index('bool storage_ok')]
+assert 'painter.flip_page_later();\n    bn::core::update();' in initial, 'Initial flip must commit before first bitmap Home render'
 assert 'Scene::CREDITS' in main
 # Normal library controls must not execute on either modal transition/release tail.
 assert 'if(credits_consumed)' in main

@@ -38,6 +38,12 @@ g++ "${CXXFLAGS[@]}" -D__DEVKITARM__ -I"$OUT/stubs" \
     "$ROOT/src/reader_core.cpp" "$ROOT/src/reader_txt_save.cpp" \
     -Wl,--gc-sections -o "$OUT/test_reader_file_ranges"
 "$OUT/test_reader_file_ranges"
+g++ "${CXXFLAGS[@]}" -D__DEVKITARM__ -I"$OUT/stubs" \
+    -Wno-misleading-indentation -ffunction-sections -fdata-sections \
+    "$ROOT/tests/test_library.cpp" "$ROOT/src/reader_file.cpp" \
+    "$ROOT/src/reader_core.cpp" "$ROOT/src/reader_txt_save.cpp" \
+    -Wl,--gc-sections -o "$OUT/test_library"
+"$OUT/test_library"
 
 python3 "$ROOT/tests/generate_epub_fixtures.py" "$OUT/fixtures"
 g++ "${CXXFLAGS[@]}" \
@@ -111,7 +117,7 @@ gcc -std=c11 "${CXXFLAGS[@]:1}" -Wno-old-style-declaration -Wno-discarded-qualif
     -c "$ROOT/src/superfw_font.c" -o "$OUT/font.o"
 g++ "${CXXFLAGS[@]}" -I"$ROOT/references/superfw/src/fonts" \
     "$ROOT/tests/test_reader_display.cpp" "$ROOT/src/reader_core.cpp" \
-    "$ROOT/src/reader_credits.cpp" "$OUT/font.o" -o "$OUT/test_reader_display"
+    "$ROOT/src/reader_credits.cpp" "$ROOT/src/reader_controls.cpp" "$OUT/font.o" -o "$OUT/test_reader_display"
 "$OUT/test_reader_display" "$ROOT/references/superfw/res/fonts.pack" \
     "$ROOT/references/superfw/res/reader-symbols.pack"
 

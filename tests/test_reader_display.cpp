@@ -1,5 +1,6 @@
 #include "reader_core.h"
 #include "reader_credits.h"
+#include "reader_controls.h"
 #include <array>
 #include <cassert>
 #include <cstdio>
@@ -116,5 +117,17 @@ int main(int argc, char** argv)
     }
     assert(actual == expected); // Exact full framebuffer, real bus-safe compositor and fonts.
     assert(actual != Pixels{});
-    std::puts("PASS: real renderer punctuation pixels, width/wrap, offsets, credits framebuffer");
+    for(int p = 0; p < reader::CONTROLS_PAGE_COUNT; ++p) {
+        actual = {}; expected = {};
+        reader::draw_controls(reinterpret_cast<uint8_t*>(actual.data()), p);
+        for(int i = 0; i < reader::CONTROLS_LINES; ++i) {
+            const char* text = reader::controls_lines[p][i];
+            assert(font_width(text) <= 224);
+            for(const char* c = text; *c; ++c) assert(*c >= 32 && *c <= 126);
+            draw_text_idx8_bus16_range(text, reinterpret_cast<uint8_t*>(expected.data()) +
+                                      (30 + i * 16) * 240 + 8, 0, 224, 240, 1);
+        }
+        assert(actual == expected && actual != Pixels{});
+    }
+    std::puts("PASS: real renderer punctuation pixels, width/wrap, offsets, credits/controls framebuffer");
 }

@@ -33,6 +33,16 @@ int main(int argc,char**argv){
  if(argc!=9)return 2; // image book action version fault ordinal policy out-prefix
  fd=::open(argv[1],O_RDWR);if(fd<0)return 3;
  FATFS fs{};if(f_mount(&fs,"0:",1)!=FR_OK)return 4;
+ if(std::strncmp(argv[2],"/gbareader/",11)==0) {
+  assert(scan_library()); assert(library_count()==2);
+  bool found=false;
+  for(int i=0;i<library_count();++i) {
+   char library_file[LIBRARY_PATH_MAX]; assert(library_path(i,library_file));
+   if(std::strcmp(library_file,argv[2])==0)found=true;
+   assert(std::strcmp(library_name(i),"outside.txt")!=0);
+  }
+  assert(found);
+ }
  ReaderFile file;bool opened=file.open_read_only(argv[2]);if(!opened){puts("{\"opened\":false}");return 0;}
  bool txt=txt_book_name(argv[2]);EpubDocument doc;bool doc_ok=txt||doc.open(file);
  auto wanted=state(atoi(argv[4]));unsigned char expected[TXT_SAVE_FOOTER_SIZE];make_txt_save_footer(wanted,expected);
