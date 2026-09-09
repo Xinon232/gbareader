@@ -114,7 +114,7 @@ static void test_display_layout_marker_and_history_restore()
     input.history_rebuild.anchor = 4321;
     unsigned char bytes[TXT_SAVE_FOOTER_SIZE]{};
     make_txt_save_footer(input, bytes);
-    assert(!std::memcmp(bytes + 725, ";L=2", 4));
+    assert(!std::memcmp(bytes + 725, ";L=3", 4));
     TxtSaveFooter parsed{};
     assert(parse_txt_save_footer(bytes, sizeof(bytes), parsed));
     assert(parsed.display_layout == CURRENT_DISPLAY_LAYOUT);
@@ -153,6 +153,12 @@ static void test_display_layout_marker_and_history_restore()
     assert(rebuild.state == HistoryRebuildState::BUILDING && rebuild.anchor == input.byte_offset);
     assert(!rebuild.initialized);
 
+    // V1.2's always-ON layout must not be reused for a default-OFF document.
+    parsed = input;
+    parsed.display_layout = 2;
+    restore_saved_history(parsed, history, rebuild);
+    assert(history.count == 0 && rebuild.anchor == input.byte_offset);
+
     parsed.display_layout = CURRENT_DISPLAY_LAYOUT + 1;
     restore_saved_history(parsed, history, rebuild);
     assert(history.count == 0 && rebuild.anchor == input.byte_offset);
@@ -160,8 +166,38 @@ static void test_display_layout_marker_and_history_restore()
     assert(parsed.display_layout == 0);
 }
 
+static void test_sticky_mode_roundtrip()
+{
+    TxtSaveFooter input{};
+    input.settings = default_settings();
+    input.settings.arabic_shaping = true;
+    unsigned char bytes[TXT_SAVE_FOOTER_SIZE];
+    make_txt_save_footer(input, bytes);
+    TxtSaveFooter parsed{};
+    assert(parse_txt_save_footer(bytes, sizeof(bytes), parsed));
+    assert(parsed.settings.arabic_shaping);
+    assert(!std::memcmp(bytes + 729, ";G=1", 4));
+    bytes[732] = '0';
+    assert(!parse_txt_save_footer(bytes, sizeof(bytes), parsed));
+    // True pre-mode V3 footer: the new field did not exist, even on layout 2.
+    make_txt_save_footer(input, bytes);
+    std::memset(bytes + 729, ' ', 4);
+    bytes[728] = '2';
+    uint32_t checksum = 2166136261u;
+    for(int i = 0; i < TXT_SAVE_FOOTER_SIZE; ++i)
+        if(i < 717 || i >= 725) checksum = (checksum ^ bytes[i]) * 16777619u;
+    const char hex[] = "0123456789ABCDEF";
+    for(int i = 7; i >= 0; --i) { bytes[717 + i] = hex[checksum & 15]; checksum >>= 4; }
+    parsed.settings.arabic_shaping = true;
+    assert(parse_txt_save_footer(bytes, sizeof(bytes), parsed));
+    assert(parsed.display_layout == 2 && !parsed.settings.arabic_shaping);
+    assert(parse_txt_save_footer(legacy_v1_footer, TXT_SAVE_FOOTER_V1_SIZE, parsed));
+    assert(!parsed.settings.arabic_shaping);
+}
+
 int main()
 {
+    test_sticky_mode_roundtrip();
     test_display_layout_marker_and_history_restore();
     test_v2_round_trip_preserves_full_history_ring();
     test_v1_footer_remains_readable_and_requests_lazy_history();

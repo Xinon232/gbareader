@@ -11,6 +11,12 @@ if [[ -n "${EXTRA_CXXFLAGS:-}" ]]; then
     CXXFLAGS+=("${EXTRA_CXXFLAGS_ARRAY[@]}")
 fi
 
+for test in test_reader_mode test_reader_open; do
+    g++ "${CXXFLAGS[@]}" "$ROOT/tests/$test.cpp" "$ROOT/src/reader_core.cpp" \
+        "$ROOT/src/reader_txt_save.cpp" -o "$OUT/$test"
+    "$OUT/$test"
+done
+
 g++ "${CXXFLAGS[@]}" "$ROOT/tests/test_reader_crc32.cpp" -o "$OUT/test_reader_crc32"
 "$OUT/test_reader_crc32"
 
@@ -135,7 +141,7 @@ g++ "${CXXFLAGS[@]}" "$ROOT/tests/test_reader_arabic.cpp" \
     "$ROOT/src/reader_core.cpp" "$ROOT/src/reader_txt_save.cpp" -o "$OUT/test_reader_arabic"
 "$OUT/test_reader_arabic"
 g++ "${CXXFLAGS[@]}" -I"$ROOT/references/superfw/src/fonts" \
-    "$ROOT/tests/test_reader_arabic_pixels.cpp" "$OUT/font.o" -o "$OUT/test_reader_arabic_pixels"
+    "$ROOT/tests/test_reader_arabic_pixels.cpp" "$ROOT/src/reader_core.cpp" "$OUT/font.o" -o "$OUT/test_reader_arabic_pixels"
 "$OUT/test_reader_arabic_pixels" "$ROOT/references/superfw/res/fonts.pack" \
     "$ROOT/references/superfw/res/reader-symbols.pack"
 g++ "${CXXFLAGS[@]}" -I"$ROOT/references/superfw/src/fonts" \

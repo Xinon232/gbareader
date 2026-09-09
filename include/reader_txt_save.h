@@ -10,7 +10,7 @@ constexpr int TXT_SAVE_FOOTER_V1_SIZE = 96;
 constexpr int TXT_SAVE_FOOTER_V2_SIZE = 384;
 // Fixed ASCII v3: footer state survives partial Back-history reconstruction.
 constexpr int TXT_SAVE_FOOTER_SIZE = 800;
-constexpr uint8_t CURRENT_DISPLAY_LAYOUT = 2; // Ghoulam shaping/RTL advances.
+constexpr uint8_t CURRENT_DISPLAY_LAYOUT = 3; // Explicit per-document OFF/ON geometry.
 
 struct TxtSaveFooter {
     uint32_t byte_offset;

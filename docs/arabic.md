@@ -1,4 +1,4 @@
-# Arabic display — gbareader V1.2
+# Arabic display — gbareader V1.3 pre-release
 
 Made by Halim Jarrar · (C) 2026 · halim-jarrar.de · monday@halim-jarrar.de
 
@@ -11,7 +11,13 @@ Ghoulam Regular © 2025 Imad AlFil / mloukhiyye, CC BY 4.0.
 - Converted by `tools/extract_ghoulam.py` with fontTools and FreeType: actual unencoded GSUB initial/medial/final forms and required lam-alef ligatures, native 11px, baseline 11. This modified monochrome representation preserves advances and bearings; no author endorsement is implied.
 - Table and shaper imported from gbavocab commit `03d8eade4dfa2fcc5a088c309e3463ca7cc15f74`. Generated font bytes were regenerated and compared exactly. The supplied TTF has not been established byte-identical to a fresh upstream download.
 
-## Display policy
+## Per-document activation
+
+A missing or OFF flag starts the document with shaping off. Opening checks only the provisional page at the saved byte anchor (or the beginning); finding Arabic enables shaping, re-lays out that page at the same anchor and automatically saves sticky ON inside the existing TXT footer or EPUB state member. An already-ON document skips detection and stays ON on future opens. This setting is not global and needs no `.sav` or permanent sidecar.
+
+Subsequent pages do not detect or shape Arabic in an OFF session. Arabic appearing later intentionally remains unshaped until the reader saves there and reopens on an Arabic page. If the automatic save fails, ON remains active in RAM but is not guaranteed durable; retry with Reader Start. No body text is changed. Switching geometry preserves the byte anchor but rejects incompatible Back history and partial rebuild state.
+
+## Display policy (when shaping is ON)
 
 Logical UTF-8 stays in TXT and normalized EPUB text. Ordinary Arabic letters join; four lam-alef variants are supported. Harakat and the agreed Arabic combining-mark ranges are transparent for display only. Missing meaningful extended Arabic letters use `?`. Arabic comma displays as SuperFW comma and Arabic-Indic digits as SuperFW digits. ZWNJ prevents joining; ZWJ can join neighbors. Persian/Urdu extensions and encoded presentation forms are not full-coverage scripts.
 
@@ -21,9 +27,9 @@ Latin, Korean/Hangul, CJK, Greek/Cyrillic and other inherited fonts remain uncha
 
 ## Layout, persistence and bounds
 
-Reader lines retain the existing 256-byte array (255 text bytes plus NUL). One shared non-reentrant 256-cluster shaping scratch lives in device EWRAM; immutable glyph tables remain ROM-resident. Each bounded candidate prefix is shaped before acceptance; native advances plus rightmost artwork bounds drive wrapping and drawing. Spaces remain word-wrap opportunities, oversized words split across rows, and explicit newline behavior stays unchanged. Per-line work is bounded by the fixed byte cap; no whole-book allocation is added. Long runs of hidden marks can occupy multiple logical rows due to this byte cap.
+Reader lines retain the existing 256-byte array (255 text bytes plus NUL). One shared non-reentrant 256-cluster shaping scratch lives in device EWRAM; immutable glyph tables remain ROM-resident. When ON, each bounded Arabic candidate prefix is shaped before acceptance; native advances plus rightmost artwork bounds drive wrapping and drawing. OFF sessions bypass Arabic shaping and the additional per-line rendering scan. Spaces remain word-wrap opportunities, oversized words split across rows, and explicit newline behavior stays unchanged. Per-line work is bounded by the fixed byte cap; no whole-book allocation is added. Long runs of hidden marks can occupy multiple logical rows due to this byte cap.
 
-The existing source cursor advances by original consumed UTF-8 bytes. Neither shaping nor hidden marks rewrite text or byte anchors. The checksummed existing footer display-layout marker changes from 1 to 2: old/unknown history is rebuilt, while the exact saved byte anchor/settings survive. Current-layout history and rebuild state remain reusable. Existing ZIP/cache, TXT footer, FatFS, save and input rules are retained (apart from explicitly added Credits paging).
+The existing source cursor advances by original consumed UTF-8 bytes. Neither shaping nor hidden marks rewrite text or byte anchors. The existing checksummed state distinguishes shaping mode and page-layout compatibility. Missing legacy flags default OFF and receive the opening-page check; the previous V1.2 always-shaped layout is not evidence of a saved sticky ON flag. Compatible history and partial rebuilds remain reusable; incompatible geometry keeps the saved byte anchor/settings and rebuilds history. The existing ZIP/cache and FatFS transaction paths are retained; first-time activation now requests an automatic state save.
 
 ## Verification commands
 

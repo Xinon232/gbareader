@@ -7,13 +7,14 @@ int main() {
  const char* text=u8"السَّلَام عليكم 123 {hello}";
  reader::MemorySource src(reinterpret_cast<const unsigned char*>(text),std::strlen(text));
  reader::Page p{};
- assert(reader::layout_page(src,0,reader::default_settings(),nullptr,p));
+ auto settings = reader::default_settings(); settings.arabic_shaping = true;
+ assert(reader::layout_page(src,0,settings,nullptr,p));
  assert(std::strcmp(p.lines[0].text,text)==0); // Logical display bytes survive decode.
  assert(p.next_offset==std::strlen(text));
  puts("Arabic logical TXT decode passed");
  const char* joined=u8"لالالالالالالالالالالالالالالالالالالالالا";
  reader::MemorySource lig(reinterpret_cast<const unsigned char*>(joined),std::strlen(joined));
- assert(reader::layout_page(lig,0,reader::default_settings(),nullptr,p));
+ assert(reader::layout_page(lig,0,settings,nullptr,p));
  assert(p.line_count==1); // Native Ghoulam lam-alef is much narrower than two fallback cells.
  assert(std::strcmp(p.lines[0].text,joined)==0);
  puts("Arabic joining-aware wrapping passed");

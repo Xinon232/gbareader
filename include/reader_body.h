@@ -11,8 +11,13 @@ inline int body_glyph_width(uint32_t cp)
 }
 // Caller supplies the first pixel of a 224x16 body row with 240-byte pitch.
 // All device writes are halfword read/modify/write, including odd glyph x.
-inline void draw_body_line(const char* text, uint8_t* pixels)
+inline void draw_body_line(const char* text, uint8_t* pixels, bool arabic_shaping)
 {
+    // OFF accepts only canonical PageLine bytes from layout_page (not raw files).
+    if(!arabic_shaping) {
+        draw_text_idx8_bus16_range(text, pixels, 0, 224, 240, 1);
+        return;
+    }
     bool shaped = false;
     const int n = int(std::strlen(text));
     for(int p = 0; p < n;) {

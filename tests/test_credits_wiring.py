@@ -7,7 +7,7 @@ assert 'reader::handle_credits_input(' in main
 assert 'reader::draw_credits(' in main
 assert '"Start: Credits"' in main
 assert '"Select: Controls"' in main
-assert '"gbareader V1.2"' in main
+assert '"gbareader V1.3"' in main
 assert '"files: /gbareader"' in main
 assert 'reader::library_path(selected, path)' in main
 assert 'reader::handle_controls_input(' in main
@@ -22,7 +22,8 @@ assert '} else if(scene == Scene::LIBRARY)' in main
 # A snapshot made using older glyph widths is not a valid current-layout history.
 assert 'history = footer.history;' not in main
 assert 'history_rebuild = footer.history_rebuild;' not in main
-assert 'reader::restore_saved_history(footer, history, history_rebuild);' in main
+assert 'reader::open_document_page(' in main
+assert 'restore_saved_history(*saved, history, rebuild);' in (root / 'include/reader_open.h').read_text()
 # Reading/settings Start retains its original action rather than opening credits.
 reader_start = main[main.index('} else if(bn::keypad::start_pressed())'):main.index('} else if(bn::keypad::select_pressed())')]
 assert 'file.save_footer(' in reader_start and 'Scene::CREDITS' not in reader_start

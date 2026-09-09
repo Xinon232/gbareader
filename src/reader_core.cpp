@@ -35,7 +35,7 @@ Settings default_settings() { return { 1, 1, 1 }; }
 bool same_settings(const Settings& a, const Settings& b)
 {
     return a.line_spacing == b.line_spacing && a.top_margin == b.top_margin &&
-           a.bottom_margin == b.bottom_margin;
+           a.bottom_margin == b.bottom_margin && a.arabic_shaping == b.arabic_shaping;
 }
 
 void clamp_settings(Settings& s)
@@ -83,7 +83,7 @@ static Decoded decode(const ByteSource& source, uint32_t offset, unsigned char f
     int count = (a >= 0xC2 && a <= 0xDF) ? 2 : (a >= 0xE0 && a <= 0xEF) ? 3 :
                 (a >= 0xF0 && a <= 0xF4) ? 4 : 0;
     if(! count) return d;
-    d.bytes[0] = a;
+    uint8_t bytes[4] = {a, 0, 0, 0};
     for(int i = 1; i < count; ++i) {
         unsigned char c = 0;
         // A failed lazy read can invalidate the source and clear its size.
@@ -93,10 +93,10 @@ static Decoded decode(const ByteSource& source, uint32_t offset, unsigned char f
             return d;
         }
         if((c & 0xC0) != 0x80) return d;
-        d.bytes[i] = c;
+        bytes[i] = c;
     }
     uint32_t cp = count == 2 ? (a & 0x1F) : count == 3 ? (a & 0x0F) : (a & 0x07);
-    for(int i = 1; i < count; ++i) cp = (cp << 6) | (d.bytes[i] & 0x3F);
+    for(int i = 1; i < count; ++i) cp = (cp << 6) | (bytes[i] & 0x3F);
     if((count == 3 && cp >= 0xD800 && cp <= 0xDFFF) ||
        (count == 3 && cp < 0x800) || (count == 4 && (cp < 0x10000 || cp > 0x10FFFF))) return d;
     const bool apostrophe = cp == 0x2018 || cp == 0x2019 || cp == 0x201A;
@@ -112,6 +112,7 @@ static Decoded decode(const ByteSource& source, uint32_t offset, unsigned char f
         d.consumed = count;
         return d;
     }
+    std::memcpy(d.bytes, bytes, count);
     d.code = cp;
     d.count = count;
     d.consumed = count;
@@ -119,7 +120,7 @@ static Decoded decode(const ByteSource& source, uint32_t offset, unsigned char f
 }
 
 static bool make_line(const ByteSource& source, uint32_t& cursor, GlyphWidth width_fn, PageLine& line,
-                      bool& source_ok)
+                      bool& source_ok, bool arabic_shaping)
 {
     const int max_width = SCREEN_WIDTH - BODY_SIDE_MARGIN * 2;
     uint32_t start = cursor;
@@ -178,7 +179,7 @@ static bool make_line(const ByteSource& source, uint32_t& cursor, GlyphWidth wid
         int glyph_width = width_fn ? width_fn(d.code) : 8;
         if(glyph_width < 1) glyph_width = 8;
         if(out + d.count >= PAGE_LINE_BYTES) break;
-        has_arabic = has_arabic || arabic::script(d.code);
+        has_arabic = has_arabic || (arabic_shaping && arabic::script(d.code));
         int candidate_width = width + glyph_width;
         if(has_arabic) {
             // Bounded prefix (255 bytes): re-shape contextual forms and lam-alef
@@ -240,7 +241,7 @@ bool layout_page(const ByteSource& source, uint32_t offset, const Settings& inpu
                 gap_before += FONT_HEIGHT + settings.line_spacing;
         }
         if(used_height + gap_before + FONT_HEIGHT > bottom_limit) break;
-        if(!make_line(source, cursor, glyph_width, result.lines[result.line_count], source_ok)) break;
+        if(!make_line(source, cursor, glyph_width, result.lines[result.line_count], source_ok, settings.arabic_shaping)) break;
         used_height += gap_before + FONT_HEIGHT;
         ++result.line_count;
     }

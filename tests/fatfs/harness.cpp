@@ -1,4 +1,5 @@
 #include "reader_file.h"
+#include "reader_open.h"
 #include "epub_document.h"
 #include "diskio.h"
 #include <cstdio>
@@ -27,7 +28,7 @@ DRESULT disk_read(BYTE,BYTE* b,LBA_t s,UINT n){if(fault('r'))return RES_ERROR;re
 DRESULT disk_write(BYTE,const BYTE* b,LBA_t s,UINT n){if(fault('w'))return RES_ERROR;return pwrite(fd,b,size_t(n)*512,off_t(s)*512)==ssize_t(n)*512?RES_OK:RES_ERROR;}
 DRESULT disk_ioctl(BYTE,BYTE cmd,void* b){if(cmd==CTRL_SYNC){if(fault('s'))return RES_ERROR;return fsync(fd)==0?RES_OK:RES_ERROR;}if(cmd==GET_SECTOR_COUNT){*(LBA_t*)b=lseek(fd,0,SEEK_END)/512;return RES_OK;}if(cmd==GET_SECTOR_SIZE){*(WORD*)b=512;return RES_OK;}if(cmd==GET_BLOCK_SIZE){*(DWORD*)b=1;return RES_OK;}return RES_PARERR;}
 }
-static TxtSaveFooter state(int version){TxtSaveFooter f{};f.byte_offset=version*123;f.settings={uint8_t(version%4+1),2,3};f.history.count=3;f.history.head=62;f.history.offsets[62]=0;f.history.offsets[63]=version*17;f.history.offsets[0]=version*51;return f;}
+static TxtSaveFooter state(int version){TxtSaveFooter f{};f.byte_offset=version*123;f.settings={uint8_t(version%4+1),2,3};f.settings.arabic_shaping=true;f.history.count=3;f.history.head=62;f.history.offsets[62]=0;f.history.offsets[63]=version*17;f.history.offsets[0]=version*51;return f;}
 static void dump(const char* path,const unsigned char*b,size_t n){FILE*f=fopen(path,"wb");if(!f||fwrite(b,1,n,f)!=n)exit(8);fclose(f);}
 int main(int argc,char**argv){
  if(argc!=9)return 2; // image book action version fault ordinal policy out-prefix
@@ -45,6 +46,46 @@ int main(int argc,char**argv){
  }
  ReaderFile file;bool opened=file.open_read_only(argv[2]);if(!opened){puts("{\"opened\":false}");return 0;}
  bool txt=txt_book_name(argv[2]);EpubDocument doc;bool doc_ok=txt||doc.open(file);
+ if(std::strncmp(argv[3],"mode",4)==0) {
+  assert(doc_ok);
+  const ByteSource& source = txt ? static_cast<const ByteSource&>(file) : static_cast<const ByteSource&>(doc);
+  TxtSaveFooter before{}; const bool had_footer = file.saved_footer(before);
+  Settings settings = default_settings(); Page page{}; PageHistory history{}; PageHistoryRebuild rebuild{};
+  struct Context { ReaderFile& file; const ByteSource* cache; int calls; } context{file,txt?nullptr:&doc,0};
+  kind=argv[5][0];target=atoi(argv[6]);policy=argv[7][0];
+  auto persist=[](void* opaque,const TxtSaveFooter& state) {
+   auto& c=*static_cast<Context*>(opaque); ++c.calls;
+   armed=true; const bool result=c.file.save_footer(state,c.cache); armed=false; return result;
+  };
+  const auto result=open_document_page(source,had_footer?&before:nullptr,settings,nullptr,
+                    history,page,rebuild,!txt&&!doc.optimized_size(),persist,&context);
+  assert(result!=OpenResult::FAILED && settings.arabic_shaping==(atoi(argv[4])!=0));
+  if(std::strcmp(argv[3],"mode-latin")==0) {
+   // Fixture's final 100 bytes are strictly ASCII; bookmark it and change spacing.
+   assert(source.size()>100); const uint32_t anchor=source.size()-100;
+   assert(open_page_at(source,anchor,settings,nullptr,history,page));
+   for(uint32_t at=anchor;at<source.size();++at) { unsigned char ch;assert(source.byte_at(at,ch)&&ch<128); }
+   adjust_setting(settings,SettingField::LINE_SPACING,1);
+   begin_history_rebuild(anchor,rebuild);
+   assert(file.save_footer({anchor,settings,history,rebuild},txt?nullptr:&doc));
+  }
+  if(std::strcmp(argv[3],"mode-bookmark-arabic")==0) {
+   uint32_t anchor=0;
+   for(;anchor<source.size();++anchor) { unsigned char ch;assert(source.byte_at(anchor,ch));if(ch==0xD8||ch==0xD9)break; }
+   assert(anchor<source.size() && !settings.arabic_shaping);
+   assert(open_page_at(source,anchor,settings,nullptr,history,page));
+   begin_history_rebuild(anchor,rebuild);
+   assert(file.save_footer({anchor,settings,history,rebuild},txt?nullptr:&doc));
+  }
+  TxtSaveFooter actual{};const bool footer=file.saved_footer(actual);
+  if(result==OpenResult::SAVED || had_footer) assert(footer);
+  if(result==OpenResult::SAVED || (had_footer&&before.settings.arabic_shaping))
+   assert(actual.settings.arabic_shaping==settings.arabic_shaping);
+  printf("{\"result\":%d,\"calls\":%d,\"on\":%s,\"persisted_on\":%s,\"bookmark\":%u,\"page_anchor\":%u,\"hits\":%d}\n",
+       int(result),context.calls,settings.arabic_shaping?"true":"false",
+       footer&&actual.settings.arabic_shaping?"true":"false",actual.byte_offset,page.start_offset,hits);
+  file.close(); f_mount(nullptr,"0:",0); fsync(fd);::close(fd);return 0;
+ }
  auto wanted=state(atoi(argv[4]));unsigned char expected[TXT_SAVE_FOOTER_SIZE];make_txt_save_footer(wanted,expected);
  char path[4096];snprintf(path,sizeof(path),"%s.expected",argv[8]);dump(path,expected,sizeof(expected));
  bool saved=false;

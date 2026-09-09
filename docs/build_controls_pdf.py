@@ -18,7 +18,7 @@ text=(root/'README.md').read_text().split('## Controls\n',1)[1].split('## Hardwa
 styles=getSampleStyleSheet()
 styles.add(ParagraphStyle(name='BodyControls',fontName='Helvetica',fontSize=11,leading=16,spaceAfter=8))
 styles['Heading1'].textColor=styles['Heading2'].textColor=HexColor('#254d83')
-flow: list[Flowable]=[Paragraph('gbareader V1.2',styles['Title']),Paragraph('Full controls',styles['Heading1'])]
+flow: list[Flowable]=[Paragraph('gbareader V1.3',styles['Title']),Paragraph('Full controls',styles['Heading1'])]
 def formatted(t):
  return re.sub(r'`([^`]+)`',r'<b>\1</b>',escape(t))
 for block in text.strip().split('\n\n'):
@@ -31,7 +31,7 @@ for block in text.strip().split('\n\n'):
  else:flow.append(Paragraph(formatted(block.replace('\n',' ')),styles['BodyControls']))
 flow += [Spacer(1,14),Paragraph('Files, saving and compatibility',styles['Heading2'])]
 for t in [
- 'TXT bookmarks are stored in a trailing footer. EPUB bookmarks and normalized text caches stay inside the EPUB as ZIP members. No GBA .sav or permanent settings sidecar is required. Initial EPUB cache preparation writes initial state automatically. Later changes to reading position, back history and settings require a successful Reader Start save.',
+ 'TXT bookmarks are stored in a trailing footer. EPUB bookmarks and normalized text caches stay inside the EPUB as ZIP members. No GBA .sav or permanent settings sidecar is required. Initial EPUB cache preparation and first-time Arabic activation save state automatically. Later position, back history and settings changes require a successful Reader Start save.',
  'An EPUB may show Preparing cache... on first opening. Cache preparation writes inside the EPUB automatically; it is not a text-editing or export feature. Wait for storage operations to finish before switching off. If a save fails, keep the book open and retry; do not assume the new place was stored.',
  'Supported files use UTF-8. EPUB support is text-only: no DRM, images, CSS presentation, scripts, embedded fonts, audio or video. Arabic uses native Ghoulam joining and limited per-line RTL; harakat are hidden only on screen. Full Persian/Urdu and full Unicode bidi are not supported. Long names are clipped on screen, not changed on disk. Missing storage or a missing/empty /gbareader folder never opens a demo or scans the card root.',
  'Requires compatible Supercard SD hardware. Emulator UI checks do not prove physical SD-card operation. Keep backups of your books.',
@@ -50,7 +50,7 @@ for notice in [
 out=root/'docs/gbareader-full-controls.pdf';out.parent.mkdir(exist_ok=True)
 def footer(canvas,doc):
  canvas.setFont('Helvetica',9);canvas.setFillColor(HexColor('#526070'));canvas.drawString(42,25,'gbareader · Full controls · Halim Jarrar');canvas.drawRightString(553,25,str(doc.page))
-SimpleDocTemplate(str(out),pagesize=(595,842),leftMargin=48,rightMargin=48,topMargin=38,bottomMargin=46,title='gbareader V1.2 — Full controls',author='Halim Jarrar').build(flow,onFirstPage=footer,onLaterPages=footer)
+SimpleDocTemplate(str(out),pagesize=(595,842),leftMargin=48,rightMargin=48,topMargin=38,bottomMargin=46,title='gbareader V1.3 — Full controls',author='Halim Jarrar').build(flow,onFirstPage=footer,onLaterPages=footer)
 pdf=PdfReader(out); joined='\n'.join(p.extract_text() for p in pdf.pages)
 for required in ['Read TXT and EPUB','/gbareader','Select','Start','Left','Right','Up','Down','previous page','shoulder','Settings','Save failed','Halim Jarrar','no text editing']:
  assert required.lower() in joined.lower(),required

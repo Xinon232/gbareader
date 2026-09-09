@@ -12,6 +12,7 @@ constexpr int V3_FIELDS = 16, V3_OFFSET = 18, V3_SPACING = 31, V3_TOP = 34, V3_B
 
 // ASCII reserve immediately after the checksum; covered by the existing FNV.
 constexpr int V3_LAYOUT = 725;
+constexpr int V3_ARABIC = 729;
 
 uint32_t fnv(const unsigned char* b, int n, int skip, int skipn) { uint32_t h=2166136261u; for(int i=0;i<n;++i) if(i<skip||i>=skip+skipn) h=(h^b[i])*16777619u; return h; }
 uint32_t get32(const unsigned char*p){return uint32_t(p[0])|(uint32_t(p[1])<<8)|(uint32_t(p[2])<<16)|(uint32_t(p[3])<<24);}
@@ -48,6 +49,8 @@ void make_txt_save_footer(const TxtSaveFooter& f,unsigned char out[TXT_SAVE_FOOT
  int state=int(f.history_rebuild.state);if(state<0||state>3)state=0;out[V3_STATE]=static_cast<unsigned char>('0'+state);out[V3_INITIALIZED]=f.history_rebuild.initialized?'1':'0';dec(out+V3_ANCHOR,f.history_rebuild.anchor,10);dec(out+V3_SCAN,f.history_rebuild.scan.start_offset,10);
  std::memcpy(out + V3_LAYOUT, ";L=", 3);
  out[V3_LAYOUT + 3] = static_cast<unsigned char>('0' + (f.display_layout <= 9 ? f.display_layout : 0));
+ std::memcpy(out + V3_ARABIC, ";G=", 3);
+ out[V3_ARABIC + 3] = f.settings.arabic_shaping ? '1' : '0';
  int n=f.history.count;if(n<0)n=0;if(n>PAGE_HISTORY_MAX)n=PAGE_HISTORY_MAX;dec(out+V3_COUNT,uint32_t(n),2);for(int i=0;i<PAGE_HISTORY_MAX;++i){uint32_t x=i<n?f.history.offsets[(f.history.head+i)%PAGE_HISTORY_MAX]:0;dec(out+V3_HISTORY+i*10,x,10);}std::memcpy(out+715,";C=",3);hex(out+V3_CHECKSUM,fnv(out,TXT_SAVE_FOOTER_SIZE,V3_CHECKSUM,8));
 }
 bool looks_like_txt_save_footer(const unsigned char*p,int n){return p&&((n==TXT_SAVE_FOOTER_SIZE&&!std::memcmp(p,V3_MAGIC,sizeof(V3_MAGIC)-1))||(n==TXT_SAVE_FOOTER_V2_SIZE&&!std::memcmp(p,V2_MAGIC,sizeof(V2_MAGIC)-1))||(n==TXT_SAVE_FOOTER_V1_SIZE&&v1(p)));}
@@ -61,6 +64,10 @@ bool parse_txt_save_footer(const unsigned char*p,int n,TxtSaveFooter&f)
  f={};f.display_layout=0;f.byte_offset=o;f.settings={uint8_t(p[V3_SPACING]-'0'),uint8_t(p[V3_TOP]-'0'),uint8_t(p[V3_BOTTOM]-'0')};f.history.count=count;for(int i=0;i<count;++i){uint32_t x;if(!readdec(p+V3_HISTORY+i*10,10,x)||(x>=o)||(i&&x<=f.history.offsets[i-1]))return false;f.history.offsets[i]=x;}const HistoryRebuildState persisted_state=HistoryRebuildState(p[V3_STATE]-'0');
  if(!std::memcmp(p + V3_LAYOUT, ";L=", 3) && p[V3_LAYOUT + 3] >= '0' && p[V3_LAYOUT + 3] <= '9')
      f.display_layout = uint8_t(p[V3_LAYOUT + 3] - '0');
+ if(!std::memcmp(p + V3_ARABIC, ";G=", 3)) {
+     if(p[V3_ARABIC + 3] != '0' && p[V3_ARABIC + 3] != '1') return false;
+     f.settings.arabic_shaping = p[V3_ARABIC + 3] == '1';
+ }
  // A partial Page scan cannot safely resume from only start_offset: its next_offset,
  // EOF flag, and rebuilt ring are not serialized. Restart from zero at the anchor.
  if(persisted_state==HistoryRebuildState::BUILDING){f.history_rebuild={};f.history_rebuild.anchor=a;f.history_rebuild.state=HistoryRebuildState::BUILDING;}else{f.history_rebuild.state=persisted_state;}

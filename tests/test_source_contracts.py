@@ -70,8 +70,8 @@ assert "step_history_rebuild" in core
 assert "reader::step_history_rebuild" in main
 assert 'show_overlay(save_ui, save_sprites, "Loading back...")' in main
 
-assert "gbareader V1.2" in main
-assert "gbareader V1.2" in makefile
+assert "gbareader V1.3" in main
+assert "gbareader V1.3" in makefile
 assert "release/v0.8.0" in workflow
 assert "pull_request:" in workflow and "      - main" in workflow
 assert "contents: read" in workflow
@@ -111,4 +111,13 @@ assert "crc32_combine(" in cache_load
 # Both readers use the same bounded read-only CRC primitive (no per-bit hot loops).
 assert '#include "reader_crc32.h"' in epub_source and '#include "reader_crc32.h"' in file_source
 assert "0xEDB88320" not in epub_source and "0xEDB88320" not in file_source
+# Actual device open and painting must use the host-tested mode policy.
+assert 'opening_arabic' not in core and 'opening_arabic' not in header
+opening = (root / 'include/reader_open.h').read_text()
+assert 'arabic::contains(page.lines[line].text)' in opening
+assert 'reader::open_document_page(' in main
+assert 'settings.arabic_shaping);' in main
+assert 'reader::OpenResult::SAVE_FAILED' in main
+assert 'show_save_result(save_ui, save_sprites, false);' in main
+assert 'file.save_footer(state, context.cache)' in main
 print("PASS: source contracts")

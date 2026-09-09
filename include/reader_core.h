@@ -20,6 +20,7 @@ struct Settings {
     uint8_t line_spacing;
     uint8_t top_margin;
     uint8_t bottom_margin;
+    bool arabic_shaping = false; // Per-document; never inherited from another open.
 };
 
 enum class SettingField : uint8_t { LINE_SPACING, TOP_MARGIN, BOTTOM_MARGIN };

@@ -88,10 +88,8 @@ static void test_truncated_utf8_at_physical_eof()
             assert(open_first_page(source, default_settings(), mono_width, history, page));
             assert(page.start_offset == 0 && page.next_offset == count && page.eof);
             assert(page.line_count == 1 && std::strlen(page.lines[0].text) == count);
-            // Preserve the existing malformed-sequence representation: the lead
-            // byte uses replacement-glyph width, remaining continuation bytes '?'.
-            assert(static_cast<unsigned char>(page.lines[0].text[0]) == bytes[0]);
-            for(uint32_t i = 1; i < count; ++i) assert(page.lines[0].text[i] == '?');
+            // Canonical replacement bytes keep the OFF native painter UTF-8 safe.
+            for(uint32_t i = 0; i < count; ++i) assert(page.lines[0].text[i] == '?');
         }
     }
 }

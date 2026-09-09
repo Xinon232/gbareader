@@ -155,3 +155,6 @@ for row in required:
 if failed:
  raise SystemExit('FAIL: real FatFS recovery gate: '+', '.join(failed))
 print('PASS: real FatFS successful saves and exercised transient-error recovery')
+sys.dont_write_bytecode = True
+from mode_cases import run as run_mode_cases
+run_mode_cases(RUN, base, invoke, cmd)

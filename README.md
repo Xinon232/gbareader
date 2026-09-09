@@ -1,14 +1,20 @@
-# gbareader V1.2
+# gbareader V1.3 — pre-release
 
 Read TXT and EPUB books on your Game Boy Advance. Save your place and return to it later. Put your books in `/gbareader` on your Supercard SD card; they appear directly on the home screen.
 
-The app uses the SD/FatFS and font foundation of [`gba-vocab-trainer-CC` v0.2.5](https://github.com/Xinon232/gba-vocab-trainer-CC/releases/tag/v0.2.5). The home-screen title is `gbareader V1.2`; the existing EPUB/storage engine and controls are retained.
+The app uses the SD/FatFS and font foundation of [`gba-vocab-trainer-CC` v0.2.5](https://github.com/Xinon232/gba-vocab-trainer-CC/releases/tag/v0.2.5). The home-screen title is `gbareader V1.3`. This experimental pre-release is maintained on a separate branch, not merged into `main`.
 
-Version 1.2 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of UTF-8 EPUB 2/3 files directly from a Supercard SD card.
+Version 1.3 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of UTF-8 EPUB 2/3 files directly from a Supercard SD card.
 
-## V1.2 changes
+## V1.3 changes
 
-Arabic TXT and EPUB text now uses native Ghoulam joining, lam-alef and per-line RTL display. Latin/digit runs remain left-to-right. Harakat are hidden only on screen; original UTF-8 bytes and saved byte anchors are preserved. Layout marker 2 rebuilds incompatible older Back history while retaining current history. See [Arabic coverage, credits and bounds](docs/arabic.md). V1.2 is the final release after independent source review, host verification and exact-ROM emulator QA. Host tests cover original and reopened cached EPUBs; emulator body checks use RAM-seeded TXT and already-normalized EPUB text windows, not mounted storage or EPUB parsing. Physical Supercard/SD operation remains unverified.
+Arabic shaping is now a sticky per-document choice. A document without a saved ON flag opens with shaping off and checks only the page about to be displayed (the saved position, or the beginning). If that page contains Arabic, shaping turns on and the app automatically saves the flag inside the document. Future opens of that document keep shaping on without repeating detection. Other documents are unaffected.
+
+With shaping off, subsequent pages skip Arabic detection and shaping. **Intentional limitation:** Arabic encountered later in that session stays unshaped; reopen on an Arabic page to activate it. Switching layout mode retains the byte bookmark but rebuilds incompatible Back history. No `.sav` or permanent sidecar is used. This changes when the existing document state is written, not the book text. Keep backups and wait for writes to finish. See [Arabic policy and bounds](docs/arabic.md).
+
+## Retained V1.2 Arabic display
+
+When enabled, Arabic uses native Ghoulam joining, lam-alef and per-line RTL display. Latin/digit runs remain left-to-right. Harakat are hidden only on screen; original UTF-8 bytes and saved byte anchors are preserved. Native font sizes, Credits and existing page-turn controls remain unchanged. Physical Supercard/SD operation remains unverified.
 
 ## Retained v1.1 changes
 
@@ -110,11 +116,13 @@ Current-display-layout bookmarks retain up to 64 previous page offsets. Older or
 
 ### Arabic display
 
-Arabic joins and reads right-to-left on each wrapped line; Latin and digit runs remain left-to-right. Harakat are hidden only on screen, not deleted from your TXT or EPUB. Arabic uses native 11px Ghoulam inside the fixed 16px row. There is no new typing mode. Mixed direction and unsupported Persian/Urdu extensions are limited; see the Arabic coverage document. Older bookmarks retain their exact byte position but rebuild incompatible Back history once.
+Shaping starts off for each document unless its saved flag is on. When off, opening checks only the page being resumed (or the first page). Finding Arabic enables shaping and automatically saves ON inside that document. Future opens retain ON; other files are unaffected. Later pages are not checked in an off-mode session: reopen on a page containing Arabic to enable it. A mode change keeps your reading position but rebuilds incompatible Back history.
+
+When enabled, Arabic joins right-to-left with native 11px Ghoulam; Latin/digits remain left-to-right. Harakat are hidden, never deleted. The row stays 16px. Mixed direction and Persian/Urdu coverage are limited; no typing mode is added.
 
 ## Hardware and files
 
-The app uses the Supercard SD access path inherited from the base engine. Create a **gbareader** folder at the SD-card root and copy UTF-8 `.txt` or supported `.epub` files directly into it. Home indexes up to 64 files and retains filenames up to 255 bytes for opening; long displayed names are clipped by pixel width without changing their bytes. Embedded save state retains the current position and reading-layout settings for both formats. No `.sav` or permanent settings sidecar is used. Initial EPUB cache preparation writes initial state automatically. Later position, Back history and settings changes require a successful Reader `Start` save before leaving with `Select`.
+The app uses the Supercard SD access path inherited from the base engine. Create a **gbareader** folder at the SD-card root and copy UTF-8 `.txt` or supported `.epub` files directly into it. Home indexes up to 64 files and retains filenames up to 255 bytes for opening; long displayed names are clipped by pixel width without changing their bytes. Embedded save state retains the current position and reading-layout settings for both formats. No `.sav` or permanent settings sidecar is used. Initial EPUB cache preparation and first-time Arabic activation write state automatically. If that write fails, the flag is not guaranteed saved; keep the book open and retry with Reader `Start`. Later position, Back history and settings changes require a successful Reader `Start` save before leaving with `Select`.
 
 An emulator without the expected Supercard storage interface can validate the ROM header and execute the UI path, but it cannot prove SD/FatFS behavior. Real-hardware verification remains important.
 

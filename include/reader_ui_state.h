@@ -3,7 +3,7 @@
 namespace reader {
 
 enum class Scene { LIBRARY, READER, SETTINGS, CREDITS, CONTROLS };
-constexpr int CONTROLS_PAGE_COUNT = 6;
+constexpr int CONTROLS_PAGE_COUNT = 7;
 constexpr int CREDITS_PAGE_COUNT = 7;
 constexpr int LIBRARY_VISIBLE_ROWS = 5;
 int library_first_row(int selected, int count);

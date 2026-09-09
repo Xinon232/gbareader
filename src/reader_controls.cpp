@@ -4,8 +4,8 @@ extern "C" {
 }
 namespace reader {
 const char* const controls_titles[CONTROLS_PAGE_COUNT] = {
-    "Controls 1/6: About", "Controls 2/6: Home", "Controls 3/6: Reading",
-    "Controls 4/6: Saving", "Controls 5/6: Settings", "Controls 6/6: Arabic"
+    "Controls 1/7: About", "Controls 2/7: Home", "Controls 3/7: Reading",
+    "Controls 4/7: Saving", "Controls 5/7: Settings", "Controls 6/7: Arabic", "Controls 7/7: Arabic mode"
 };
 const char* const controls_lines[CONTROLS_PAGE_COUNT][CONTROLS_LINES] = {
     {"Read TXT and EPUB books.", "Save and resume your place.",
@@ -25,7 +25,10 @@ const char* const controls_lines[CONTROLS_PAGE_COUNT][CONTROLS_LINES] = {
      "B/Start: apply and return.", "Reader Start: save changes."},
     {"Arabic: joined, right to left.", "Harakat hidden, not deleted.",
      "Latin and digits stay LTR.", "Ghoulam native 11px font.",
-     "Limited mixed-direction text.", "No full Persian/Urdu support."}
+     "Limited mixed-direction text.", "No full Persian/Urdu support."},
+    {"Arabic starts OFF per book.", "Opening-page Arabic: ON.",
+     "ON auto-saves in that book.", "Saved ON stays ON on reopen.",
+     "Later Arabic stays unshaped.", "Save there; reopen to enable."}
 };
 void draw_controls(uint8_t* pixels, int page) {
     if(page < 0 || page >= CONTROLS_PAGE_COUNT) return;

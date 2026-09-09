@@ -1,4 +1,4 @@
-// gbareader V1.2 -- streaming Supercard SD TXT/EPUB reader.
+// gbareader V1.3 -- streaming Supercard SD TXT/EPUB reader.
 
 #include "bn_bg_palette_item.h"
 #include "bn_core.h"
@@ -17,6 +17,7 @@ extern "C" {
 }
 #include "reader_core.h"
 #include "reader_body.h"
+#include "reader_open.h"
 #include "reader_ui_state.h"
 #include "reader_credits.h"
 #include "reader_controls.h"
@@ -47,7 +48,7 @@ constexpr int UI_SPRITE_CAPACITY = 127;
 constexpr int SAVE_OVERLAY_SPRITE_CAPACITY = 16;
 constexpr int LIBRARY_VISIBLE_ROWS = reader::LIBRARY_VISIBLE_ROWS;
 constexpr int LIBRARY_WORST_CASE_SPRITES =
-        int(sizeof("gbareader V1.2") - 1) +
+        int(sizeof("gbareader V1.3") - 1) +
         int(sizeof("files: /gbareader") - 1) +
         int(sizeof("UP/DOWN select   A open") - 1) +
         int(sizeof("Select: Controls") - 1) + int(sizeof("Start: Credits") - 1);
@@ -79,7 +80,7 @@ void draw_page(bn::palette_bitmap_bg_painter& painter)
         if(page.lines[line].text[0])
             reader::draw_body_line(
                     page.lines[line].text,
-                    pixels + y * 240 + reader::BODY_SIDE_MARGIN);
+                    pixels + y * 240 + reader::BODY_SIDE_MARGIN, settings.arabic_shaping);
         if(line + 1 < page.line_count) {
             y += reader::FONT_HEIGHT + settings.line_spacing;
             if(page.lines[line].paragraph_break) y += reader::FONT_HEIGHT + settings.line_spacing;
@@ -210,38 +211,40 @@ int main()
                     if(epub.open(file)) active_source = &epub;
                     else library_status = reader::epub_error_string(epub.error());
                 }
-                uint32_t offset = 0;
                 reader::TxtSaveFooter footer{};
                 const bool footer_loaded = file.saved_footer(footer);
-                if(footer_loaded) { settings = footer.settings; offset = footer.byte_offset; }
-                bool page_open = ! library_status && reader::open_page_at(
-                        *active_source, offset, settings, glyph_width, history, page);
-                const bool saved_page_open = footer_loaded && page_open;
-                if(! page_open && ! library_status)
-                    page_open = reader::open_first_page(
-                            *active_source, settings, glyph_width, history, page);
-                if(page_open) {
-                    history_rebuild = {};
-                    if(saved_page_open) {
-                        // Preserve current-layout fast Back; only legacy/unknown
-                        // display layouts need a one-time lazy boundary rebuild.
-                        reader::restore_saved_history(footer, history, history_rebuild);
-                    }
+                const bool prepare_cache = active_source == &epub && !epub.optimized_size();
+                struct SaveContext {
+                    const reader::ByteSource* cache;
+                    bn::sprite_text_generator& ui;
+                    bn::vector<bn::sprite_ptr, SAVE_OVERLAY_SPRITE_CAPACITY>& sprites;
+                    bool prepare_cache;
+                } save_context{active_source == &epub ? active_source : nullptr,
+                               save_ui, save_sprites, prepare_cache};
+                reader::cancel_save_message(save_message_timer);
+                save_sprites.clear();
+                auto opening_save = [](void* opaque, const reader::TxtSaveFooter& state) {
+                    auto& context = *static_cast<SaveContext*>(opaque);
+                    show_overlay(context.ui, context.sprites,
+                                 context.prepare_cache ? "Preparing cache..." : "save...");
+                    bn::core::update();
+                    return file.save_footer(state, context.cache);
+                };
+                auto opened = library_status ? reader::OpenResult::FAILED : reader::open_document_page(
+                        *active_source, footer_loaded ? &footer : nullptr, settings, glyph_width,
+                        history, page, history_rebuild, prepare_cache, opening_save, &save_context);
+                // Preserve the existing one-time cache switch after a verified save.
+                if(opened == reader::OpenResult::SAVED && prepare_cache) {
+                    epub.close();
+                    if(!epub.open(file)) opened = reader::OpenResult::FAILED;
+                }
+                save_sprites.clear();
+                if(opened != reader::OpenResult::FAILED) {
                     pending_back = false;
-                    reader::cancel_save_message(save_message_timer);
-                    save_sprites.clear();
-                    // Build the immutable ZIP cache after a usable first page exists.  This is
-                    // intentionally not part of later bookmark saves, which append state only.
-                    if(active_source == &epub && !epub.optimized_size()) {
-                        show_overlay(save_ui, save_sprites, "Preparing cache...");
-                        bn::core::update();
-                        reader::TxtSaveFooter cache_state{page.start_offset, settings, history,
-                                                          history_rebuild};
-                        if(file.save_footer(cache_state, &epub)) {
-                            epub.close();
-                            if(epub.open(file)) active_source = &epub;
-                        }
-                        save_sprites.clear();
+                    if(opened == reader::OpenResult::SAVE_FAILED) {
+                        // ON remains usable in RAM; later Start retries its persistence.
+                        show_save_result(save_ui, save_sprites, false);
+                        reader::start_save_message(save_message_timer);
                     }
                     scene = Scene::READER;
                     sprites.clear();
@@ -372,7 +375,7 @@ int main()
             sprites.clear();
             ui.set_center_alignment();
             if(scene == Scene::LIBRARY) {
-                add_text(ui, 0, -68, "gbareader V1.2", sprites);
+                add_text(ui, 0, -68, "gbareader V1.3", sprites);
                 add_text(ui, 0, -48, "files: /gbareader", sprites);
                 auto* pixels = reinterpret_cast<uint8_t*>(painter.page().data());
                 if(!storage_ok || !reader::library_count()) {

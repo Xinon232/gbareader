@@ -1,40 +1,36 @@
-# gbareader V1.2 — final release
+# gbareader V1.3 — pre-release
 
 Read TXT and EPUB books on your Game Boy Advance. Save your place and return to it later.
 
+**Experimental pre-release, on `prerelease/v1.3.0`; not merged into `main` and not designated the latest stable release.**
+
 ## Changes
 
-- Native Ghoulam Arabic contextual joining and lam-alef, RTL line display and matching shaped wrapping. Harakat are hidden only on screen; source bytes and bookmark anchors remain intact.
-- Latin, digits, Korean/Hangul, CJK and inherited fonts/pixels stay unchanged. Arabic uses 11px native artwork within existing 16px rows. Mixed direction is bounded, not full UAX #9 or full Persian/Urdu coverage.
-- The existing checksummed display-layout marker advances to 2. Old/unknown Back history rebuilds from the unchanged saved byte anchor; compatible current history remains reusable. EPUB parser/cache and file save algorithms are unchanged.
-- In-ROM title `gbareader V1.2`; six Controls pages and seven Credits pages. Credits page one is the exact personal block only. Subsequent pages credit Ghoulam, SuperFW, UNSCII, Unifont/Hangul, Butano, FatFs, miniz and the toolchain/base project. Left/Right pages Credits, B/Start closes; reading/save controls are unchanged.
-- Bounded malformed-body fallback avoids forwarding truncated UTF-8 to the inherited renderer, which can otherwise read beyond NUL. Valid non-Arabic rendering is unchanged.
-- Complete three-page controls PDF includes files, all controls, automatic initial cache writes, explicit saves, compatibility, Arabic limitations and source/license links.
+- In-app title: `gbareader V1.3`.
+- Arabic shaping starts OFF for a document unless that document already has a saved ON flag.
+- Opening an OFF/unmarked document checks only the page about to be displayed: the saved reading position, or the beginning. Finding Arabic enables shaping and automatically saves sticky ON inside the document's existing state.
+- Future opens of that document retain ON regardless of which page is displayed. Other files are unaffected.
+- OFF sessions bypass subsequent Arabic detection and shaping. The existing Arabic shaper and native fonts are retained when ON; this is not a rewrite of the shaping algorithm.
+- Saved byte positions remain intact. Incompatible page history is rebuilt when layout mode changes rather than reusing mismatched page boundaries.
+- No `.sav`, permanent sidecar, new typing mode or page-turn control is introduced. Controls and the full-controls PDF explain automatic activation saving.
 
-## Release files
+## Intentional limitation
 
-- `gbareader.gba` (stable required basename)
-- `gbareader-full-controls.pdf` (also in the repository under `docs/`)
+An English-only opening/resume page leaves shaping OFF even if Arabic exists elsewhere in the book. Arabic encountered later in that session is not shaped. Save on a page containing Arabic and reopen there to activate it. Once enabled and successfully saved, the flag remains ON for that file; there is no new OFF toggle.
 
-Create `/gbareader` at the SD-card root and place supported UTF-8 TXT/text-only EPUB books directly inside. No demos or test fixtures belong in release data. Keep backups of your books. Reader Start saves; Reader Select closes without saving. Initial EPUB cache preparation writes initial state automatically. No permanent `.sav` or settings sidecar is introduced.
+## Downloads and saving
 
-## Verification and publication status
+- `gbareader.gba` — complete runnable ROM.
+- `gbareader-full-controls.pdf` — complete controls, saving behavior and credits; also in `docs/`.
 
-**Final V1.2 release (`v1.2.0`). Independent source review, host verification and exact-ROM emulator QA passed.** Historical releases, tags and assets are preserved. The downloadable ROM is the exact emulator-verified build, not a replacement CI artifact.
+Create `/gbareader` at the SD-card root and place supported UTF-8 TXT/text-only EPUB books directly inside. Keep backups of your books. Initial EPUB cache preparation and first-time Arabic activation write state automatically. Wait for writes to finish. If activation saving fails, shaping can remain ON in RAM without being stored for the next open; keep the book open and retry with Reader Start. Later position/settings changes still require Reader Start before closing with Select.
 
-Host tests and independent ASan/UBSan verification passed for native glyph pixels/bounds, joining/reference glyph IDs, long multiline Arabic TXT and original/reopened cached EPUB, mixed Latin/digits/full-width text, forward/back/resume, old/current bookmarks, unchanged source bytes, controls/credits framebuffers and storage regressions. The separate offline HarfBuzz comparison passed all 1504 cases. Real-FatFS image tests passed their successful-save and exercised transient-recovery gates, retaining inherited bookmark-loss and unhit-fault-selector limitations.
+## Verification status
 
-The exact V1.2 ROM passed actual emulator cold boot, all seven Credits pages, all six Controls pages, boundaries and close/reopen checks. Arabic presentation, forward/Back pagination and byte-anchor resume/rebuild passed with RAM-seeded TXT-source and already-normalized EPUB text windows. These body checks do not exercise mounted storage, ZIP parsing, DEFLATE, XHTML normalization, cache creation/reopening or persisted bookmarks; original/cached EPUB and old/current saved-marker coverage comes from host tests, not emulator storage. No crash or visible clipping was observed in the inspected samples. Broader mixed-direction linguistic review remains appropriate.
+Full host tests, ASan/UBSan, clean devkitARM ROM build and static memory/frame budgets passed. Normal and legacy sector-backed FatFS suites passed successful-save and exercised transient-recovery gates, plus production opening-mode checks for TXT, original/cached EPUB, sticky resumes, state-only updates, failed-write retry and original-content preservation. Independent review found no demonstrated data-integrity or memory-safety blocker; its opening-boundary finding was corrected and regression-tested so only accepted opening-page text triggers activation.
 
-Release asset SHA256:
+These automated checks are not physical Supercard tests or performance measurements. Exact-ROM emulator scope is reported separately in the GitHub pre-release description. The downloadable ROM retains the frozen build SHA256 `d76dfb5b0e3a0a46e4db24101946ea08129446798acc34ad20812077dd88c4b2`.
 
-```text
-eb4519e3aa06e235bdd1e84d67fd5a3e58fa43dc345f3dc4b3c0698cfd5fbc95  gbareader.gba
-ae0020219d246d96c388edfcb4e7f27d901901119107e668405fe8cbe2b8d368  gbareader-full-controls.pdf
-```
+Inherited fault-test limitations remain: persistent-error/abrupt-interruption cases can lose TXT bookmarks, and three second-sync fault selectors are not reached. Static memory/frame budgets are not exhaustive call-tree proofs.
 
-Physical Supercard/SD operation remains unverified. Persistent storage errors and arbitrary power loss can lose bookmarks under inherited save semantics. EPUB remains bounded and text-only, with no DRM/images/CSS/embedded-font presentation. Compaction is deferred; saves remain subject to the inherited archive size limit.
-
-The exact inherited UNSCII/Unifont font snapshot versions are not documented; conservative GPL attribution is retained without claiming newer OFL eligibility. See [Arabic and credits audit](docs/arabic.md).
-
-Made by Halim Jarrar · (C) 2026 · halim-jarrar.de · monday@halim-jarrar.de
+Physical Supercard/SD operation is a separate hardware check. Persistent storage errors and arbitrary power loss can lose bookmarks under inherited save semantics. EPUB remains bounded and text-only, with no DRM/images/CSS/embedded-font presentation. Compaction is deferred and saves remain subject to the inherited archive size limit. Arabic follows the existing bounded per-line direction policy, not full Unicode bidi or complete Persian/Urdu coverage.

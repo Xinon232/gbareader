@@ -15,7 +15,7 @@ static bool sink(void* p,const unsigned char* b,uint32_t n) {
 }
 static void exercise(const reader::ByteSource& source) {
  using namespace reader;
- auto settings=default_settings(); Page p{},next{},back{}; PageHistory h{};
+ auto settings=default_settings(); settings.arabic_shaping=true; Page p{},next{},back{}; PageHistory h{};
  assert(open_first_page(source,settings,body_glyph_width,h,p));
  unsigned pages=0; uint32_t anchor=0;
  do {
@@ -26,7 +26,7 @@ static void exercise(const reader::ByteSource& source) {
    if(arabic::contains(p.lines[i].text)) {
     assert(strchr(p.lines[i].text,'?')==nullptr);
     uint16_t pixels[240*18/2]; for(auto& v:pixels)v=0x7777;
-    draw_body_line(p.lines[i].text,reinterpret_cast<uint8_t*>(pixels)+248);
+    draw_body_line(p.lines[i].text,reinterpret_cast<uint8_t*>(pixels)+248, settings.arabic_shaping);
     auto* bytes=reinterpret_cast<uint8_t*>(pixels);
     for(int y=0;y<18;++y)for(int x=0;x<240;++x)
      if(y==0||y==17||x<8||x>=232)assert(bytes[y*240+x]==0x77);
@@ -42,7 +42,7 @@ static void exercise(const reader::ByteSource& source) {
   assert(pages<10000);
  }while(true);
  assert(pages>3 && anchor>0);
- for(unsigned version: {0u,1u,unsigned(CURRENT_DISPLAY_LAYOUT),9u}) {
+ for(unsigned version: {0u,1u,2u,unsigned(CURRENT_DISPLAY_LAYOUT),9u}) {
   TxtSaveFooter saved{}; saved.byte_offset=anchor; saved.settings=settings; saved.display_layout=version;
   saved.history.count=1; saved.history.offsets[0]=0;
   unsigned char bytes[TXT_SAVE_FOOTER_SIZE]; make_txt_save_footer(saved,bytes);
@@ -61,7 +61,7 @@ static void exercise(const reader::ByteSource& source) {
   assert(next_page(source,settings,body_glyph_width,h,back,next));
   assert(next.start_offset==back.next_offset);
  }
- printf("%u pages: shaped bounds, contiguous next/back, resume, layouts 0/1/2/9 passed\n",pages);
+ printf("%u pages: shaped bounds, contiguous next/back, resume, layouts 0/1/2/3/9 passed\n",pages);
 }
 int main(int argc,char** argv) {
  assert(argc==6); auto base=load(argv[1]),symbols=load(argv[2]); font_base_addr=base.data();reader_font_base_addr=symbols.data();
