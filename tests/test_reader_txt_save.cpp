@@ -114,7 +114,7 @@ static void test_display_layout_marker_and_history_restore()
     input.history_rebuild.anchor = 4321;
     unsigned char bytes[TXT_SAVE_FOOTER_SIZE]{};
     make_txt_save_footer(input, bytes);
-    assert(!std::memcmp(bytes + 725, ";L=1", 4));
+    assert(!std::memcmp(bytes + 725, ";L=2", 4));
     TxtSaveFooter parsed{};
     assert(parse_txt_save_footer(bytes, sizeof(bytes), parsed));
     assert(parsed.display_layout == CURRENT_DISPLAY_LAYOUT);
@@ -134,9 +134,9 @@ static void test_display_layout_marker_and_history_restore()
         assert(!std::memcmp(&rebuild, &input.history_rebuild, sizeof(rebuild)));
     }
     // The marker is covered by the existing checksum.
-    bytes[728] = '2';
-    assert(!parse_txt_save_footer(bytes, sizeof(bytes), parsed));
     bytes[728] = '1';
+    assert(!parse_txt_save_footer(bytes, sizeof(bytes), parsed));
+    bytes[728] = '2';
 
     // Historical v3 reserved bytes were spaces. Repair its checksum, not its history.
     std::memset(bytes + 725, ' ', 4);

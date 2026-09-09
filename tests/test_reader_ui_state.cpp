@@ -12,6 +12,22 @@ static void test_credits_input()
     CreditsInputGate gate{};
     assert(handle_credits_input(scene, gate, true, false, true));
     assert(scene == Scene::CREDITS);
+    assert(gate.page == 0);
+    // Entry chord is fully released before any page turns.
+    handle_credits_input(scene, gate, false, false, false);
+    for(int i=1; i<CREDITS_PAGE_COUNT; ++i) {
+        handle_credits_input(scene, gate, false, false, true, false, true);
+        assert(gate.page == i && scene == Scene::CREDITS);
+    }
+    handle_credits_input(scene, gate, false, false, true, false, true);
+    assert(gate.page == CREDITS_PAGE_COUNT - 1);
+    for(int i=CREDITS_PAGE_COUNT-2; i>=0; --i) {
+        handle_credits_input(scene, gate, false, false, true, true, false);
+        assert(gate.page == i);
+    }
+    handle_credits_input(scene, gate, false, false, true, true, false);
+    assert(gate.page == 0);
+    gate.waiting_for_release = true;
     assert(handle_credits_input(scene, gate, true, true, true));
     assert(scene == Scene::CREDITS); // Held entry chord cannot immediately close.
     assert(handle_credits_input(scene, gate, false, false, false));

@@ -128,5 +128,23 @@ g++ "${CXXFLAGS[@]}" -I"$OUT" -I"$ROOT/references/superfw/src/fonts" \
 "$OUT/test_library_framebuffer" "$ROOT/references/superfw/res/fonts.pack" \
     "$ROOT/references/superfw/res/reader-symbols.pack"
 
+# Shared shaper plus production reader Arabic layout, pixels and EPUB cache path.
+g++ "${CXXFLAGS[@]}" "$ROOT/tests/test_arabic_text.cpp" -o "$OUT/test_arabic_text"
+"$OUT/test_arabic_text"
+g++ "${CXXFLAGS[@]}" "$ROOT/tests/test_reader_arabic.cpp" \
+    "$ROOT/src/reader_core.cpp" "$ROOT/src/reader_txt_save.cpp" -o "$OUT/test_reader_arabic"
+"$OUT/test_reader_arabic"
+g++ "${CXXFLAGS[@]}" -I"$ROOT/references/superfw/src/fonts" \
+    "$ROOT/tests/test_reader_arabic_pixels.cpp" "$OUT/font.o" -o "$OUT/test_reader_arabic_pixels"
+"$OUT/test_reader_arabic_pixels" "$ROOT/references/superfw/res/fonts.pack" \
+    "$ROOT/references/superfw/res/reader-symbols.pack"
+g++ "${CXXFLAGS[@]}" -I"$ROOT/references/superfw/src/fonts" \
+    "$ROOT/tests/test_reader_arabic_books.cpp" "$ROOT/src/reader_core.cpp" \
+    "$ROOT/src/reader_txt_save.cpp" "$ROOT/src/reader_file.cpp" \
+    "$ROOT/src/epub_document.cpp" "$ROOT/src/miniz_tinfl.c" "$OUT/font.o" -o "$OUT/test_reader_arabic_books"
+"$OUT/test_reader_arabic_books" "$ROOT/references/superfw/res/fonts.pack" \
+    "$ROOT/references/superfw/res/reader-symbols.pack" "$OUT/fixtures/arabic.txt" \
+    "$OUT/fixtures/arabic.epub" "$OUT/fixtures/arabic-cached.epub"
+
 python3 "$ROOT/tests/test_credits_wiring.py"
 python3 "$ROOT/tests/test_source_contracts.py"

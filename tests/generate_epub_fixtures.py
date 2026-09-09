@@ -27,6 +27,14 @@ def make(name, compression, text):
 make("stored.epub", zipfile.ZIP_STORED, "Stored chapter.")
 make("deflated.epub", zipfile.ZIP_DEFLATED, "Deflated chapter.")
 
+# Developer-only long multiline Arabic; never part of ROM DATA/release staging.
+arabic_lines = ['السَّلَام عليكم 123 {hello}', 'ب\u08f0ب / بيت، ١٢٣',
+                'Latin 한글 日本語 العربية 456', 'لا' * 180, 'ب' * 300]
+arabic_text = '\n'.join(arabic_lines * 24)
+(out / 'arabic.txt').write_text(arabic_text, encoding='utf-8')
+make('arabic.epub', zipfile.ZIP_DEFLATED,
+     '</p><p>'.join(arabic_lines * 24))
+
 # Every continuation position can be the first byte in a lazy 4096-byte block.
 for codepoint in ("£", "€", "🙂"):
     width = len(codepoint.encode("utf-8"))

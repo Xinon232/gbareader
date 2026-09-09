@@ -19,7 +19,8 @@ assert "draw_text_idx8_bus16_range" in main
 assert "bn::sprite_font ui_font(" in main
 assert "bn::sprite_items::ui_variable_8x16_font" in main
 assert "constexpr int FONT_HEIGHT = 16;" in header
-assert "const bool arabic" in core
+assert "shape_reader_line" in core
+assert "reader::draw_body_line(" in main
 assert "UI_SPRITE_CAPACITY" in main
 assert "LIBRARY_WORST_CASE_SPRITES < 128" in main
 assert "char* strcpy(char* destination, const char* source)" in string_shims
@@ -69,8 +70,8 @@ assert "step_history_rebuild" in core
 assert "reader::step_history_rebuild" in main
 assert 'show_overlay(save_ui, save_sprites, "Loading back...")' in main
 
-assert "gbareader v1.1" in main
-assert "gbareader v1.1" in makefile
+assert "gbareader V1.2" in main
+assert "gbareader V1.2" in makefile
 assert "release/v0.8.0" in workflow
 assert "pull_request:" in workflow and "      - main" in workflow
 assert "contents: read" in workflow

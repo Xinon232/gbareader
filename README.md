@@ -1,14 +1,18 @@
-# gbareader v1.1
+# gbareader V1.2
 
 Read TXT and EPUB books on your Game Boy Advance. Save your place and return to it later. Put your books in `/gbareader` on your Supercard SD card; they appear directly on the home screen.
 
-The app uses the SD/FatFS and font foundation of [`gba-vocab-trainer-CC` v0.2.5](https://github.com/Xinon232/gba-vocab-trainer-CC/releases/tag/v0.2.5). The home-screen title is `gbareader V1.1`; this work retains the v0.8.0 reading and embedded-save engine.
+The app uses the SD/FatFS and font foundation of [`gba-vocab-trainer-CC` v0.2.5](https://github.com/Xinon232/gba-vocab-trainer-CC/releases/tag/v0.2.5). The home-screen title is `gbareader V1.2`; the existing EPUB/storage engine and controls are retained.
 
-Version 1.1 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of UTF-8 EPUB 2/3 files directly from a Supercard SD card.
+Version 1.2 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of UTF-8 EPUB 2/3 files directly from a Supercard SD card.
 
-## v1.1 changes
+## V1.2 changes
 
-Home shows five books at once instead of four. The list moves slightly up and the navigation instructions move down; title/path placement, fonts, controls and the reading/storage engine are unchanged. Controls and Credits remain accessible. See [release notes and known limitations](RELEASE_NOTES.md). This is the V1.1 final release; physical Supercard/SD hardware remains unverified.
+Arabic TXT and EPUB text now uses native Ghoulam joining, lam-alef and per-line RTL display. Latin/digit runs remain left-to-right. Harakat are hidden only on screen; original UTF-8 bytes and saved byte anchors are preserved. Layout marker 2 rebuilds incompatible older Back history while retaining current history. See [Arabic coverage, credits and bounds](docs/arabic.md). V1.2 is the final release after independent source review, host verification and exact-ROM emulator QA. Host tests cover original and reopened cached EPUBs; emulator body checks use RAM-seeded TXT and already-normalized EPUB text windows, not mounted storage or EPUB parsing. Physical Supercard/SD operation remains unverified.
+
+## Retained v1.1 changes
+
+Home shows five books at once instead of four. The list moves slightly up and the navigation instructions move down; title/path placement, fonts, controls and the reading/storage engine are unchanged. Controls and Credits remain accessible. See [release notes and known limitations](RELEASE_NOTES.md). Physical Supercard/SD hardware remains unverified.
 
 ## Retained v0.8.0 changes
 
@@ -66,9 +70,9 @@ Physical compaction is deferred: files still grow with saves, and saves are reje
 
 ## Explicit scope
 
-- **Arabic is not supported.** Arabic code points are rendered as `?`; no shaping or bidirectional path is included.
+- **Arabic display is bounded.** Ordinary Arabic letters join with Ghoulam at native 11px within the existing 16px row. Harakat are display-only hidden, Arabic comma uses a SuperFW comma, and Arabic-Indic digits use SuperFW digits. Mixed direction is a limited per-line policy, not full Unicode bidi or full Persian/Urdu coverage. Unsupported meaningful letters use a visible fallback.
 - **Text size is fixed.** The reader keeps the native 16-pixel SuperFW bitmap body font.
-- **This is not full EPUB compliance.** Images are skipped completely, including image-only spine pages. CSS presentation, JavaScript, embedded fonts, audio, video, SVG presentation and DRM are unsupported and ignored or rejected as appropriate. Arabic is unsupported.
+- **This is not full EPUB compliance.** Images are skipped completely, including image-only spine pages. CSS presentation, JavaScript, embedded fonts, audio, video, SVG presentation and DRM are unsupported and ignored or rejected as appropriate. Arabic follows the bounded display policy above.
 - TXT uses a trailing save footer. EPUB v0.5 state and cache are ZIP members, not post-EOCD data. A bounded detector recognizes a valid v0.4.7 cache trailer plus v1/v2 footer, exposes its original pre-trailer archive and bookmark, and rewrites it as v0.5 ZIP members on the next successful save.
 - ZIP64 and multi-disk archives are rejected. Required metadata and spine text must be unencrypted and use stored (0) or DEFLATE (8) compression; unsupported methods or encryption on recognized, ignored image assets do not prevent reading.
 - The ZIP central directory is validated as a stream, so image-heavy EPUBs are not rejected merely for containing more than 128 archive members. Remaining compile-time limits are 256 readable spine documents, 255-byte archive paths, 64 KiB uncompressed metadata, 32 MiB uncompressed XHTML per spine document, 16 MiB compressed required entry and 128 MiB archive. XHTML is inflated and converted through a 32 KiB dictionary and 16 KiB visible-text window, never a whole-chapter allocation. Ignored images, fonts and other non-spine assets are not subject to the XHTML limit. Each applicable limit has a distinct user-facing error; text is never silently truncated.
@@ -85,7 +89,7 @@ See [the full controls PDF](docs/gbareader-full-controls.pdf).
 - `Up` / `Down`: select a `.txt` or `.epub` book
 - `A`: open the selected book
 - `Select`: show Controls. `Left` / `Right` changes help pages; `B` returns Home.
-- `Start`: show credits; `B` or `Start` returns to the library
+- `Start`: show Credits, always beginning with the personal author page. `Left` / `Right` turns Credits pages; `B` or `Start` returns to the library. Font/framework/license attribution is on subsequent pages.
 
 ### Reader
 
@@ -102,7 +106,11 @@ Current-display-layout bookmarks retain up to 64 previous page offsets. Older or
 
 - `Up` / `Down`: select line spacing, top margin or bottom margin
 - `Left` / `Right`: change the selected value
-- `B` or `Start`: apply the displayed settings and return to the reader. To retain them in either TXT or EPUB, press `Start` again from the reader. Font size is fixed at 16 pixels.
+- `B` or `Start`: apply the displayed settings and return to the reader. To retain them in either TXT or EPUB, press `Start` again from the reader. Rows remain 16 pixels high; SuperFW is native 16px and Arabic Ghoulam is native 11px.
+
+### Arabic display
+
+Arabic joins and reads right-to-left on each wrapped line; Latin and digit runs remain left-to-right. Harakat are hidden only on screen, not deleted from your TXT or EPUB. Arabic uses native 11px Ghoulam inside the fixed 16px row. There is no new typing mode. Mixed direction and unsupported Persian/Urdu extensions are limited; see the Arabic coverage document. Older bookmarks retain their exact byte position but rebuild incompatible Back history once.
 
 ## Hardware and files
 
@@ -163,6 +171,10 @@ The inherited emulator target is not sufficient release evidence: it can report 
 Body text is rendered into a bitmap page rather than creating one GBA sprite per glyph. This avoids the 128-object OAM limit that makes a full-page sprite-text reader impractical. The menu UI remains sprite-based.
 
 ## Provenance and licensing
+
+Made by Halim Jarrar · © 2026 · halim-jarrar.de · monday@halim-jarrar.de
+
+Ghoulam Regular © 2025 Imad AlFil / mloukhiyye, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). [Font source](https://mloukhiyye.itch.io/ghoulam-arabic-pixel-art-font-version-1). Actual GSUB glyphs were converted into monochrome ROM rows at 11px; this modified representation is not author endorsement. Source, conversion and coverage details: [docs/arabic.md](docs/arabic.md).
 
 The project was derived from the exact `gba-vocab-trainer-CC` `v0.2.5` tagged source. Its Supercard/FatFS integration and customized UI-font foundation are retained. SuperFW font-rendering sources and `fonts.pack` are included under `references/superfw/` with their upstream notices.
 

@@ -105,13 +105,13 @@ static void test_invalid_utf8_fallback()
     assert(std::strcmp(page.lines[0].text, "A??B") == 0);
 }
 
-static void test_arabic_is_not_supported()
+static void test_arabic_logical_bytes_preserved()
 {
     const unsigned char text[] = {'A', 0xD8, 0xA7, 'B'}; // U+0627 ARABIC LETTER ALEF
     MemorySource source(text, sizeof(text));
     Page page{};
     assert(layout_page(source, 0, default_settings(), mono_width, page));
-    assert(std::strcmp(page.lines[0].text, "A?B") == 0);
+    assert(std::strcmp(page.lines[0].text, u8"AاB") == 0);
 }
 
 static void test_readable_fallbacks_for_unsupported_equivalents()
@@ -318,7 +318,7 @@ int main()
     test_bom_crlf_paragraphs_and_wrap();
     test_truncated_utf8_at_physical_eof();
     test_invalid_utf8_fallback();
-    test_arabic_is_not_supported();
+    test_arabic_logical_bytes_preserved();
     test_readable_fallbacks_for_unsupported_equivalents();
     test_settings_bounds_and_pagination_checkpoints();
     test_excess_whitespace_is_collapsed();

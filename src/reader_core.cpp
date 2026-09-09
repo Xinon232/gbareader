@@ -1,4 +1,9 @@
 #include "reader_core.h"
+#include "reader_arabic.h"
+
+#ifdef __DEVKITARM__
+namespace arabic { Line scratch __attribute__((section(".sbss"))); }
+#endif
 
 #include <cstring>
 
@@ -107,18 +112,6 @@ static Decoded decode(const ByteSource& source, uint32_t offset, unsigned char f
         d.consumed = count;
         return d;
     }
-    const bool arabic = (cp >= 0x0600 && cp <= 0x06FF) ||
-                        (cp >= 0x0750 && cp <= 0x077F) ||
-                        (cp >= 0x08A0 && cp <= 0x08FF) ||
-                        (cp >= 0xFB50 && cp <= 0xFDFF) ||
-                        (cp >= 0xFE70 && cp <= 0xFEFF);
-    if(arabic) {
-        d.code = '?';
-        d.bytes[0] = '?';
-        d.count = 1;
-        d.consumed = count;
-        return d;
-    }
     d.code = cp;
     d.count = count;
     d.consumed = count;
@@ -134,6 +127,7 @@ static bool make_line(const ByteSource& source, uint32_t& cursor, GlyphWidth wid
     int last_space_out = -1;
     int out = 0;
     int width = 0;
+    bool has_arabic = false;
     line.paragraph_break = false;
     line.text[0] = 0;
 
@@ -183,7 +177,18 @@ static bool make_line(const ByteSource& source, uint32_t& cursor, GlyphWidth wid
         if(! d.source_ok) { source_ok = false; return false; }
         int glyph_width = width_fn ? width_fn(d.code) : 8;
         if(glyph_width < 1) glyph_width = 8;
-        if(width + glyph_width > max_width && out > 0) {
+        if(out + d.count >= PAGE_LINE_BYTES) break;
+        has_arabic = has_arabic || arabic::script(d.code);
+        int candidate_width = width + glyph_width;
+        if(has_arabic) {
+            // Bounded prefix (255 bytes): re-shape contextual forms and lam-alef
+            // before accepting the next logical character. Never alter offsets.
+            for(int i = 0; i < d.count; ++i) line.text[out + i] = char(d.bytes[i]);
+            line.text[out + d.count] = 0;
+            candidate_width = arabic_extent(shape_reader_line(line.text, width_fn));
+            line.text[out] = 0;
+        }
+        if(candidate_width > max_width && out > 0) {
             if(last_space_out >= 0) {
                 out = last_space_out;
                 cursor = last_space_next;
@@ -199,7 +204,7 @@ static bool make_line(const ByteSource& source, uint32_t& cursor, GlyphWidth wid
         if(out + d.count >= PAGE_LINE_BYTES) break;
         for(int i = 0; i < d.count; ++i) line.text[out++] = char(d.bytes[i]);
         cursor += uint32_t(d.consumed);
-        width += glyph_width;
+        width = candidate_width;
         if(d.code == ' ') {
             last_space_out = out - 1;
             last_space_next = cursor;

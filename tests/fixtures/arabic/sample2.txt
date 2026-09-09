@@ -1,0 +1,14 @@
+
+Was?	شو
+Wo?	وين
+Warum?	ليش
+Seit wann?	من ايمتا
+Wohin?	لوين
+Welcher/-s?	انو
+Wer?	مين
+Wann?	ايمتا
+Wie viel?	اديش / اديهه / كم
+Woher?	منين
+Wie?	شلون / كيف
+
+

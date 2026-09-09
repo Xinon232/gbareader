@@ -1,4 +1,4 @@
-// gbareader v1.1 -- streaming Supercard SD TXT/EPUB reader.
+// gbareader V1.2 -- streaming Supercard SD TXT/EPUB reader.
 
 #include "bn_bg_palette_item.h"
 #include "bn_core.h"
@@ -16,6 +16,7 @@ extern "C" {
 #include "font_render.h"
 }
 #include "reader_core.h"
+#include "reader_body.h"
 #include "reader_ui_state.h"
 #include "reader_credits.h"
 #include "reader_controls.h"
@@ -46,7 +47,7 @@ constexpr int UI_SPRITE_CAPACITY = 127;
 constexpr int SAVE_OVERLAY_SPRITE_CAPACITY = 16;
 constexpr int LIBRARY_VISIBLE_ROWS = reader::LIBRARY_VISIBLE_ROWS;
 constexpr int LIBRARY_WORST_CASE_SPRITES =
-        int(sizeof("gbareader V1.1") - 1) +
+        int(sizeof("gbareader V1.2") - 1) +
         int(sizeof("files: /gbareader") - 1) +
         int(sizeof("UP/DOWN select   A open") - 1) +
         int(sizeof("Select: Controls") - 1) + int(sizeof("Start: Credits") - 1);
@@ -76,13 +77,9 @@ void draw_page(bn::palette_bitmap_bg_painter& painter)
     int y = settings.top_margin;
     for(int line = 0; line < page.line_count; ++line) {
         if(page.lines[line].text[0])
-            draw_text_idx8_bus16_range(
+            reader::draw_body_line(
                     page.lines[line].text,
-                    pixels + y * 240 + reader::BODY_SIDE_MARGIN,
-                    0,
-                    reader::SCREEN_WIDTH - reader::BODY_SIDE_MARGIN * 2,
-                    240,
-                    1);
+                    pixels + y * 240 + reader::BODY_SIDE_MARGIN);
         if(line + 1 < page.line_count) {
             y += reader::FONT_HEIGHT + settings.line_spacing;
             if(page.lines[line].paragraph_break) y += reader::FONT_HEIGHT + settings.line_spacing;
@@ -187,13 +184,16 @@ int main()
                 bn::keypad::start_held() || bn::keypad::select_held() ||
                 bn::keypad::l_held() || bn::keypad::r_held();
         const int previous_controls_page = controls_page;
+        const int previous_credits_page = credits_gate.page;
         const bool credits_consumed = reader::handle_controls_input(
                 scene, credits_gate, controls_page, bn::keypad::select_pressed(),
                 bn::keypad::b_pressed(), bn::keypad::left_pressed(),
                 bn::keypad::right_pressed(), any_held) || reader::handle_credits_input(
-                scene, credits_gate, bn::keypad::start_pressed(), bn::keypad::b_pressed(), any_held);
+                scene, credits_gate, bn::keypad::start_pressed(), bn::keypad::b_pressed(), any_held,
+                bn::keypad::left_pressed(), bn::keypad::right_pressed());
         if(credits_consumed) {
-            if(scene != previous_scene || controls_page != previous_controls_page) redraw_ui = true;
+            if(scene != previous_scene || controls_page != previous_controls_page ||
+                    credits_gate.page != previous_credits_page) redraw_ui = true;
         } else if(scene == Scene::LIBRARY) {
             if(bn::keypad::up_pressed() && selected > 0) { --selected; library_status = nullptr; redraw_ui = true; }
             if(bn::keypad::down_pressed() && selected + 1 < reader::library_count()) { ++selected; library_status = nullptr; redraw_ui = true; }
@@ -372,7 +372,7 @@ int main()
             sprites.clear();
             ui.set_center_alignment();
             if(scene == Scene::LIBRARY) {
-                add_text(ui, 0, -68, "gbareader V1.1", sprites);
+                add_text(ui, 0, -68, "gbareader V1.2", sprites);
                 add_text(ui, 0, -48, "files: /gbareader", sprites);
                 auto* pixels = reinterpret_cast<uint8_t*>(painter.page().data());
                 if(!storage_ok || !reader::library_count()) {
@@ -399,9 +399,9 @@ int main()
                 reader::draw_controls(reinterpret_cast<uint8_t*>(painter.page().data()), controls_page);
                 add_text(ui, 0, 68, "LEFT/RIGHT page   B back", sprites);
             } else if(scene == Scene::CREDITS) {
-                add_text(ui, 0, -62, "Credits", sprites);
-                reader::draw_credits(reinterpret_cast<uint8_t*>(painter.page().data()));
-                add_text(ui, 0, 68, "B/START close", sprites);
+                add_text(ui, 0, -62, reader::credits_titles[credits_gate.page], sprites);
+                reader::draw_credits(reinterpret_cast<uint8_t*>(painter.page().data()), credits_gate.page);
+                add_text(ui, 0, 68, "LEFT/RIGHT  B/START close", sprites);
             } else if(scene == Scene::SETTINGS) {
                 add_text(ui, 0, -62, "Reader settings", sprites);
                 const char* labels[3] = { "Line spacing", "Top margin", "Bottom margin" };

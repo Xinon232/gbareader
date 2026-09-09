@@ -1,39 +1,40 @@
-# gbareader v1.1 — five-book home
+# gbareader V1.2 — final release
 
 Read TXT and EPUB books on your Game Boy Advance. Save your place and return to it later.
 
-## What changed
+## Changes
 
-- Home shows five books at once instead of four. The list moves slightly up and navigation instructions move down, leaving Controls and Credits visible at the bottom.
-- The title is `gbareader V1.1`. Title/path placement, fonts, button actions, folder discovery, the 64-file index and 255-byte basename limit are unchanged.
-- Parser, cache, pagination, history, settings and embedded-save algorithms are unchanged from v1.0.0. This is a scoped Home layout release, not a storage or reading-engine update.
-- The complete controls PDF is updated for V1.1 and the five-book display.
+- Native Ghoulam Arabic contextual joining and lam-alef, RTL line display and matching shaped wrapping. Harakat are hidden only on screen; source bytes and bookmark anchors remain intact.
+- Latin, digits, Korean/Hangul, CJK and inherited fonts/pixels stay unchanged. Arabic uses 11px native artwork within existing 16px rows. Mixed direction is bounded, not full UAX #9 or full Persian/Urdu coverage.
+- The existing checksummed display-layout marker advances to 2. Old/unknown Back history rebuilds from the unchanged saved byte anchor; compatible current history remains reusable. EPUB parser/cache and file save algorithms are unchanged.
+- In-ROM title `gbareader V1.2`; six Controls pages and seven Credits pages. Credits page one is the exact personal block only. Subsequent pages credit Ghoulam, SuperFW, UNSCII, Unifont/Hangul, Butano, FatFs, miniz and the toolchain/base project. Left/Right pages Credits, B/Start closes; reading/save controls are unchanged.
+- Bounded malformed-body fallback avoids forwarding truncated UTF-8 to the inherited renderer, which can otherwise read beyond NUL. Valid non-Arabic rendering is unchanged.
+- Complete three-page controls PDF includes files, all controls, automatic initial cache writes, explicit saves, compatibility, Arabic limitations and source/license links.
 
-## Downloads and setup
+## Release files
 
-Download **gbareader.gba** and **gbareader-full-controls.pdf**. Create `/gbareader` at the root of your Supercard SD card and put supported UTF-8 `.txt` and text-only `.epub` books directly inside, then restart the app. Keep backups before using embedded saves.
+- `gbareader.gba` (stable required basename)
+- `gbareader-full-controls.pdf` (also in the repository under `docs/`)
 
-Reader `Start` saves position, settings and Back history inside the open book; Reader `Select` closes without saving. Initial EPUB cache preparation writes initial state automatically; later position/history/settings changes require a successful Reader `Start` save. TXT uses a trailing bookmark footer; EPUB uses internal ZIP cache/state members, not permanent `.sav` or settings sidecars.
+Create `/gbareader` at the SD-card root and place supported UTF-8 TXT/text-only EPUB books directly inside. No demos or test fixtures belong in release data. Keep backups of your books. Reader Start saves; Reader Select closes without saving. Initial EPUB cache preparation writes initial state automatically. No permanent `.sav` or settings sidecar is introduced.
 
-## Verification and known limitations
+## Verification and publication status
 
-**V1.1 is a final release. Physical Supercard/SD hardware remains unverified.** Final release status does not imply hardware or power-loss certification.
+**Final V1.2 release (`v1.2.0`). Independent source review, host verification and exact-ROM emulator QA passed.** Historical releases, tags and assets are preserved. The downloadable ROM is the exact emulator-verified build, not a replacement CI artifact.
 
-- A clean ROM build and the full host and ASan/UBSan suites passed. New tests cover five-row selection windows through the inherited 64-file limit and the actual Home bitmap-render branch using shipped fonts, including long names, empty/unavailable storage and error presentation.
-- The exact ROM passed an unpatched, unseeded emulator cold boot, all five Controls pages, Credits, boundaries and repeated returns. Home path and navigation/footer pixels were compared with the inherited ROM at their unchanged or requested shifted positions.
-- A separate exact-ROM emulator run used a clearly labeled RAM-only seven-book fixture, not a mounted SD card. Real keypad events exercised every selection, scrolling in both directions, both list boundaries and both footer controls. Complete screen pixels matched the real-font expected five-row bitmap and cold-boot UI. No ROM patches, save commands or program-counter/stack-pointer relocation were used.
-- Both PDF pages were rendered and visually inspected. The complete README controls round-trip into the PDF; the unchanged settings/saving/compatibility/credits page retains its text. Regenerating unchanged documentation produces identical PDF bytes.
-- Physical SD discovery/open/save behavior was not retested in an emulator; the storage code is unchanged. Retained v1.0.0 FatFS image evidence is historical, not a new hardware claim.
-- Inherited TXT limitations remain: persistent write failure or interrupted footer replacement can lose an old-or-new bookmark. Arbitrary power loss, torn sectors, out-of-space conditions and exhaustive faults remain unverified. These are not fixed by v1.1.
-- EPUB remains a bounded text-only subset without DRM, images, CSS presentation or Arabic support. Physical EPUB compaction remains deferred; appended saves remain subject to the inherited 128 MiB archive limit.
+Host tests and independent ASan/UBSan verification passed for native glyph pixels/bounds, joining/reference glyph IDs, long multiline Arabic TXT and original/reopened cached EPUB, mixed Latin/digits/full-width text, forward/back/resume, old/current bookmarks, unchanged source bytes, controls/credits framebuffers and storage regressions. The separate offline HarfBuzz comparison passed all 1504 cases. Real-FatFS image tests passed their successful-save and exercised transient-recovery gates, retaining inherited bookmark-loss and unhit-fault-selector limitations.
 
-The release ROM should be the exact emulator-verified `gbareader.gba` below, not a replacement CI build. Its visible title is `gbareader V1.1`; the inherited ROM header is `GBA READER`. CI status and publication verification are separate from local exact-ROM verification.
+The exact V1.2 ROM passed actual emulator cold boot, all seven Credits pages, all six Controls pages, boundaries and close/reopen checks. Arabic presentation, forward/Back pagination and byte-anchor resume/rebuild passed with RAM-seeded TXT-source and already-normalized EPUB text windows. These body checks do not exercise mounted storage, ZIP parsing, DEFLATE, XHTML normalization, cache creation/reopening or persisted bookmarks; original/cached EPUB and old/current saved-marker coverage comes from host tests, not emulator storage. No crash or visible clipping was observed in the inspected samples. Broader mixed-direction linguistic review remains appropriate.
 
-## SHA-256
+Release asset SHA256:
 
 ```text
-adc7a0eaf1d9b53e26a9f2efd5163ad5e5e0e7b33bc530f32db1e3e23c99a188  gbareader.gba
-14dcd07543ee0c1e5a406d9e84658ae8da96011783cd64b44571f7e13f4782bf  gbareader-full-controls.pdf
+eb4519e3aa06e235bdd1e84d67fd5a3e58fa43dc345f3dc4b3c0698cfd5fbc95  gbareader.gba
+ae0020219d246d96c388edfcb4e7f27d901901119107e668405fe8cbe2b8d368  gbareader-full-controls.pdf
 ```
 
-Made by Halim Jarrar. Existing GPL and third-party notices remain in the repository.
+Physical Supercard/SD operation remains unverified. Persistent storage errors and arbitrary power loss can lose bookmarks under inherited save semantics. EPUB remains bounded and text-only, with no DRM/images/CSS/embedded-font presentation. Compaction is deferred; saves remain subject to the inherited archive size limit.
+
+The exact inherited UNSCII/Unifont font snapshot versions are not documented; conservative GPL attribution is retained without claiming newer OFL eligibility. See [Arabic and credits audit](docs/arabic.md).
+
+Made by Halim Jarrar · (C) 2026 · halim-jarrar.de · monday@halim-jarrar.de

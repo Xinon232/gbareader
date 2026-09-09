@@ -44,7 +44,7 @@ static void text(Pixels& p,const char* s,int x,int y,int w) {
 int main(int argc,char** argv) {
     assert(argc==3); auto base=load(argv[1]),symbols=load(argv[2]);
     font_base_addr=base.data(); reader_font_base_addr=symbols.data();
-    const Labels labels={{0,-68,"gbareader V1.1",false},{0,-48,"files: /gbareader",false},
+    const Labels labels={{0,-68,"gbareader V1.2",false},{0,-48,"files: /gbareader",false},
         {0,56,"UP/DOWN select   A open",false},{-104,72,"Select: Controls",true},{8,72,"Start: Credits",true}};
     for(int count : {0,1,2,3,4,5,6,64}) {
         names.clear();

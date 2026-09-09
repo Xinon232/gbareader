@@ -27,7 +27,8 @@ bool handle_controls_input(Scene& scene, CreditsInputGate& gate, int& page,
 }
 
 bool handle_credits_input(Scene& scene, CreditsInputGate& gate,
-                          bool start_pressed, bool b_pressed, bool any_held)
+                          bool start_pressed, bool b_pressed, bool any_held,
+                          bool left_pressed, bool right_pressed)
 {
     if(scene != Scene::LIBRARY && scene != Scene::CREDITS) return false;
     if(gate.waiting_for_release) {
@@ -36,6 +37,7 @@ bool handle_credits_input(Scene& scene, CreditsInputGate& gate,
     }
     if(scene == Scene::LIBRARY && start_pressed) {
         scene = Scene::CREDITS;
+        gate.page = 0;
         gate.waiting_for_release = true;
         return true;
     }
@@ -44,6 +46,8 @@ bool handle_credits_input(Scene& scene, CreditsInputGate& gate,
             scene = Scene::LIBRARY;
             gate.waiting_for_release = true;
         }
+        else if(left_pressed && gate.page > 0) --gate.page;
+        else if(right_pressed && gate.page + 1 < CREDITS_PAGE_COUNT) ++gate.page;
         return true;
     }
     return false;

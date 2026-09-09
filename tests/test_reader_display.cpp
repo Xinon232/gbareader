@@ -117,6 +117,30 @@ int main(int argc, char** argv)
     }
     assert(actual == expected); // Exact full framebuffer, real bus-safe compositor and fonts.
     assert(actual != Pixels{});
+    for(int i = 0; i < 4; ++i) assert(!std::strcmp(reader::credits_lines[0][i], lines[i]));
+    assert(!reader::credits_lines[0][4][0] && !reader::credits_lines[0][5][0]);
+    std::string notices;
+    for(int p = 1; p < reader::CREDITS_PAGE_COUNT; ++p) {
+        actual = {}; expected = {};
+        reader::draw_credits(reinterpret_cast<uint8_t*>(actual.data()), p);
+        for(int i = 0; i < reader::CREDITS_LINES; ++i) {
+            const char* text = reader::credits_lines[p][i];
+            const unsigned w = font_width(text); assert(w <= 224);
+            for(const char* ch=text; *ch; ++ch) assert(*ch >= 32 && *ch <= 126);
+            notices += text; notices += '\n';
+            draw_text_idx8_bus16_range(text, reinterpret_cast<uint8_t*>(expected.data()) +
+                (30 + i * 16) * 240 + (240 - w) / 2, 0, w, 240, 1);
+        }
+        assert(actual == expected && actual != Pixels{});
+    }
+    for(const char* required : {"Ghoulam Regular", "Imad AlFil / mloukhiyye", "CC BY 4.0",
+            "SuperFW", "David Guillen Fandos", "GPL v3 or later", "UNSCII by Viznut",
+            "unscii-16-full: GPL", "Fixedsys Excelsior", "public domain", "GNU Unifont / Hangul",
+            "Roman Czyborra, Paul Hardy", "GPL v2+ with font exception", "Butano", "Gustavo Valiente",
+            "zlib", "devkitARM / devkitPro", "FatFs (C) 2022 ChaN", "miniz - MIT", "Rich Geldreich",
+            "RAD Game Tools / Valve", "gba-vocab-trainer-CC"}) assert(notices.find(required) != std::string::npos);
+    assert(reader::CONTROLS_PAGE_COUNT == 6);
+    assert(std::strstr(reader::controls_titles[5], "Arabic"));
     for(int p = 0; p < reader::CONTROLS_PAGE_COUNT; ++p) {
         actual = {}; expected = {};
         reader::draw_controls(reinterpret_cast<uint8_t*>(actual.data()), p);
