@@ -35,15 +35,20 @@ static void test_credits_input()
 
 int main()
 {
-    assert(library_first_row(0, 0) == 0);
-    for(int count : {1, 2, 3, 4, 5, 64}) {
+    assert(LIBRARY_VISIBLE_ROWS == 5);
+    assert(library_first_row(0, 0) == 0); // Empty or unavailable storage.
+    for(int count = 1; count <= 64; ++count) {
         for(int selected = 0; selected < count; ++selected) {
             const int first = library_first_row(selected, count);
-            assert(first >= 0 && first <= selected && selected < first + 4);
-            assert(first == 0 || first + 4 <= count);
+            assert(first >= 0 && first <= selected && selected < first + 5);
+            assert(first == 0 || first + 5 <= count);
+            if(count <= 5) assert(first == 0);
         }
+        assert(library_first_row(0, count) == 0);
+        assert(library_first_row(count - 1, count) == (count > 5 ? count - 5 : 0));
     }
-    assert(library_first_row(63, 64) == 60);
+    assert(library_first_row(2, 6) == 1); // Preserve selection-relative scrolling.
+    assert(library_first_row(63, 64) == 59);
     Scene s = Scene::LIBRARY;
     CreditsInputGate gate{};
     int p = 0;

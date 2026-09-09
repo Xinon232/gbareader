@@ -121,5 +121,12 @@ g++ "${CXXFLAGS[@]}" -I"$ROOT/references/superfw/src/fonts" \
 "$OUT/test_reader_display" "$ROOT/references/superfw/res/fonts.pack" \
     "$ROOT/references/superfw/res/reader-symbols.pack"
 
+python3 "$ROOT/tests/extract_library_branch.py" "$OUT/library_branch.inc"
+g++ "${CXXFLAGS[@]}" -I"$OUT" -I"$ROOT/references/superfw/src/fonts" \
+    "$ROOT/tests/test_library_framebuffer.cpp" "$ROOT/src/reader_ui_state.cpp" \
+    "$OUT/font.o" -o "$OUT/test_library_framebuffer"
+"$OUT/test_library_framebuffer" "$ROOT/references/superfw/res/fonts.pack" \
+    "$ROOT/references/superfw/res/reader-symbols.pack"
+
 python3 "$ROOT/tests/test_credits_wiring.py"
 python3 "$ROOT/tests/test_source_contracts.py"

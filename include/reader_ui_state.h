@@ -4,7 +4,7 @@ namespace reader {
 
 enum class Scene { LIBRARY, READER, SETTINGS, CREDITS, CONTROLS };
 constexpr int CONTROLS_PAGE_COUNT = 5;
-constexpr int LIBRARY_VISIBLE_ROWS = 4;
+constexpr int LIBRARY_VISIBLE_ROWS = 5;
 int library_first_row(int selected, int count);
 struct CreditsInputGate { bool waiting_for_release; };
 bool handle_controls_input(Scene& scene, CreditsInputGate& gate, int& page,

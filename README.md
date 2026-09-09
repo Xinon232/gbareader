@@ -1,14 +1,14 @@
-# gbareader v1.0.0
+# gbareader v1.1
 
 Read TXT and EPUB books on your Game Boy Advance. Save your place and return to it later. Put your books in `/gbareader` on your Supercard SD card; they appear directly on the home screen.
 
-The app uses the SD/FatFS and font foundation of [`gba-vocab-trainer-CC` v0.2.5](https://github.com/Xinon232/gba-vocab-trainer-CC/releases/tag/v0.2.5). The home-screen title is `gbareader V1.0`; this work retains the v0.8.0 reading and embedded-save engine.
+The app uses the SD/FatFS and font foundation of [`gba-vocab-trainer-CC` v0.2.5](https://github.com/Xinon232/gba-vocab-trainer-CC/releases/tag/v0.2.5). The home-screen title is `gbareader V1.1`; this work retains the v0.8.0 reading and embedded-save engine.
 
-Version 1.0.0 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of UTF-8 EPUB 2/3 files directly from a Supercard SD card.
+Version 1.1 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of UTF-8 EPUB 2/3 files directly from a Supercard SD card.
 
-## v1.0.0 changes
+## v1.1 changes
 
-Home now lists books directly from `/gbareader`, with Controls and Credits always accessible. The reading engine is retained from v0.8.0. See [release notes and known limitations](RELEASE_NOTES.md). This is a **hardware-unverified prerelease**; no physical Supercard/SD test was performed.
+Home shows five books at once instead of four. The list moves slightly up and the navigation instructions move down; title/path placement, fonts, controls and the reading/storage engine are unchanged. Controls and Credits remain accessible. See [release notes and known limitations](RELEASE_NOTES.md). This is the V1.1 final release; physical Supercard/SD hardware remains unverified.
 
 ## Retained v0.8.0 changes
 
@@ -76,7 +76,7 @@ Physical compaction is deferred: files still grow with saves, and saves are reje
 
 ## Controls
 
-Read TXT and EPUB books, save your reading position, and resume later. Place UTF-8 `.txt` and supported `.epub` files directly in `/gbareader` on the SD-card root, then restart the app. It lists up to 64 files, not subfolders. A missing or empty folder shows instructions; Controls and Credits remain available. This reader has no text editing, typing or user-facing export controls.
+Read TXT and EPUB books, save your reading position, and resume later. Place UTF-8 `.txt` and supported `.epub` files directly in `/gbareader` on the SD-card root, then restart the app. It lists up to 64 files, not subfolders, with five books visible at once. A missing or empty folder shows instructions; Controls and Credits remain available. This reader has no text editing, typing or user-facing export controls.
 
 See [the full controls PDF](docs/gbareader-full-controls.pdf).
 

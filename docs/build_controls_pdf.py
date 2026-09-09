@@ -8,6 +8,9 @@ from xml.sax.saxutils import escape
 from reportlab.platypus import SimpleDocTemplate,Paragraph,Spacer,PageBreak,Flowable
 from reportlab.lib.styles import getSampleStyleSheet,ParagraphStyle
 from reportlab.lib.colors import HexColor
+from reportlab import rl_config
+
+rl_config.invariant = 1  # Rebuilding unchanged controls produces identical bytes.
 
 from pypdf import PdfReader
 root=Path(__file__).resolve().parents[1]
@@ -15,7 +18,7 @@ text=(root/'README.md').read_text().split('## Controls\n',1)[1].split('## Hardwa
 styles=getSampleStyleSheet()
 styles.add(ParagraphStyle(name='BodyControls',fontName='Helvetica',fontSize=11,leading=16,spaceAfter=8))
 styles['Heading1'].textColor=styles['Heading2'].textColor=HexColor('#254d83')
-flow: list[Flowable]=[Paragraph('gbareader V1.0',styles['Title']),Paragraph('Full controls',styles['Heading1'])]
+flow: list[Flowable]=[Paragraph('gbareader V1.1',styles['Title']),Paragraph('Full controls',styles['Heading1'])]
 def formatted(t):
  return re.sub(r'`([^`]+)`',r'<b>\1</b>',escape(t))
 for block in text.strip().split('\n\n'):
@@ -37,7 +40,7 @@ flow += [Spacer(1,10),Paragraph('Credits',styles['Heading2']),Paragraph('Made by
 out=root/'docs/gbareader-full-controls.pdf';out.parent.mkdir(exist_ok=True)
 def footer(canvas,doc):
  canvas.setFont('Helvetica',9);canvas.setFillColor(HexColor('#526070'));canvas.drawString(42,25,'gbareader · Full controls · Halim Jarrar');canvas.drawRightString(553,25,str(doc.page))
-SimpleDocTemplate(str(out),pagesize=(595,842),leftMargin=48,rightMargin=48,topMargin=38,bottomMargin=46,title='gbareader V1.0 — Full controls',author='Halim Jarrar').build(flow,onFirstPage=footer,onLaterPages=footer)
+SimpleDocTemplate(str(out),pagesize=(595,842),leftMargin=48,rightMargin=48,topMargin=38,bottomMargin=46,title='gbareader V1.1 — Full controls',author='Halim Jarrar').build(flow,onFirstPage=footer,onLaterPages=footer)
 pdf=PdfReader(out); joined='\n'.join(p.extract_text() for p in pdf.pages)
 for required in ['Read TXT and EPUB','/gbareader','Select','Start','Left','Right','Up','Down','previous page','shoulder','Settings','Save failed','Halim Jarrar','no text editing']:
  assert required.lower() in joined.lower(),required

@@ -1,4 +1,4 @@
-// GBA Reader v0.8.0 -- streaming Supercard SD TXT/EPUB reader.
+// gbareader v1.1 -- streaming Supercard SD TXT/EPUB reader.
 
 #include "bn_bg_palette_item.h"
 #include "bn_core.h"
@@ -46,7 +46,7 @@ constexpr int UI_SPRITE_CAPACITY = 127;
 constexpr int SAVE_OVERLAY_SPRITE_CAPACITY = 16;
 constexpr int LIBRARY_VISIBLE_ROWS = reader::LIBRARY_VISIBLE_ROWS;
 constexpr int LIBRARY_WORST_CASE_SPRITES =
-        int(sizeof("gbareader V1.0") - 1) +
+        int(sizeof("gbareader V1.1") - 1) +
         int(sizeof("files: /gbareader") - 1) +
         int(sizeof("UP/DOWN select   A open") - 1) +
         int(sizeof("Select: Controls") - 1) + int(sizeof("Start: Credits") - 1);
@@ -372,7 +372,7 @@ int main()
             sprites.clear();
             ui.set_center_alignment();
             if(scene == Scene::LIBRARY) {
-                add_text(ui, 0, -68, "gbareader V1.0", sprites);
+                add_text(ui, 0, -68, "gbareader V1.1", sprites);
                 add_text(ui, 0, -48, "files: /gbareader", sprites);
                 auto* pixels = reinterpret_cast<uint8_t*>(painter.page().data());
                 if(!storage_ok || !reader::library_count()) {
@@ -386,14 +386,14 @@ int main()
                 const int first = reader::library_first_row(selected, reader::library_count());
                 for(int i = first; ! library_status && i < reader::library_count() &&
                                    i < first + LIBRARY_VISIBLE_ROWS; ++i) {
-                    const int y = 52 + (i - first) * 16;
+                    const int y = 48 + (i - first) * 16;
                     draw_text_idx8_bus16_range(i == selected ? ">" : " ", pixels + y * 240 + 8, 0, 12, 240, 1);
                     draw_text_idx8_bus16_range(reader::library_name(i), pixels + y * 240 + 22, 0, 210, 240, 1);
                 }
-                add_text(ui, 0, 44, "UP/DOWN select   A open", sprites);
+                add_text(ui, 0, 56, "UP/DOWN select   A open", sprites);
                 ui.set_left_alignment();
-                add_text(ui, -104, 68, "Select: Controls", sprites);
-                add_text(ui, 8, 68, "Start: Credits", sprites);
+                add_text(ui, -104, 72, "Select: Controls", sprites);
+                add_text(ui, 8, 72, "Start: Credits", sprites);
             } else if(scene == Scene::CONTROLS) {
                 add_text(ui, 0, -62, reader::controls_titles[controls_page], sprites);
                 reader::draw_controls(reinterpret_cast<uint8_t*>(painter.page().data()), controls_page);

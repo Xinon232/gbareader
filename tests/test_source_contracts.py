@@ -69,8 +69,8 @@ assert "step_history_rebuild" in core
 assert "reader::step_history_rebuild" in main
 assert 'show_overlay(save_ui, save_sprites, "Loading back...")' in main
 
-assert "GBA Reader v0.8.0" in main
-assert "GBA Reader v0.8.0" in makefile
+assert "gbareader v1.1" in main
+assert "gbareader v1.1" in makefile
 assert "release/v0.8.0" in workflow
 assert "pull_request:" in workflow and "      - main" in workflow
 assert "contents: read" in workflow

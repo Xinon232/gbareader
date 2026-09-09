@@ -1,5 +1,5 @@
 #---------------------------------------------------------------------------------------------------------------------
-# GBA Reader v0.8.0
+# gbareader v1.1
 #
 # Stack: butano + devkitPro devkitARM, C++.
 # Adapted from /home/hlm/butano/examples/text/Makefile (canonical butano template).
