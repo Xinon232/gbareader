@@ -18,7 +18,7 @@ text=(root/'README.md').read_text().split('## Controls\n',1)[1].split('## Hardwa
 styles=getSampleStyleSheet()
 styles.add(ParagraphStyle(name='BodyControls',fontName='Helvetica',fontSize=11,leading=16,spaceAfter=8))
 styles['Heading1'].textColor=styles['Heading2'].textColor=HexColor('#254d83')
-flow: list[Flowable]=[Paragraph('gbareader V1.4',styles['Title']),Paragraph('Full controls',styles['Heading1'])]
+flow: list[Flowable]=[Paragraph('gbareader V1.5',styles['Title']),Paragraph('Full controls',styles['Heading1'])]
 def formatted(t):
  return re.sub(r'`([^`]+)`',r'<b>\1</b>',escape(t))
 for block in text.strip().split('\n\n'):
@@ -44,7 +44,7 @@ for notice in notices: flow.append(Paragraph(escape(notice), styles['BodyControl
 out=root/'docs/gbareader-full-controls.pdf';out.parent.mkdir(exist_ok=True)
 def footer(canvas,doc):
  canvas.setFont('Helvetica',9);canvas.setFillColor(HexColor('#526070'));canvas.drawString(42,25,'gbareader · Full controls · Halim Jarrar');canvas.drawRightString(553,25,str(doc.page))
-SimpleDocTemplate(str(out),pagesize=(595,842),leftMargin=48,rightMargin=48,topMargin=38,bottomMargin=46,title='gbareader V1.4 — Full controls',author='Halim Jarrar').build(flow,onFirstPage=footer,onLaterPages=footer)
+SimpleDocTemplate(str(out),pagesize=(595,842),leftMargin=48,rightMargin=48,topMargin=38,bottomMargin=46,title='gbareader V1.5 — Full controls',author='Halim Jarrar').build(flow,onFirstPage=footer,onLaterPages=footer)
 pdf=PdfReader(out)
 joined='\n'.join('\n'.join(line for line in page.extract_text().splitlines()
     if line not in ('gbareader · Full controls · Halim Jarrar',str(index)))
@@ -52,7 +52,7 @@ joined='\n'.join('\n'.join(line for line in page.extract_text().splitlines()
 for required in ['Read TXT and EPUB','/gbareader','Select','Start','Left','Right','Up','Down','previous page','shoulder','Settings','Save failed','Halim Jarrar','no text editing']:
  assert required.lower() in joined.lower(),required
 instructions='\n\n'.join(b for b in text.strip().split('\n\n') if not b.startswith('See ['))
-markdown='# gbareader V1.4\n\n## Full controls\n\n'+instructions+'\n\n## Credits and font licenses\n\nMade by Halim Jarrar\n(C) 2026\nhalim-jarrar.de\nmonday@halim-jarrar.de\n\n'+'\n\n'.join(notices)+'\n'
+markdown='# gbareader V1.5\n\n## Full controls\n\n'+instructions+'\n\n## Credits and font licenses\n\nMade by Halim Jarrar\n(C) 2026\nhalim-jarrar.de\nmonday@halim-jarrar.de\n\n'+'\n\n'.join(notices)+'\n'
 (root/'docs/gbareader-full-controls.md').write_text(markdown,encoding='utf-8')
 def normalized(s):
  return re.sub(r'\s+','',s.replace('`','').replace('\u2022',''))

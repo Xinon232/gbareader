@@ -1,4 +1,4 @@
-// gbareader V1.4 -- streaming Supercard SD TXT/EPUB reader.
+// gbareader V1.5 -- streaming Supercard SD TXT/EPUB reader.
 
 #include "bn_bg_palette_item.h"
 #include "bn_core.h"
@@ -21,6 +21,7 @@ extern "C" {
 #include "reader_ui_state.h"
 #include "reader_credits.h"
 #include "reader_controls.h"
+#include "reader_hold.h"
 #include "epub_document.h"
 #include "reader_file.h"
 
@@ -48,7 +49,7 @@ constexpr int UI_SPRITE_CAPACITY = 127;
 constexpr int SAVE_OVERLAY_SPRITE_CAPACITY = 16;
 constexpr int LIBRARY_VISIBLE_ROWS = reader::LIBRARY_VISIBLE_ROWS;
 constexpr int LIBRARY_WORST_CASE_SPRITES =
-        int(sizeof("gbareader V1.4") - 1) +
+        int(sizeof("gbareader V1.5") - 1) +
         int(sizeof("files: /gbareader") - 1) +
         int(sizeof("UP/DOWN select   A open") - 1) +
         int(sizeof("Select: Controls") - 1) + int(sizeof("Start: Credits") - 1);
@@ -111,14 +112,14 @@ void add_text(bn::sprite_text_generator& generator, int x, int y, const char* te
 }
 
 void show_overlay(bn::sprite_text_generator& generator,
-                  bn::vector<bn::sprite_ptr, SAVE_OVERLAY_SPRITE_CAPACITY>& sprites,
-                  const char* text)
+                  bn::ivector<bn::sprite_ptr>& sprites,
+                  const char* text, int y = 64)
 {
     sprites.clear();
     generator.set_right_alignment();
     generator.set_bg_priority(0);
     generator.set_z_order(-32767);
-    generator.generate(112, 64, text, sprites);
+    generator.generate(112, y, text, sprites);
     for(bn::sprite_ptr& sprite : sprites) sprite.put_above();
     generator.set_z_order(0);
     generator.set_center_alignment();
@@ -136,6 +137,23 @@ void show_save_result(bn::sprite_text_generator& generator,
 {
     show_overlay(generator, sprites, reader::save_result_string(saved));
 }
+
+// Keep keypad temporaries out of the existing reader main-stack budget.
+[[gnu::noinline]] unsigned sample_reader_hold(reader::ReaderHold& hold, Scene scene)
+{
+    const unsigned keys = unsigned(bn::keypad::up_held()) |
+            (unsigned(bn::keypad::down_held()) << 1) |
+            (unsigned(bn::keypad::left_held()) << 2) |
+            (unsigned(bn::keypad::right_held()) << 3) |
+            (unsigned(bn::keypad::a_held()) << 4) |
+            (unsigned(bn::keypad::b_held()) << 5) |
+            (unsigned(bn::keypad::start_held()) << 6) |
+            (unsigned(bn::keypad::select_held()) << 7) |
+            (unsigned(bn::keypad::l_held()) << 8) |
+            (unsigned(bn::keypad::r_held()) << 9);
+    return hold.update(keys, scene == Scene::READER);
+}
+// End reader hold sampler.
 
 }
 
@@ -159,6 +177,7 @@ int main()
     save_ui.set_palette_item(bn::sprite_items::ui_variable_8x16_font.palette_item());
     bn::vector<bn::sprite_ptr, SAVE_OVERLAY_SPRITE_CAPACITY> save_sprites;
 
+
     settings = reader::default_settings();
     bool storage_ok = reader::storage_init();
     Scene scene = Scene::LIBRARY;
@@ -166,7 +185,7 @@ int main()
     int settings_row = 0;
     reader::Settings settings_before = settings;
     // Deliberately session-only: shoulder page turns always start disabled.
-    bool shoulder_page_turns = false;
+    reader::ReaderHold reader_hold{};
     bool redraw_ui = true;
     bool redraw_page = false;
     const char* open_name = nullptr;
@@ -179,6 +198,10 @@ int main()
 
     while(true) {
         const Scene previous_scene = scene;
+        // Reader hold sampling: keep edge history in every scene.
+        if(reader_hold.mode_message_frames && !--reader_hold.mode_message_frames) sprites.clear();
+        const unsigned reader_action = sample_reader_hold(reader_hold, scene);
+        // End reader hold sampling.
         const bool any_held = bn::keypad::up_held() || bn::keypad::down_held() ||
                 bn::keypad::left_held() || bn::keypad::right_held() ||
                 bn::keypad::a_held() || bn::keypad::b_held() ||
@@ -262,11 +285,13 @@ int main()
         } else if(scene == Scene::READER) {
             reader::Page next{};
             const bool forward_pressed = bn::keypad::right_pressed() || bn::keypad::a_pressed() ||
-                                         (shoulder_page_turns && bn::keypad::r_pressed());
+                                         (reader_hold.shoulder_page_turns && bn::keypad::r_pressed());
             const bool back_pressed = bn::keypad::left_pressed() || bn::keypad::b_pressed() ||
-                                      (shoulder_page_turns && bn::keypad::l_pressed());
-            if(bn::keypad::up_pressed()) {
-                shoulder_page_turns = ! shoulder_page_turns;
+                                      (reader_hold.shoulder_page_turns && bn::keypad::l_pressed());
+            if(reader_action == 1) {
+                reader_hold.shoulder_page_turns = ! reader_hold.shoulder_page_turns;
+                show_overlay(save_ui, sprites, reader_hold.shoulder_page_turns ? "L+R: On" : "L+R: Off", -64);
+                reader_hold.mode_message_frames = 60; // One second of application frames, non-blocking.
             } else if(forward_pressed) {
                 if(pending_back) save_sprites.clear();
                 pending_back = false;
@@ -284,7 +309,7 @@ int main()
                     reader::cancel_save_message(save_message_timer);
                     show_overlay(save_ui, save_sprites, "Loading back...");
                 }
-            } else if(bn::keypad::down_pressed()) {
+            } else if(reader_action == 2) {
                 pending_back = false;
                 settings_before = settings;
                 reader::cancel_save_message(save_message_timer);
@@ -367,6 +392,12 @@ int main()
             }
         }
 
+        // Reader mode overlay exit cleanup.
+        if(scene != Scene::READER && reader_hold.mode_message_frames) {
+            reader_hold.mode_message_frames = 0;
+            sprites.clear();
+        }
+        // End reader mode overlay exit cleanup.
         if(scene == Scene::READER && reader::tick_save_message(save_message_timer))
             save_sprites.clear();
         if(redraw_page) { draw_page(painter); redraw_page = false; }
@@ -375,7 +406,7 @@ int main()
             sprites.clear();
             ui.set_center_alignment();
             if(scene == Scene::LIBRARY) {
-                add_text(ui, 0, -68, "gbareader V1.4", sprites);
+                add_text(ui, 0, -68, "gbareader V1.5", sprites);
                 add_text(ui, 0, -48, "files: /gbareader", sprites);
                 auto* pixels = reinterpret_cast<uint8_t*>(painter.page().data());
                 if(!storage_ok || !reader::library_count()) {

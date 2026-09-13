@@ -1,8 +1,12 @@
-# gbareader V1.4
+# gbareader V1.5
 
 Read TXT and EPUB books on your Game Boy Advance. Save your place and return to it later. Put books directly in `/gbareader` on a compatible Supercard SD card; they appear on Home.
 
-## V1.4: unchanged books, individual SAV companions
+## V1.5: deliberate reader controls
+
+Reader Up/Down now require the same continuous solo hold as gbawriter Caps. A brief foreground UI-font notice confirms shoulder page-turn mode. All V1.4 storage, rendering and other controls are preserved.
+
+## Preserved V1.4: unchanged books, individual SAV companions
 
 All newly generated per-book data now lives in one companion alongside each book: `Title.txt.sav` for `Title.txt`, and `Title.epub.sav` for `Title.epub`. The original extension is retained, so the two formats do not collide. **The app opens books read-only and never writes, strips, truncates or replaces their bytes**, including during migration and failed saves.
 
@@ -36,17 +40,19 @@ See [the full controls PDF](docs/gbareader-full-controls.pdf) and [downloadable 
 
 - `Up` / `Down`: select a `.txt` or `.epub` book.
 - `A`: open the selected book.
-- `Select`: show Controls. `Left` / `Right` changes its eight help pages; `B` returns Home.
+- `Select`: show Controls. `Left` / `Right` changes its nine help pages; `B` returns Home.
 - `Start`: show Credits, beginning with the personal author page. `Left` / `Right` changes its seven pages; `B` or `Start` returns Home. Font/framework/license attribution is on subsequent pages.
 
 ### Reader
 
 - `Right` or `A`: next page.
 - `Left` or `B`: previous page.
-- `Down`: open the reader settings.
-- `Up`: toggle shoulder-button page turns for this session. When enabled, `L` goes back and `R` goes forward. This starts disabled whenever the app launches and is not saved.
+- Hold `Down` alone: open reader settings.
+- Hold `Up` alone: toggle shoulder-button page turns. `L` goes back and `R` forward when enabled. A UI-font `L+R: On` or `L+R: Off` notice appears for about one second. This mode starts disabled each app launch and is not saved.
 - `Start`: save the current byte position, reader settings, Arabic mode and up to 64 previous page offsets to the book's `.sav` companion. A `save...` message appears while writing, followed temporarily by `Saved` or `Save failed`.
 - `Select`: close the book and return Home without saving later changes.
+
+Both holds require 48 consecutive held updates after the initial press (about 0.8 seconds), exactly matching gbawriter R-only Caps. Short presses do nothing. Each hold acts once; release before trying again. Any other key or leaving reading cancels that hold. Library/settings Up/Down stay immediate.
 
 Current-layout bookmarks retain previous page offsets. Older or unknown layouts keep the saved byte position but rebuild Back history incrementally. An early Back request shows `Loading back...` while reconstruction proceeds. A partly completed rebuild restarts safely at its saved anchor rather than resuming an incomplete page scan.
 

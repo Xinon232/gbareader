@@ -11,6 +11,14 @@ if [[ -n "${EXTRA_CXXFLAGS:-}" ]]; then
     CXXFLAGS+=("${EXTRA_CXXFLAGS_ARRAY[@]}")
 fi
 
+python3 "$ROOT/tests/extract_reader_input.py" "$OUT/reader_input.inc"
+g++ "${CXXFLAGS[@]}" -I"$OUT" "$ROOT/tests/test_reader_input_adapter.cpp" \
+    "$ROOT/src/reader_ui_state.cpp" -o "$OUT/test_reader_input_adapter"
+"$OUT/test_reader_input_adapter"
+python3 "$ROOT/tests/extract_overlay.py" "$OUT/overlay.inc"
+g++ "${CXXFLAGS[@]}" -I"$OUT" "$ROOT/tests/test_reader_overlay.cpp" -o "$OUT/test_reader_overlay"
+"$OUT/test_reader_overlay"
+
 for test in test_reader_mode test_reader_open; do
     g++ "${CXXFLAGS[@]}" "$ROOT/tests/$test.cpp" "$ROOT/src/reader_core.cpp" \
         "$ROOT/src/reader_txt_save.cpp" -o "$OUT/$test"

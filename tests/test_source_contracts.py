@@ -29,10 +29,10 @@ assert "#define FF_MAX_LFN\t\t255" in ffconf
 assert "#define FF_LFN_BUF\t\t255" in ffconf
 assert "BN_DATA_EWRAM_BSS reader::EpubDocument epub;" in main
 assert "BN_DATA_EWRAM_BSS reader::PageHistoryRebuild history_rebuild;" in main
-assert "bool shoulder_page_turns = false;" in main
-assert "shoulder_page_turns = ! shoulder_page_turns;" in main
-assert "shoulder_page_turns && bn::keypad::r_pressed()" in main
-assert "shoulder_page_turns && bn::keypad::l_pressed()" in main
+assert "reader::ReaderHold reader_hold{};" in main
+assert "reader_hold.shoulder_page_turns = ! reader_hold.shoulder_page_turns;" in main
+assert "reader_hold.shoulder_page_turns && bn::keypad::r_pressed()" in main
+assert "reader_hold.shoulder_page_turns && bn::keypad::l_pressed()" in main
 
 # Save results are timed without blocking input or delaying the main loop.
 assert "reader::start_save_message(save_message_timer);" in main
@@ -75,8 +75,8 @@ assert "step_history_rebuild" in core
 assert "reader::step_history_rebuild" in main
 assert 'show_overlay(save_ui, save_sprites, "Loading back...")' in main
 
-assert "gbareader V1.4" in main
-assert "gbareader V1.4" in makefile
+assert "gbareader V1.5" in main
+assert "gbareader V1.5" in makefile
 assert "release/v0.8.0" in workflow
 assert "pull_request:" in workflow and "      - main" in workflow
 assert "contents: read" in workflow
@@ -103,7 +103,7 @@ assert "central_char" not in parse_zip, "local comparison must not reread centra
 assert "std::memcmp(central_name,local_name,nl)" in parse_zip
 assert "read_bytes(*_archive,lo+30,local_name,nl)" in parse_zip
 # Settings have no live preview: pause reconstruction and defer layout until exit.
-settings_entry = main[main.index("} else if(bn::keypad::down_pressed())"):main.index("} else if(bn::keypad::start_pressed())")]
+settings_entry = main[main.index("} else if(reader_action == 2)"):main.index("} else if(bn::keypad::start_pressed())")]
 assert "history_rebuild = {}" not in settings_entry, "settings entry must preserve reconstruction"
 assert "settings_before = settings" in settings_entry
 settings_ui = main[main.index("if(bn::keypad::up_pressed() && settings_row"):main.index("if(scene == Scene::READER && reader::tick_save_message")]
