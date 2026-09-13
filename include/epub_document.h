@@ -42,6 +42,10 @@ public:
                               uint16_t& entry_count) const override;
     EpubError error() const { return _error; }
     void cache_persisted() const override { _cache_written = true; }
+    bool needs_cache_persistence() const {
+        uint32_t central,bytes;uint16_t entries;
+        return cache_archive_layout(central,bytes,entries);
+    }
 
 private:
     struct ZipEntry {
@@ -66,6 +70,8 @@ private:
     bool read_entry(uint32_t central_offset, ZipEntry& entry) const;
     bool validate_local_entry(const ZipEntry& entry, uint32_t& data_offset) const;
     bool load_owned_cache();
+    bool read_cache(uint32_t offset, unsigned char* bytes, uint32_t count) const;
+    mutable bool _external_cache = false;
     bool index_original() const;
     bool load_cache_block(uint32_t offset) const;
     bool fail(EpubError error) const;

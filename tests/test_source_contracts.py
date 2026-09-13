@@ -49,7 +49,7 @@ assert "TXT_SAVE_FOOTER_SIZE = 800" in save_header
 assert "PageHistory history;" in save_header
 assert "V2_HISTORY_AT" in save_source
 assert "parse_v1" in save_source
-# EPUB caches are standard ZIP members; no private trailer or post-EOCD bytes remain.
+# Legacy ZIP fixtures stay compatible; native generation is companion-only.
 assert "META-INF/gbareader/cache-v5" in file_source
 assert "META-INF/gbareader/state-v5" in file_source
 assert "GBAREPC5" in file_source
@@ -58,6 +58,11 @@ assert "local_header" in file_source
 assert "final_eocd" in file_source
 assert "EPUB_CACHE_TRAILER" not in file_source
 assert "write_epub_cache_transaction" not in file_source
+side_source=(root/'src/reader_sidecar.inc').read_text()
+assert 'FA_READ|FA_WRITE' not in file_source
+assert 'f_truncate(&_file)' not in file_source
+assert 'f_write(&_file' not in file_source
+assert 'GBARSAV1' in side_source and 'SAV_CACHE_START = 2048' in side_source
 # Butano's ROM link omits these hosted C-string routines; use bounded local comparisons/copies.
 assert "std::strncpy" not in file_source
 assert "std::strncmp" not in (root / "src/epub_document.cpp").read_text(encoding="utf-8")
@@ -70,8 +75,8 @@ assert "step_history_rebuild" in core
 assert "reader::step_history_rebuild" in main
 assert 'show_overlay(save_ui, save_sprites, "Loading back...")' in main
 
-assert "gbareader V1.3" in main
-assert "gbareader V1.3" in makefile
+assert "gbareader V1.4" in main
+assert "gbareader V1.4" in makefile
 assert "release/v0.8.0" in workflow
 assert "pull_request:" in workflow and "      - main" in workflow
 assert "contents: read" in workflow
@@ -120,4 +125,5 @@ assert 'settings.arabic_shaping);' in main
 assert 'reader::OpenResult::SAVE_FAILED' in main
 assert 'show_save_result(save_ui, save_sprites, false);' in main
 assert 'file.save_footer(state, context.cache)' in main
+assert 'epub.needs_cache_persistence()' in main, 'Opening must migrate a valid legacy embedded cache too'
 print("PASS: source contracts")

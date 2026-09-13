@@ -39,11 +39,9 @@ def run(run_dir, base, invoke, cmd):
 
     def verify_body(image, txt, epub, label):
         actual = extract(image, 'legacy.txt', label + '-actual.txt').read_bytes()
-        assert actual.startswith(txt.read_bytes())
-        if len(actual) > txt.stat().st_size:
-            assert len(actual) == txt.stat().st_size + 800
-            assert b';G=1' in actual[-800:]
+        assert actual==txt.read_bytes()
         actual_epub = extract(image, 'book.epub', label + '-actual.epub')
+        assert actual_epub.read_bytes()==epub.read_bytes()
         with zipfile.ZipFile(epub) as original, zipfile.ZipFile(actual_epub) as actual:
             assert actual.testzip() is None
             for entry in original.infolist():
@@ -70,25 +68,32 @@ def run(run_dir, base, invoke, cmd):
     off = call(image, 'book.epub', 'mode', False, 'cached-off')
     assert off['result'] == 2 and off['calls'] == 1 and not off['persisted_on']
     saved = call(image, 'book.epub', 'mode-bookmark-arabic', False, 'cached-arabic-anchor')
-    before = extract(image, 'book.epub', 'mode-cache-before.epub')
+    before = extract(image, 'book.epub.sav', 'mode-cache-before.sav')
     on = call(image, 'book.epub', 'mode', True, 'cached-on')
     assert on['result'] == 2 and on['calls'] == 1 and on['persisted_on']
     assert on['bookmark'] == saved['bookmark'] > 0
-    after = extract(image, 'book.epub', 'mode-cache-after.epub')
-    with zipfile.ZipFile(before) as old, zipfile.ZipFile(after) as new:
-        name = 'META-INF/gbareader/cache-v5'
-        assert old.getinfo(name).header_offset == new.getinfo(name).header_offset
-        assert old.read(name) == new.read(name)
+    after = extract(image, 'book.epub.sav', 'mode-cache-after.sav')
+    assert len(before.read_bytes())==len(after.read_bytes())
+    assert before.read_bytes()[2048:]==after.read_bytes()[2048:]
     verify_body(image, txt, epub, 'mode-cached')
 
     # Returned automatic-save error is visible, retains a shaped page and ON RAM;
-    # a later genuine reopen retries, with original payload integrity intact.
+    # an empty returned-error artifact refuses ownership after restart. Only an
+    # explicit computer-side fixture backup/move-aside permits a fresh creation.
     for book in ('legacy.txt', 'book.epub'):
         image, txt, epub = image_for('mode-failure-' + book)
         failed = call(image, book, 'mode', True, 'failed-' + book, 'w', 1)
         assert failed['hits'] == 1 and failed['result'] == 3 and failed['calls'] == 1
         retried = call(image, book, 'mode', True, 'retried-' + book)
-        assert retried['persisted_on']
+        assert retried['result'] == 3 and not retried['persisted_on']
+        empty = extract(image, book + '.sav', 'empty-backup-' + book + '.sav')
+        assert empty.read_bytes() == b''
+        refused = call(image, book, 'mode', True, 'refused-' + book)
+        assert refused['result'] == 3 and not refused['persisted_on']
+        assert extract(image, book + '.sav', 'empty-after-' + book + '.sav').read_bytes() == b''
+        cmd(['mren', '-i', image, '::' + book + '.sav', '::' + book + '.sav.backup'])
+        reset = call(image, book, 'mode', True, 'manual-reset-' + book)
+        assert reset['result'] == 2 and reset['persisted_on']
         verify_body(image, txt, epub, 'mode-retry-' + book)
     (run_dir / 'mode-results.json').write_text(json.dumps(rows, indent=2) + '\n')
     print(f'PASS: {len(rows)} production opening-mode checks; TXT/original+cached EPUB, sticky Latin resume, state-only cache, failed-write retry, preserved content and fsck')

@@ -58,7 +58,7 @@ int main(int argc,char**argv){
    armed=true; const bool result=c.file.save_footer(state,c.cache); armed=false; return result;
   };
   const auto result=open_document_page(source,had_footer?&before:nullptr,settings,nullptr,
-                    history,page,rebuild,!txt&&!doc.optimized_size(),persist,&context);
+                    history,page,rebuild,!txt&&doc.needs_cache_persistence(),persist,&context);
   assert(result!=OpenResult::FAILED && settings.arabic_shaping==(atoi(argv[4])!=0));
   if(std::strcmp(argv[3],"mode-latin")==0) {
    // Fixture's final 100 bytes are strictly ASCII; bookmark it and change spacing.
@@ -89,7 +89,23 @@ int main(int argc,char**argv){
  auto wanted=state(atoi(argv[4]));unsigned char expected[TXT_SAVE_FOOTER_SIZE];make_txt_save_footer(wanted,expected);
  char path[4096];snprintf(path,sizeof(path),"%s.expected",argv[8]);dump(path,expected,sizeof(expected));
  bool saved=false;
- if(std::strncmp(argv[3],"repeat",6)==0) {
+ if(std::strncmp(argv[3],"live-retry",10)==0) {
+  assert(doc_ok);
+  unsigned char first=0;assert(file.byte_at(0,first));
+  kind=argv[5][0];target=atoi(argv[6]);policy=argv[7][0];armed=true;
+  saved=file.save_footer(wanted);armed=false;
+  assert(!saved && hits==1); // The first source-identity disk read latched FIL.err.
+  if(std::strcmp(argv[3],"live-retry-nav")==0) {
+   unsigned char value=0;assert(file.byte_at(0,value)&&value==first);
+  }
+  saved=file.save_footer(wanted,txt?nullptr:&doc);assert(saved);
+  unsigned char value=0;assert(file.byte_at(0,value)&&value==first);
+  const ByteSource& src=txt?static_cast<const ByteSource&>(file):static_cast<const ByteSource&>(doc);
+  std::vector<unsigned char> text(src.size());assert(src.read_range(0,text.data(),text.size()));
+  snprintf(path,sizeof(path),"%s.text",argv[8]);dump(path,text.data(),text.size());
+  unsigned char pending[TXT_SAVE_FOOTER_SIZE];make_txt_save_footer(wanted,pending);
+  assert(!memcmp(pending,expected,sizeof(pending))); // Pending input was not replaced.
+ }else if(std::strncmp(argv[3],"repeat",6)==0) {
   assert(doc_ok && !txt);
   if(std::strcmp(argv[3],"repeat-fallback")==0) {
    unsigned char value; assert(doc.byte_at(doc.size()-1,value)); assert(!doc.optimized_size());
@@ -98,17 +114,12 @@ int main(int argc,char**argv){
   uint32_t central,bytes;uint16_t entries;
   assert(!doc.cache_archive_layout(central,bytes,entries));
   const uint32_t first=file.size();
-  unsigned char eocd[22];assert(file.read_range(first-22,eocd,sizeof(eocd)));
-  assert(eocd[0]==0x50 && eocd[1]==0x4b && eocd[2]==5 && eocd[3]==6);
-  const uint32_t directory_bytes=uint32_t(eocd[12])|(uint32_t(eocd[13])<<8)|
-          (uint32_t(eocd[14])<<16)|(uint32_t(eocd[15])<<24);
-  // A state-only append copies the same-size directory, then replaces its
-  // state record. Compare the exact transaction size, not the book length:
-  // a valid tiny book can be much shorter than its 800-byte state record.
-  const uint32_t state_append_bytes=30u+uint32_t(std::strlen("META-INF/gbareader/state-v5"))+
-          TXT_SAVE_FOOTER_SIZE+directory_bytes+22u;
+  uint32_t cache_bytes=0,cache_crc=0;
+  assert(file.companion_cache(cache_bytes,cache_crc));
   saved=file.save_footer(wanted,&doc); assert(saved);
-  assert(file.size()>first && file.size()-first==state_append_bytes);
+  assert(file.size()==first);
+  uint32_t after_bytes=0,after_crc=0;
+  assert(file.companion_cache(after_bytes,after_crc)&&after_bytes==cache_bytes&&after_crc==cache_crc);
   EpubDocument check;assert(check.open(file)&&check.optimized_size()==doc.size());
  }else if(strcmp(argv[3],"probe")==0){
   if(doc_ok){const ByteSource& src=txt?static_cast<const ByteSource&>(file):static_cast<const ByteSource&>(doc);std::vector<unsigned char> text(src.size());bool ok=src.read_range(0,text.data(),text.size());if(!ok)doc_ok=false;else{snprintf(path,sizeof(path),"%s.text",argv[8]);dump(path,text.data(),text.size());}}

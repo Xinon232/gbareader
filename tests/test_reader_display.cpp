@@ -139,9 +139,10 @@ int main(int argc, char** argv)
             "Roman Czyborra, Paul Hardy", "GPL v2+ with font exception", "Butano", "Gustavo Valiente",
             "zlib", "devkitARM / devkitPro", "FatFs (C) 2022 ChaN", "miniz - MIT", "Rich Geldreich",
             "RAD Game Tools / Valve", "gba-vocab-trainer-CC"}) assert(notices.find(required) != std::string::npos);
-    assert(reader::CONTROLS_PAGE_COUNT == 7);
+    assert(reader::CONTROLS_PAGE_COUNT == 8);
     assert(!std::strcmp(reader::controls_lines[6][0], "Arabic starts OFF per book."));
-    assert(!std::strcmp(reader::controls_lines[6][2], "ON auto-saves in that book."));
+    assert(!std::strcmp(reader::controls_lines[6][2], "ON auto-saves in its SAV."));
+    assert(!std::strcmp(reader::controls_lines[7][0], "Book bytes stay unchanged."));
     assert(std::strstr(reader::controls_titles[5], "Arabic"));
     for(int p = 0; p < reader::CONTROLS_PAGE_COUNT; ++p) {
         actual = {}; expected = {};

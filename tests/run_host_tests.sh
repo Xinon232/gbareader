@@ -154,3 +154,4 @@ g++ "${CXXFLAGS[@]}" -I"$ROOT/references/superfw/src/fonts" \
 
 python3 "$ROOT/tests/test_credits_wiring.py"
 python3 "$ROOT/tests/test_source_contracts.py"
+bash "$ROOT/tests/run_sidecar_tests.sh"

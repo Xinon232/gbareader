@@ -1,4 +1,4 @@
-# Arabic display — gbareader V1.3 pre-release
+# Arabic display — gbareader V1.4
 
 Made by Halim Jarrar · (C) 2026 · halim-jarrar.de · monday@halim-jarrar.de
 
@@ -13,7 +13,7 @@ Ghoulam Regular © 2025 Imad AlFil / mloukhiyye, CC BY 4.0.
 
 ## Per-document activation
 
-A missing or OFF flag starts the document with shaping off. Opening checks only the provisional page at the saved byte anchor (or the beginning); finding Arabic enables shaping, re-lays out that page at the same anchor and automatically saves sticky ON inside the existing TXT footer or EPUB state member. An already-ON document skips detection and stays ON on future opens. This setting is not global and needs no `.sav` or permanent sidecar.
+A missing or OFF flag starts the document with shaping off. Opening checks only the provisional page at the saved byte anchor (or the beginning); finding Arabic enables shaping, re-lays out that page at the same anchor and automatically saves sticky ON in the book's individual `.txt.sav` or `.epub.sav` companion. An already-ON document skips detection and stays ON on future opens. This setting is not global. All newly generated state/cache stays in the SAV; source bytes are unchanged. Valid legacy embedded state is read only when no companion exists; see [migration and identity](sidecar-format.md).
 
 Subsequent pages do not detect or shape Arabic in an OFF session. Arabic appearing later intentionally remains unshaped until the reader saves there and reopens on an Arabic page. If the automatic save fails, ON remains active in RAM but is not guaranteed durable; retry with Reader Start. No body text is changed. Switching geometry preserves the byte anchor but rejects incompatible Back history and partial rebuild state.
 
@@ -29,7 +29,7 @@ Latin, Korean/Hangul, CJK, Greek/Cyrillic and other inherited fonts remain uncha
 
 Reader lines retain the existing 256-byte array (255 text bytes plus NUL). One shared non-reentrant 256-cluster shaping scratch lives in device EWRAM; immutable glyph tables remain ROM-resident. When ON, each bounded Arabic candidate prefix is shaped before acceptance; native advances plus rightmost artwork bounds drive wrapping and drawing. OFF sessions bypass Arabic shaping and the additional per-line rendering scan. Spaces remain word-wrap opportunities, oversized words split across rows, and explicit newline behavior stays unchanged. Per-line work is bounded by the fixed byte cap; no whole-book allocation is added. Long runs of hidden marks can occupy multiple logical rows due to this byte cap.
 
-The existing source cursor advances by original consumed UTF-8 bytes. Neither shaping nor hidden marks rewrite text or byte anchors. The existing checksummed state distinguishes shaping mode and page-layout compatibility. Missing legacy flags default OFF and receive the opening-page check; the previous V1.2 always-shaped layout is not evidence of a saved sticky ON flag. Compatible history and partial rebuilds remain reusable; incompatible geometry keeps the saved byte anchor/settings and rebuilds history. The existing ZIP/cache and FatFS transaction paths are retained; first-time activation now requests an automatic state save.
+The existing source cursor advances by original consumed UTF-8 bytes. Neither shaping nor hidden marks rewrite text or byte anchors. The existing checksummed state distinguishes shaping mode and page-layout compatibility. Missing legacy flags default OFF and receive the opening-page check; the previous V1.2 always-shaped layout is not evidence of a saved sticky ON flag. Compatible history remains reusable; partial BUILDING scans restart safely at their anchor. Incompatible geometry keeps the saved byte anchor/settings and rebuilds history. V1.4 redirects first-time activation and later saves into the companion while retaining the existing detection, shaping and history rules.
 
 ## Verification commands
 

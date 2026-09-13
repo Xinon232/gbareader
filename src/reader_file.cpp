@@ -87,6 +87,9 @@ bool central_fingerprint(const ByteSource&s,const ZipLayout& z,uint32_t& result)
     bool found=false;uint32_t p=z.central;for(uint16_t i=0;i<z.count;++i){uint16_t nl;uint32_t r;if(!central_record(s,p,z.central+z.size,nl,r))return false;if(name_at(s,p+46,nl,STATE_NAME)){unsigned char h[46],local[30];if(!source_read(s,p,h,46)||get16(h+10)||get32(h+20)!=TXT_SAVE_FOOTER_SIZE||get32(h+24)!=TXT_SAVE_FOOTER_SIZE||!source_read(s,get32(h+42),local,30)||get32(local)!=0x04034b50u||get16(local+6)||get16(local+8)||get32(local+18)!=TXT_SAVE_FOOTER_SIZE||get32(local+22)!=TXT_SAVE_FOOTER_SIZE)return false;uint32_t d=get32(h+42)+30u+get16(local+26)+get16(local+28);if(d>s.size()||TXT_SAVE_FOOTER_SIZE>s.size()-d)return false;data=d;size=TXT_SAVE_FOOTER_SIZE;found=true;}p+=r;}return found;
 }
 
+// Legacy embedded writers exist only to build compatibility fixtures on hosts.
+// No native save path can instantiate them.
+#ifndef __DEVKITARM__
 template<class Ops> bool write_all(Ops& o,uint32_t at,const unsigned char* p,uint32_t n){return o.seek(at)&&o.write(p,n);}
 // A TXT footer replacement can overwrite a shorter legacy footer before a write,
 // truncate, or sync failure. Put the captured footer back before restoring length.
@@ -265,23 +268,6 @@ template<class Ops> bool finish_epub_append(Ops& ops, bool written, uint32_t ori
     return written;
 }
 
-#ifdef __DEVKITARM__
-struct FatOps {
-    FIL& f;
-    const char* name;
-    bool seek(uint32_t at) { return f_lseek(&f, at) == FR_OK; }
-    bool write(const unsigned char* bytes, uint32_t count) {
-        UINT written = 0;
-        return f_write(&f, bytes, count, &written) == FR_OK && written == count;
-    }
-    bool truncate() { return f_truncate(&f) == FR_OK; }
-    bool sync() { return f_sync(&f) == FR_OK; }
-    bool recover() {
-        (void)f_close(&f);
-        return f_open(&f, name, FA_READ | FA_WRITE | FA_OPEN_EXISTING) == FR_OK;
-    }
-};
-bool same_history(const PageHistory&a,const PageHistory&b){if(a.count!=b.count)return false;for(int i=0;i<a.count;++i)if(a.offsets[(a.head+i)%PAGE_HISTORY_MAX]!=b.offsets[(b.head+i)%PAGE_HISTORY_MAX])return false;return true;}
 #endif
 }
 
@@ -348,19 +334,22 @@ bool library_path(int index, char (&path)[LIBRARY_PATH_MAX]) {
 }
 ReaderFile::ReaderFile():_cache_start(0),_cache_size(0),_size(0),_physical_size(0),_footer_size(0),_footer_offset(0),_epub_cache_start(0),_epub_cache_size(0),_has_footer(false),_has_valid_cache(false),_open(false),_name{}{}
 ReaderFile::~ReaderFile(){close();}
-bool ReaderFile::open_read_only(const char*filename){close();
+bool ReaderFile::open_read_only(const char*filename){close();if(_open||_side_open)return false;
 #ifdef __DEVKITARM__
-if(!supported_book_name(filename)||f_open(&_file,filename,FA_READ|FA_OPEN_EXISTING)!=FR_OK)return false;_physical_size=uint32_t(f_size(&_file));_size=_physical_size;_footer_offset=_physical_size;_open=true;copy_book_name(_name,filename);if(txt_book_name(_name)){uint32_t n=_physical_size<TXT_SAVE_FOOTER_SIZE?_physical_size:TXT_SAVE_FOOTER_SIZE;unsigned char tail[TXT_SAVE_FOOTER_SIZE];UINT got=0;if(n&& (f_lseek(&_file,_physical_size-n)!=FR_OK||f_read(&_file,tail,n,&got)!=FR_OK||got!=n)){close();return false;}BookStorageLayout l{};if(!inspect_book_tail(_name,_physical_size,tail,n,l)){close();return false;}_size=l.book_size;_footer_offset=l.footer_offset;_footer_size=l.footer_size;_has_footer=l.has_valid_footer;}else{uint32_t n=_physical_size<uint32_t(TXT_SAVE_FOOTER_SIZE+LEGACY_CACHE_TRAILER_SIZE)?_physical_size:uint32_t(TXT_SAVE_FOOTER_SIZE+LEGACY_CACHE_TRAILER_SIZE);unsigned char tail[TXT_SAVE_FOOTER_SIZE+LEGACY_CACHE_TRAILER_SIZE];UINT got=0;if(n&&(f_lseek(&_file,_physical_size-n)!=FR_OK||f_read(&_file,tail,n,&got)!=FR_OK||got!=n)){close();return false;}BookStorageLayout l{};if(!inspect_book_tail(_name,_physical_size,tail,n,l)){close();return false;}_size=l.book_size;ZipLayout z{};if(zip_layout(*this,z)){if(l.book_size!=_physical_size&&l.has_valid_footer){_footer_offset=l.footer_offset;_footer_size=l.footer_size;_has_footer=true;}uint32_t data,size;if(find_state(*this,z,data,size)){_footer_offset=data;_footer_size=size;_has_footer=true;}}else{_size=_physical_size;}_cache_size=0;}return true;
+if(!supported_book_name(filename)||f_open(&_file,filename,FA_READ|FA_OPEN_EXISTING)!=FR_OK)return false;_source_owned=true;_physical_size=uint32_t(f_size(&_file));_size=_physical_size;_footer_offset=_physical_size;_open=true;copy_book_name(_name,filename);if(txt_book_name(_name)){uint32_t n=_physical_size<TXT_SAVE_FOOTER_SIZE?_physical_size:TXT_SAVE_FOOTER_SIZE;unsigned char tail[TXT_SAVE_FOOTER_SIZE];UINT got=0;if(n&& (f_lseek(&_file,_physical_size-n)!=FR_OK||f_read(&_file,tail,n,&got)!=FR_OK||got!=n)){close();return false;}BookStorageLayout l{};if(!inspect_book_tail(_name,_physical_size,tail,n,l)){close();return false;}_size=l.book_size;_footer_offset=l.footer_offset;_footer_size=l.footer_size;_has_footer=l.has_valid_footer;}else{uint32_t n=_physical_size<uint32_t(TXT_SAVE_FOOTER_SIZE+LEGACY_CACHE_TRAILER_SIZE)?_physical_size:uint32_t(TXT_SAVE_FOOTER_SIZE+LEGACY_CACHE_TRAILER_SIZE);unsigned char tail[TXT_SAVE_FOOTER_SIZE+LEGACY_CACHE_TRAILER_SIZE];UINT got=0;if(n&&(f_lseek(&_file,_physical_size-n)!=FR_OK||f_read(&_file,tail,n,&got)!=FR_OK||got!=n)){close();return false;}BookStorageLayout l{};if(!inspect_book_tail(_name,_physical_size,tail,n,l)){close();return false;}_size=l.book_size;ZipLayout z{};if(zip_layout(*this,z)){if(l.book_size!=_physical_size&&l.has_valid_footer){_footer_offset=l.footer_offset;_footer_size=l.footer_size;_has_footer=true;}uint32_t data,size;if(find_state(*this,z,data,size)){_footer_offset=data;_footer_size=size;_has_footer=true;}}else{_size=_physical_size;}_cache_size=0;}if(!source_identity(_source_identity)){close();return false;}return load_sidecar();
 #else
 (void)filename;return false;
 #endif
 }
 void ReaderFile::close(){
 #ifdef __DEVKITARM__
-if(_open)f_close(&_file);
+if(_side_open) { if(f_close(&_side_file)!=FR_OK)return; _side_open=false; }
+if(_source_owned) { if(f_close(&_file)!=FR_OK)return; _source_owned=false; }
+_source_verify=_source_checking=_source_changed=false;
 #endif
+_side_present=_side_created=_side_valid=false;_side_generation=0;
 _open=false;_size=_physical_size=_footer_size=_footer_offset=_epub_cache_start=_epub_cache_size=0;_cache_size=0;_has_footer=_has_valid_cache=false;_name[0]=0;}
-bool ReaderFile::physical_byte_at(uint32_t offset,unsigned char&value)const{if(!_open||offset>=_physical_size)return false;if(offset<_cache_start||offset>=_cache_start+uint32_t(_cache_size)){
+bool ReaderFile::physical_byte_at(uint32_t offset,unsigned char&value)const{if(!ensure_source()||offset>=_physical_size)return false;if(offset<_cache_start||offset>=_cache_start+uint32_t(_cache_size)){
 #ifdef __DEVKITARM__
 _cache_start=offset&~uint32_t(FILE_WINDOW_BYTES-1);_cache_size=0;UINT n=0;if(f_lseek(&_file,_cache_start)!=FR_OK||f_read(&_file,_cache,sizeof(_cache),&n)!=FR_OK)return false;_cache_size=n;
 #else
@@ -383,74 +372,20 @@ bool ReaderFile::read_range(uint32_t offset, unsigned char* output, uint32_t cou
     }
     return true;
 }
-bool ReaderFile::saved_footer(TxtSaveFooter& footer)const{if(!_open||!_has_footer||!_footer_size)return false;
+bool ReaderFile::saved_footer(TxtSaveFooter& footer)const{
 #ifdef __DEVKITARM__
+if(!ensure_source())return false;
+if(_side_present) {
+    if(!_side_valid || !read_side_slot(_side_slot)) return false;
+    return parse_txt_save_footer(_cache+64,TXT_SAVE_FOOTER_SIZE,footer);
+}
+if(!_has_footer||!_footer_size)return false;
 unsigned char b[TXT_SAVE_FOOTER_SIZE];UINT n=0;if(f_lseek(&_file,_footer_offset)!=FR_OK||f_read(&_file,b,_footer_size,&n)!=FR_OK||n!=_footer_size)return false;_cache_size=0;return parse_txt_save_footer(b,_footer_size,footer);
 #else
 (void)footer;return false;
 #endif
 }
-bool ReaderFile::save_footer(const TxtSaveFooter& footer, const ByteSource* optimized)
-{
-    if(!_open || !supported_book_name(_name)) return false;
-#ifdef __DEVKITARM__
-    unsigned char replacement[TXT_SAVE_FOOTER_SIZE];
-    make_txt_save_footer(footer, replacement);
-    char filename[LIBRARY_PATH_MAX]{};
-    std::memcpy(filename, _name, sizeof(filename));
-    const uint32_t original = _physical_size, previous = _footer_size;
-    if(previous) {
-        UINT count = 0;
-        if(f_lseek(&_file, _footer_offset) != FR_OK ||
-           f_read(&_file, _previous_footer, previous, &count) != FR_OK || count != previous)
-            return false;
-    }
-    _cache_size = 0;
-    if(f_close(&_file) != FR_OK) {
-        _open = false;
-        open_read_only(filename);
-        return false;
-    }
-    _open = false;
-    if(f_open(&_file, filename, FA_READ | FA_WRITE | FA_OPEN_EXISTING) != FR_OK) {
-        open_read_only(filename);
-        return false;
-    }
-    _open = true;
-    FatOps ops{_file, filename};
-    bool written = false, made_cache = false;
-    if(txt_book_name(filename)) {
-        written = replace_txt_footer_transaction(ops, _footer_offset, original,
-                                                 _previous_footer, previous, replacement);
-        if(!written) (void)(ops.seek(original) && ops.truncate() && ops.sync());
-    } else {
-        ZipLayout layout{};
-        const bool have_layout = zip_layout(*this, layout);
-        const bool make_cache = optimized && optimized->size() && have_layout &&
-                optimized->cache_archive_layout(layout.central, layout.size, layout.count);
-        made_cache = make_cache;
-        written = make_cache ?
-                append_cache_and_state(ops, *this, layout, *optimized, replacement,
-                                       _write_cache, sizeof(_write_cache), original) :
-                (have_layout && append_state(ops, *this, layout, replacement,
-                                             _write_cache, sizeof(_write_cache), original));
-        written = finish_epub_append(ops, written, original);
-    }
-    const bool closed = f_close(&_file) == FR_OK;
-    _open = false;
-    const bool reopened = open_read_only(filename);
-    if(!written || !closed || !reopened) return false;
-    TxtSaveFooter verify{};
-    const bool verified = saved_footer(verify) && verify.byte_offset == footer.byte_offset &&
-           same_settings(verify.settings, footer.settings) && same_history(verify.history, footer.history);
-    if(verified && made_cache) optimized->cache_persisted();
-    return verified;
-#else
-    (void)footer;
-    (void)optimized;
-    return false;
-#endif
-}
+#include "reader_sidecar.inc"
 
 #ifndef __DEVKITARM__
 EpubAppendTestResult append_epub_transaction_for_tests(

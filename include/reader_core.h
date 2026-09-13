@@ -37,6 +37,8 @@ public:
     virtual ~ByteSource() = default;
     virtual uint32_t size() const = 0;
     virtual bool byte_at(uint32_t offset, unsigned char& value) const = 0;
+    // Derived text windows must not bypass a latched/replaced backing source.
+    virtual bool read_ready() const { return true; }
     // Bulk reads let cache writers avoid one ReaderFile seek/cache lookup per byte.
     virtual bool read_range(uint32_t offset, unsigned char* output, uint32_t count) const;
     virtual bool export_text(TextSink sink, void* context) const;
@@ -45,6 +47,10 @@ public:
     virtual bool cache_archive_layout(uint32_t&, uint32_t&, uint16_t&) const { return false; }
     // Called only after a newly written cache transaction has been verified.
     virtual void cache_persisted() const {}
+    // External cache is a checked payload, not a replacement for the ZIP source.
+    virtual bool companion_present() const { return false; }
+    virtual bool companion_cache(uint32_t&, uint32_t&) const { return false; }
+    virtual bool companion_read(uint32_t, unsigned char*, uint32_t) const { return false; }
 };
 
 class MemorySource final : public ByteSource {

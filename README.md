@@ -1,197 +1,131 @@
-# gbareader V1.3 — pre-release
+# gbareader V1.4
 
-Read TXT and EPUB books on your Game Boy Advance. Save your place and return to it later. Put your books in `/gbareader` on your Supercard SD card; they appear directly on the home screen.
+Read TXT and EPUB books on your Game Boy Advance. Save your place and return to it later. Put books directly in `/gbareader` on a compatible Supercard SD card; they appear on Home.
 
-The app uses the SD/FatFS and font foundation of [`gba-vocab-trainer-CC` v0.2.5](https://github.com/Xinon232/gba-vocab-trainer-CC/releases/tag/v0.2.5). The home-screen title is `gbareader V1.3`. This experimental pre-release is maintained on a separate branch, not merged into `main`.
+## V1.4: unchanged books, individual SAV companions
 
-Version 1.3 opens UTF-8 `.txt` and a deliberately bounded, text-only subset of UTF-8 EPUB 2/3 files directly from a Supercard SD card.
+All newly generated per-book data now lives in one companion alongside each book: `Title.txt.sav` for `Title.txt`, and `Title.epub.sav` for `Title.epub`. The original extension is retained, so the two formats do not collide. **The app opens books read-only and never writes, strips, truncates or replaces their bytes**, including during migration and failed saves.
 
-## V1.3 changes
+A companion holds the byte bookmark, line spacing, top/bottom margins, sticky Arabic ON/OFF, compatible 64-entry Back history/rebuild metadata, and the entire normalized EPUB text cache. Two fixed-size checked state banks are updated alternately. The large cache is separate: ordinary bookmarks neither grow a log nor rewrite that cache. TXT companions occupy at most 2048 bytes. EPUB companions use 2048 bytes plus a 32-byte cache header, normalized text and a four-byte checksum per 4096-byte block, capped at 128 MiB total.
 
-Arabic shaping is now a sticky per-document choice. A document without a saved ON flag opens with shaping off and checks only the page about to be displayed (the saved position, or the beginning). If that page contains Arabic, shaping turns on and the app automatically saves the flag inside the document. Future opens of that document keep shaping on without repeating detection. Other documents are unaffected.
+This release changes storage, not page layout, fonts, shaping, input or ordinary page-turn behavior. It preserves the existing lazy cache policy: ZIP/package/spine guards, source fingerprint, header and checksum table are checked on opening; normalized blocks are checked as needed. Original chapter inflation/CRC is deferred on a valid cache hit. A failed block is not displayed: validated originals are used, or reading fails safely. New cache creation includes sequential saved-payload readback. No physical SD speed claim is made.
 
-With shaping off, subsequent pages skip Arabic detection and shaping. **Intentional limitation:** Arabic encountered later in that session stays unshaped; reopen on an Arabic page to activate it. Switching layout mode retains the byte bookmark but rebuilds incompatible Back history. No `.sav` or permanent sidecar is used. This changes when the existing document state is written, not the book text. Keep backups and wait for writes to finish. See [Arabic policy and bounds](docs/arabic.md).
+The final release is published from its own release tag/branch. Publishing it does not update `main` or replace historical releases, tags or assets. Technical details: [SAV format, limits and recovery](docs/sidecar-format.md).
 
-## Retained V1.2 Arabic display
+## Features and bounds
 
-When enabled, Arabic uses native Ghoulam joining, lam-alef and per-line RTL display. Latin/digit runs remain left-to-right. Harakat are hidden only on screen; original UTF-8 bytes and saved byte anchors are preserved. Native font sizes, Credits and existing page-turn controls remain unchanged. Physical Supercard/SD operation remains unverified.
-
-## Retained v1.1 changes
-
-Home shows five books at once instead of four. The list moves slightly up and the navigation instructions move down; title/path placement, fonts, controls and the reading/storage engine are unchanged. Controls and Credits remain accessible. See [release notes and known limitations](RELEASE_NOTES.md). Physical Supercard/SD hardware remains unverified.
-
-## Retained v0.8.0 changes
-
-- Saved EPUB opening validates ZIP/package metadata, source identity and a small checksum index rather than scanning all cached text. Each 4 KiB text block is verified before use; the restored page does not require reading earlier blocks.
-- A retained checksum window avoids repeated seeks to the index while paging. Fixed-block CRC combination uses a precomputed read-only operator instead of rebuilding it for each block.
-- A bounded central-directory lookup accelerator, combined fingerprint pass and bulk metadata reads reduce repeated directory scans and seeks. Hash collisions fall back to exact duplicate-detecting lookup; required ZIP safety checks remain.
-- Smart single quotes `‘ ’ ‚` display as `'`, smart double quotes `“ ” „` as `"`, and typographic hyphens `‐ ‑` as `-`, matching gbawriter's plain punctuation. This changes display only, not source bytes or normalized cache text. Ellipses, en/em dashes, guillemets and other symbols stay unchanged.
-- Library `Start` opens credits; `B` or `Start` closes them. The library shows `start: credits` near the bottom.
-- A checksummed display-layout marker preserves current-layout Back history on reopen while rebuilding older, incompatible page boundaries once. Saved byte positions and settings remain intact.
-
-**Upgrade:** v0.6/v0.7 owned caches remain readable with their old full-text checks. Open the book and press `Start` to save once, then close and reopen it to use the new block cache. The internal cache format is now 6; ZIP member names remain `cache-v5` and `state-v5`. Further saves in the same session remain state-only rather than repeatedly rebuilding the cache.
-
-**Integrity policy:** cache headers, the checksum index, source fingerprint, ZIP/package structure and required-entry bounds are checked upfront. Unread cached-text corruption is detected when its block is needed. A failed block is never displayed: the reader falls back to validated originals, or reports an error if they cannot safely supply the text. The next save can replace a damaged cache. Original chapter payload corruption that leaves ZIP metadata unchanged remains deferred until original chapters are needed. CRCs detect accidental damage, not malicious coordinated checksum replacement. Original EPUB entries remain available to other readers; no permanent sidecars are introduced.
-
-## Retained v0.6.0 improvements
-
-- ZIP filename validation avoids alternating distant reads for each character.
-- Cache preparation exports normalized text sequentially with bounded buffers and calculates checksums without rereading the normalized book.
-- Invalid-cache fallback retains original-content CRC and complete DEFLATE-stream validation. The current cache-hit policy is described above.
-- Newly appended ZIP directories contain only the latest bookmark state. Invalid-cache regeneration replaces the old live cache entry without deleting unknown entries.
-- Transient EPUB save errors reacquire the FatFS handle before rollback, including legacy migration. Existing original bytes are not overwritten by EPUB appends.
-- Unchanged settings preserve Back history, intermediate settings edits do not paginate a hidden preview, and pagination checks line fit before processing the line.
-- CI runs host, sanitizer and real-FatFS regression tests plus the ROM build on main and pull requests.
-
-Physical compaction is deferred: files still grow with saves, and saves are rejected before exceeding the reader's archive-size limit. Cache/state member names remain v5 for compatibility.
-
-## Features
-
-- Case-insensitive `.txt` and `.epub` list directly on Home, restricted to `/gbareader` on the SD-card root; no card-wide browser or demo fallback
-- EPUB discovery uses FAT long filenames up to 255 bytes and indexes up to 64 books
-- Buffered FatFS access; books are streamed instead of loaded into GBA RAM
-- Direct EPUB ZIP reading with stored and raw-DEFLATE entries; processed required entries receive CRC-32 verification, while valid-cache opens use the integrity policy above; nothing is extracted to SD
-- EPUB container, OPF manifest and declared spine-order handling
-- URI percent-decoding and XML entity decoding for container, manifest and spine references
-- Preferred EPUB package selection when `container.xml` declares multiple rootfiles
-- Compact indexing for up to 256 readable spine documents and 255-byte internal archive paths
-- Recognized image archive members are skipped before local-header or payload processing; image-only spine entries are omitted from the text stream
-- XHTML visible-text conversion with CDATA, semantic block/table breaks and common XML/HTML entities
-- Word wrapping and CRLF/LF handling
-- Fixed native 16-pixel SuperFW body-font size
-- SuperFW font coverage for supported Latin, Greek, Cyrillic, Japanese, CJK and Hangul text
-- Compact supplemental publishing-symbol font covering smart quotes, dashes, ellipsis, bullets, `€`, `™` and related punctuation/currency glyphs
-- Display-only ASCII forms for smart quotes, typographic hyphens, Unicode minus and full-width ASCII forms
-- Dedicated `gba-vocab-trainer-CC` UI font for menus
-- Line spacing, top margin and bottom margin settings, each adjustable from 1 through 4
-- Fixed 64-page circular Back history, persisted in current-format bookmarks
-- Checksummed embedded save state preserves reading position, settings and up to 64 previous page offsets without sidecars
-- The first successful EPUB save writes normalized text and state as stored `META-INF/gbareader/*-v5` ZIP members, retaining ordinary EPUB/ZIP validity
-- Later EPUB saves append a replacement v5 state member. TXT footer replacement attempts to restore the previous footer and file length on failure; persistent write failure or interruption can lose the bookmark even where original body text is preserved
-- Saved page history makes Back immediate after reopening a current-format bookmark; older bookmarks rebuild Back history incrementally without a blocking full-book scan
-- Save completion is reported as `Saved` or `Save failed`, then disappears automatically while controls remain responsive
-- Runs of three or more spaces collapse to one space, and repeated newlines collapse to one line break
-- UTF-8 BOM handling and safe replacement of malformed or unsupported input
-- White reading page with black text
-
-## Explicit scope
-
-- **Arabic display is bounded.** Ordinary Arabic letters join with Ghoulam at native 11px within the existing 16px row. Harakat are display-only hidden, Arabic comma uses a SuperFW comma, and Arabic-Indic digits use SuperFW digits. Mixed direction is a limited per-line policy, not full Unicode bidi or full Persian/Urdu coverage. Unsupported meaningful letters use a visible fallback.
-- **Text size is fixed.** The reader keeps the native 16-pixel SuperFW bitmap body font.
-- **This is not full EPUB compliance.** Images are skipped completely, including image-only spine pages. CSS presentation, JavaScript, embedded fonts, audio, video, SVG presentation and DRM are unsupported and ignored or rejected as appropriate. Arabic follows the bounded display policy above.
-- TXT uses a trailing save footer. EPUB v0.5 state and cache are ZIP members, not post-EOCD data. A bounded detector recognizes a valid v0.4.7 cache trailer plus v1/v2 footer, exposes its original pre-trailer archive and bookmark, and rewrites it as v0.5 ZIP members on the next successful save.
-- ZIP64 and multi-disk archives are rejected. Required metadata and spine text must be unencrypted and use stored (0) or DEFLATE (8) compression; unsupported methods or encryption on recognized, ignored image assets do not prevent reading.
-- The ZIP central directory is validated as a stream, so image-heavy EPUBs are not rejected merely for containing more than 128 archive members. Remaining compile-time limits are 256 readable spine documents, 255-byte archive paths, 64 KiB uncompressed metadata, 32 MiB uncompressed XHTML per spine document, 16 MiB compressed required entry and 128 MiB archive. XHTML is inflated and converted through a 32 KiB dictionary and 16 KiB visible-text window, never a whole-chapter allocation. Ignored images, fonts and other non-spine assets are not subject to the XHTML limit. Each applicable limit has a distinct user-facing error; text is never silently truncated.
-- EPUB package metadata and XHTML must be UTF-8. UTF-16 XML/XHTML is outside this release's bounded parser scope.
+- Case-insensitive UTF-8 `.txt` and a bounded text-only subset of EPUB 2/3; up to 64 files directly in `/gbareader`, five visible at once. No subfolder browser, root fallback or demo book.
+- Filenames remain intact and are clipped only on screen. Discovery accepts up to 255 UTF-8 bytes; saving needs room for `.sav`, so the full book filename must be at most 251 UTF-8 bytes. Longer names remain readable but cannot be saved until renamed on a computer.
+- Streaming FatFS reads through an 8 KiB window; no whole-book RAM allocation.
+- Stored/raw-DEFLATE ZIP entries, container/OPF manifest and declared spine order; URI percent-decoding and XML entities in references; preferred package selection for multiple rootfiles.
+- Visible XHTML text including CDATA, block/table breaks and common XML/HTML entities. Images and image-only spine pages are skipped.
+- Limits remain 256 readable spine documents, 255-byte internal paths, 64 KiB uncompressed metadata, 32 MiB uncompressed XHTML per spine document, 16 MiB compressed required entry and 128 MiB source archive. A 32 KiB inflater dictionary and 16 KiB text window bound chapter processing. Applicable errors are reported, never silently truncated.
+- ZIP64, multi-disk archives, encrypted required entries and unsupported required compression are rejected. UTF-16 XML/XHTML, DRM, CSS presentation, scripts, embedded fonts, audio, video and SVG presentation are outside scope.
+- Native 16px SuperFW body font, the existing dedicated UI font, supported Latin/Greek/Cyrillic/Japanese/CJK/Hangul and supplemental publishing symbols. Smart quotes and selected hyphens use the existing display-only ASCII substitutes.
+- Word wrapping, CRLF/LF, UTF-8 BOM and safe malformed-input replacement. Runs of three or more spaces collapse on screen; repeated newlines collapse to one line break. None of this edits the source.
+- Line spacing and margins from 1 to 4; byte anchors rather than saved page numbers; incremental Back-history rebuilding when layout markers differ.
+- Native Ghoulam Arabic joining/lam-alef and limited per-line RTL. Harakat are hidden only on screen. Latin and digit runs remain left-to-right. This is not full Unicode bidi or full Persian/Urdu support.
 
 ## Controls
 
 Read TXT and EPUB books, save your reading position, and resume later. Place UTF-8 `.txt` and supported `.epub` files directly in `/gbareader` on the SD-card root, then restart the app. It lists up to 64 files, not subfolders, with five books visible at once. A missing or empty folder shows instructions; Controls and Credits remain available. This reader has no text editing, typing or user-facing export controls.
 
-See [the full controls PDF](docs/gbareader-full-controls.pdf).
+See [the full controls PDF](docs/gbareader-full-controls.pdf) and [downloadable instructions Markdown](docs/gbareader-full-controls.md).
 
 ### Library
 
-- `Up` / `Down`: select a `.txt` or `.epub` book
-- `A`: open the selected book
-- `Select`: show Controls. `Left` / `Right` changes help pages; `B` returns Home.
-- `Start`: show Credits, always beginning with the personal author page. `Left` / `Right` turns Credits pages; `B` or `Start` returns to the library. Font/framework/license attribution is on subsequent pages.
+- `Up` / `Down`: select a `.txt` or `.epub` book.
+- `A`: open the selected book.
+- `Select`: show Controls. `Left` / `Right` changes its eight help pages; `B` returns Home.
+- `Start`: show Credits, beginning with the personal author page. `Left` / `Right` changes its seven pages; `B` or `Start` returns Home. Font/framework/license attribution is on subsequent pages.
 
 ### Reader
 
-- `Right` or `A`: next page
-- `Left` or `B`: previous page
-- `Down`: open the reader settings
-- `Up`: enable or disable shoulder-button page turns for the current session. When enabled, `L` goes to the previous page and `R` goes to the next page. This option starts disabled whenever the app launches and is not saved.
-- `Start`: save the current page, reader settings and up to 64 previous page offsets inside the open TXT or EPUB file. A `save...` message appears while writing, followed temporarily by the honest result: `Saved` or `Save failed`.
-- `Select`: close the book and return to the library without saving
+- `Right` or `A`: next page.
+- `Left` or `B`: previous page.
+- `Down`: open the reader settings.
+- `Up`: toggle shoulder-button page turns for this session. When enabled, `L` goes back and `R` goes forward. This starts disabled whenever the app launches and is not saved.
+- `Start`: save the current byte position, reader settings, Arabic mode and up to 64 previous page offsets to the book's `.sav` companion. A `save...` message appears while writing, followed temporarily by `Saved` or `Save failed`.
+- `Select`: close the book and return Home without saving later changes.
 
-Current-display-layout bookmarks retain up to 64 previous page offsets. Older or unknown display-layout bookmarks keep their saved byte position but rebuild Back history incrementally, because their glyph widths may differ. An early Back request shows `Loading back...` while reconstruction proceeds.
+Current-layout bookmarks retain previous page offsets. Older or unknown layouts keep the saved byte position but rebuild Back history incrementally. An early Back request shows `Loading back...` while reconstruction proceeds. A partly completed rebuild restarts safely at its saved anchor rather than resuming an incomplete page scan.
 
 ### Settings
 
-- `Up` / `Down`: select line spacing, top margin or bottom margin
-- `Left` / `Right`: change the selected value
-- `B` or `Start`: apply the displayed settings and return to the reader. To retain them in either TXT or EPUB, press `Start` again from the reader. Rows remain 16 pixels high; SuperFW is native 16px and Arabic Ghoulam is native 11px.
+- `Up` / `Down`: select line spacing, top margin or bottom margin.
+- `Left` / `Right`: change the selected value from 1 through 4.
+- `B` or `Start`: apply settings and return to reading. To retain them, press `Start` again from the reader. Rows stay 16px high; SuperFW is native 16px and Arabic Ghoulam native 11px. Settings changes keep the byte anchor and rebuild incompatible history.
 
 ### Arabic display
 
-Shaping starts off for each document unless its saved flag is on. When off, opening checks only the page being resumed (or the first page). Finding Arabic enables shaping and automatically saves ON inside that document. Future opens retain ON; other files are unaffected. Later pages are not checked in an off-mode session: reopen on a page containing Arabic to enable it. A mode change keeps your reading position but rebuilds incompatible Back history.
+Shaping starts OFF for each document unless its own checked saved flag is ON. Opening in OFF mode checks only the page being resumed, or the first page. Finding Arabic enables shaping, relayouts that same anchor, and automatically saves ON in that book's SAV. Other files are unaffected. A failed save leaves ON active in RAM; keep the book open and retry Reader `Start`.
 
-When enabled, Arabic joins right-to-left with native 11px Ghoulam; Latin/digits remain left-to-right. Harakat are hidden, never deleted. The row stays 16px. Mixed direction and Persian/Urdu coverage are limited; no typing mode is added.
+Later pages are not checked in an OFF session. To activate Arabic found later, save on a page containing it and reopen. Enabled Arabic joins right-to-left using native Ghoulam; Latin/digits stay left-to-right. Harakat are hidden, never deleted. Mixed direction and Persian/Urdu coverage are limited; no typing mode or manual OFF toggle is added.
+
+### Files and automatic saves
+
+Every book has its own companion: `Title.txt` uses `Title.txt.sav`; `Title.epub` uses `Title.epub.sav`. All newly generated state and the EPUB normalized-text cache are in that SAV, not in the book. Book bytes stay unchanged. The book may be marked read-only, but its directory and companion must be writable. Leave sufficient free card space and keep backups.
+
+An EPUB can show `Preparing cache...` on first opening, cache migration or rebuilding. This automatically saves its cache and current state in its SAV. Opening-page Arabic activation also saves automatically, combined with cache preparation when needed. Ordinary page turns do not save; later position, history and settings changes require a successful Reader `Start` before leaving. An interrupted initial cache may leave a complete state without a usable cache; a later open rebuilds from the originals.
+
+### Moving, renaming and resetting
+
+Copy or move the book AND its SAV together. When renaming `Title.epub` to `Novel.epub`, rename `Title.epub.sav` to `Novel.epub.sav` too. Do not reuse a same-name SAV after replacing or editing its book. Delete or move aside that SAV deliberately, after keeping a backup. Discovery accepts filenames up to 255 UTF-8 bytes, but companion saving requires a book filename of at most 251 bytes to leave room for `.sav`.
+
+Deleting a SAV loses its latest position, settings, Arabic flag, history and EPUB cache; the cache can be rebuilt. Old embedded metadata, if present, was never removed: deleting the SAV can therefore restore an older embedded bookmark or Arabic flag rather than a completely fresh start. Use a clean original book if a complete reset is wanted.
+
+### Migration and failed saves
+
+Without a SAV, valid legacy TXT footers and EPUB state are read; TXT footers remain hidden from displayed text. A successful save imports state into the companion without removing old bytes. A usable embedded EPUB cache is read and migrated automatically; otherwise the cache is rebuilt from the original chapters. A valid matching SAV takes precedence. An unreadable, mismatched or unknown SAV (even empty) suppresses embedded state instead of reviving a possibly stale bookmark, and is not overwritten automatically.
+
+After `Save failed`, keep the book open and retry `Start`; pending changes are not durable. A transient source read error can be retried read-only after checking size and identity. A complete previous state bank can survive a torn update. A newly created empty SAV is retryable only while that book stays open; after reopening, an empty SAV has no ownership proof. Back up and move aside unknown or mismatched SAVs on a computer, including empty interrupted creations. A damaged record with a valid matching identity header remains retryable. Persistent media faults, arbitrary power loss and filesystem damage are not guaranteed recoverable. Never remove the card or switch off during storage operations.
+
+### Compatibility and identity
+
+EPUB support is text-only: no DRM, images, CSS presentation, scripts, embedded fonts, audio or video. Supported text uses UTF-8. The source identity uses file sizes, three bounded physical samples and, for EPUB, original central-directory metadata. It avoids a full-book hash on each open, but cannot detect every same-size edit outside those samples or malicious checksum replacement. Treat books as unchanged while their companions are in use; after any external edit, move aside the old SAV.
+
+Requires compatible Supercard SD hardware. Host filesystem tests and emulator UI checks do not prove physical card operation. Keep backups of both books and companions.
 
 ## Hardware and files
 
-The app uses the Supercard SD access path inherited from the base engine. Create a **gbareader** folder at the SD-card root and copy UTF-8 `.txt` or supported `.epub` files directly into it. Home indexes up to 64 files and retains filenames up to 255 bytes for opening; long displayed names are clipped by pixel width without changing their bytes. Embedded save state retains the current position and reading-layout settings for both formats. No `.sav` or permanent settings sidecar is used. Initial EPUB cache preparation and first-time Arabic activation write state automatically. If that write fails, the flag is not guaranteed saved; keep the book open and retry with Reader `Start`. Later position, Back history and settings changes require a successful Reader `Start` save before leaving with `Select`.
+The Supercard SD driver, FatFS configuration, fonts, normal page-turn inputs, Arabic geometry and existing OAM capacity assertions are retained. Shoulder-page-turn mode is session-only; it is not per-book generated persistent data. Reading state uses the existing checked 800-byte serializer within the SAV banks, including its original history-validation/rebuild semantics. Read-only legacy handling remains in the reader; the old embedded writer is retained only as a host fixture generator, not a device save route.
 
-An emulator without the expected Supercard storage interface can validate the ROM header and execute the UI path, but it cannot prove SD/FatFS behavior. Real-hardware verification remains important.
+## Building and testing
 
-## Building
-
-Requirements:
-
-- devkitPro/devkitARM
-- Butano
-- GNU Make
-- A Python 3 interpreter used by Butano's asset tools
+Requirements: devkitPro/devkitARM, GNU Make, Python 3 and Butano. CI pins Butano `77dcbcb3d8783596a9f333c64eedbccec77b05dc`.
 
 ```sh
 make clean LIBBUTANO=/absolute/path/to/butano/butano
 make -j2 LIBBUTANO=/absolute/path/to/butano/butano
-```
-
-The ROM is written to `gbareader.gba`.
-
-### Host tests
-
-```sh
-make host-test LIBBUTANO=/absolute/path/to/butano/butano
-```
-
-### Real FatFS save-recovery tests
-
-Install GCC/G++, Python 3, `dosfstools` and `mtools`, then run:
-
-```sh
+bash tests/run_host_tests.sh
+EXTRA_CXXFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' bash tests/run_host_tests.sh
 python3 tests/fatfs/run.py
 GBAREADER_FATFS_FIXTURE=legacy-v047.epub python3 tests/fatfs/run.py
 ```
 
-These exercise the production FatFS branch on images and gate successful saves and exercised transient-error recovery. See [the harness documentation](tests/fatfs/README.md) for evidence paths and diagnostic limits. Persistent errors and arbitrary power loss are not guaranteed recoverable; physical Supercard testing remains separate.
+The runnable output is `gbareader.gba`. Real FAT image tests require GCC/G++, `dosfstools` and `mtools`; see [test documentation](tests/fatfs/README.md). Regenerate the full PDF and Markdown with `python3 docs/build_controls_pdf.py` in an environment containing ReportLab and pypdf.
 
-### Optional emulator smoke test
-
-```sh
-make test LIBBUTANO=/absolute/path/to/butano/butano
-```
-
-The inherited emulator target is not sufficient release evidence: it can report a pass after a frontend/display startup failure. Verify an actual visible application screen independently. Neither this target nor an emulator without Supercard support proves SD/FatFS hardware behavior.
+The inherited `make test` frontend smoke wrapper is not sufficient boot evidence. It can report a pass after a display/frontend startup failure; verify actual application pixels independently. Physical Supercard testing remains separate.
 
 ## Architecture
 
-- `reader_core`: host-testable UTF-8 decoding, wrapping, pagination and page history
-- `reader_file`: FatFS library scan, 8-KiB read window, bounded sequential ZIP cache/state appends, transient-error rollback and replaceable trailing TXT save-footer I/O
-- `epub_document`: bounded ZIP/container/OPF parser plus stored/DEFLATE XHTML-to-text conversion, exposed as a virtual concatenated `ByteSource`; uncached open establishes stable text offsets, sequential export retains per-chapter parser/inflater state, and cached open validates package metadata and the checksum index before verifying normalized text blocks on demand without inflating original spine chapters
-- `reader_txt_save`: checksummed, versioned embedded save-footer encoding retained compatibly from TXT support
-- `main`: Butano UI, controls and page presentation
-- `superfw_font`: SuperFW software glyph renderer targeting a double-buffered 8-bit bitmap background
+- `reader_core`: UTF-8, wrapping, pagination and bounded history.
+- `reader_file` / `reader_sidecar.inc`: read-only book handles, library discovery, bounded SAV banks, source association, readback and failure-only companion cleanup. A second FIL replaces the old 800-byte footer rollback buffer; the 8 KiB read window is borrowed exclusively for state/readback work.
+- `reader_sidecar_cache.inc`: bounded normalized export and checksum-table construction; no cache rewrite for ordinary state saves.
+- `epub_document`: ZIP/container/OPF parsing, chapter normalization, legacy/companion cache validation and checked lazy block fallback. The archive and external cache remain distinct byte sources.
+- `reader_txt_save`: existing versioned state codec, reused without dropping byte/history/Arabic semantics.
+- `main`: existing Butano UI and automatic/manual save triggers; updated version and storage help.
 
-Body text is rendered into a bitmap page rather than creating one GBA sprite per glyph. This avoids the 128-object OAM limit that makes a full-page sprite-text reader impractical. The menu UI remains sprite-based.
+Body text uses the existing double-buffered bitmap renderer rather than one OAM sprite per glyph. The menu remains sprite-based.
 
 ## Provenance and licensing
 
 Made by Halim Jarrar · © 2026 · halim-jarrar.de · monday@halim-jarrar.de
 
-Ghoulam Regular © 2025 Imad AlFil / mloukhiyye, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). [Font source](https://mloukhiyye.itch.io/ghoulam-arabic-pixel-art-font-version-1). Actual GSUB glyphs were converted into monochrome ROM rows at 11px; this modified representation is not author endorsement. Source, conversion and coverage details: [docs/arabic.md](docs/arabic.md).
+Ghoulam Regular © 2025 Imad AlFil / mloukhiyye, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). [Font source](https://mloukhiyye.itch.io/ghoulam-arabic-pixel-art-font-version-1). Actual GSUB glyphs were converted to native 11px monochrome ROM rows; this modified representation is not author endorsement. See [Arabic policy and provenance](docs/arabic.md).
 
-The project was derived from the exact `gba-vocab-trainer-CC` `v0.2.5` tagged source. Its Supercard/FatFS integration and customized UI-font foundation are retained. SuperFW font-rendering sources and `fonts.pack` are included under `references/superfw/` with their upstream notices.
+The project derives from [`gba-vocab-trainer-CC` v0.2.5](https://github.com/Xinon232/gba-vocab-trainer-CC/releases/tag/v0.2.5). Its Supercard/FatFS integration and customized UI font are retained. SuperFW font-rendering sources and font packs retain upstream notices under `references/superfw/`. The inherited UNSCII full-derived pack includes GNU Unifont and public-domain Fixedsys Excelsior glyphs; it is not wholly public domain.
 
-The tinfl-only miniz files are vendored from commit `77d0dce8627735138c51770d1799a1ef48f2117d`, configured without allocation, compression, zlib, stdio, time or miniz archive APIs. Provenance and its MIT license are in `third_party/miniz/`.
+The tinfl-only miniz files are vendored from `77d0dce8627735138c51770d1799a1ef48f2117d`, without allocation, compression, zlib, stdio, time or miniz archive APIs. Provenance and MIT license: `third_party/miniz/`.
 
-The inherited project and SuperFW components are distributed under the GNU General Public License, version 3 or later. See [`LICENSE`](LICENSE).
-
-## Possible later work
-
-- Directory navigation and larger libraries
-- Multiple bookmarks per book
-- Broader EPUB compatibility within the GBA memory budget
+The inherited project and SuperFW components are GPL v3 or later; see [LICENSE](LICENSE). Butano is zlib-licensed; FatFs retains ChaN's permissive notice. Complete current credits also appear in the full-controls PDF and the app's seven Credits pages.
