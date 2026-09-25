@@ -126,25 +126,34 @@ static void test_readable_fallbacks_for_unsupported_equivalents()
 
 static void test_settings_bounds_and_pagination_checkpoints()
 {
-    static_assert(MIN_LINE_SPACING == 1 && MAX_LINE_SPACING == 4);
-    static_assert(MIN_MARGIN == 1 && MAX_MARGIN == 4);
+    static_assert(MIN_LINE_SPACING == 0 && MAX_LINE_SPACING == 4);
     Settings defaults = default_settings();
-    assert(defaults.line_spacing >= 1 && defaults.line_spacing <= 4);
-    assert(defaults.top_margin >= 1 && defaults.top_margin <= 4);
-    assert(defaults.bottom_margin >= 1 && defaults.bottom_margin <= 4);
-    Settings invalid = { 0, 255, 0 };
+    assert(defaults.line_spacing == 1);
+    assert(defaults.paragraph_gap == ParagraphGap::FULL);
+    Settings invalid = { 255, ParagraphGap(200) };
     clamp_settings(invalid);
-    assert(invalid.line_spacing == 1);
-    assert(invalid.top_margin == 4);
-    assert(invalid.bottom_margin == 1);
+    assert(invalid.line_spacing == MAX_LINE_SPACING);
+    assert(invalid.paragraph_gap == ParagraphGap::FULL);
 
     Settings s = default_settings();
     for(int i = 0; i < 100; ++i) adjust_setting(s, SettingField::LINE_SPACING, -1);
     assert(s.line_spacing == MIN_LINE_SPACING);
-    for(int i = 0; i < 100; ++i) adjust_setting(s, SettingField::TOP_MARGIN, 1);
-    assert(s.top_margin == MAX_MARGIN);
-    for(int i = 0; i < 100; ++i) adjust_setting(s, SettingField::BOTTOM_MARGIN, 1);
-    assert(s.bottom_margin == MAX_MARGIN);
+    for(int i = 0; i < 100; ++i) adjust_setting(s, SettingField::PARAGRAPH_GAP, -1);
+    assert(s.paragraph_gap == ParagraphGap::NONE);
+    for(int i = 0; i < 100; ++i) adjust_setting(s, SettingField::PARAGRAPH_GAP, 1);
+    assert(s.paragraph_gap == ParagraphGap::FULL);
+
+    // Lines per page and the centered first row for every spacing.
+    const int expected_lines[] = {10, 9, 9, 8, 8};
+    const int expected_top[] = {0, 4, 0, 5, 2};
+    for(int spacing = MIN_LINE_SPACING; spacing <= MAX_LINE_SPACING; ++spacing) {
+        Settings layout = default_settings();
+        layout.line_spacing = uint8_t(spacing);
+        assert(lines_per_page(layout) == expected_lines[spacing]);
+        assert(page_top(layout) == expected_top[spacing]);
+    }
+    // The default full gap is exactly one empty line, as before.
+    assert(paragraph_gap_pixels(default_settings()) == FONT_HEIGHT + 1);
 
     const char text[] = "one two three four five six seven eight nine ten eleven twelve "
                         "thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty "
@@ -208,7 +217,7 @@ static void test_source_read_failures_are_reported()
         "fifteen sixteen seventeen eighteen nineteen twenty twentyone twentytwo twentythree "
         "twentyfour twentyfive twentysix twentyseven twentyeight twentynine thirty ";
     MemorySource complete(long_text, sizeof(long_text) - 1);
-    Settings tight = { MAX_LINE_SPACING, MAX_MARGIN, MAX_MARGIN };
+    Settings tight = { MAX_LINE_SPACING, ParagraphGap::FULL };
     PageHistory history{};
     Page first{}, unchanged{};
     assert(open_first_page(complete, tight, mono_width, history, first));
@@ -306,11 +315,11 @@ int main()
     test_page_does_not_read_unfittable_line();
     Settings original = default_settings(), changed = original;
     assert(same_settings(original, changed));
-    const SettingField fields[] = {SettingField::LINE_SPACING, SettingField::TOP_MARGIN, SettingField::BOTTOM_MARGIN};
+    const SettingField fields[] = {SettingField::LINE_SPACING, SettingField::PARAGRAPH_GAP};
     for(SettingField field : fields) {
-        adjust_setting(changed, field, 1);
-        assert(!same_settings(original, changed));
         adjust_setting(changed, field, -1);
+        assert(!same_settings(original, changed));
+        adjust_setting(changed, field, 1);
         assert(same_settings(original, changed));
     }
     test_bom_crlf_paragraphs_and_wrap();

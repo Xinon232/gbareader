@@ -30,34 +30,72 @@ bool ByteSource::export_text(TextSink sink, void* context) const
     return true;
 }
 
-Settings default_settings() { return { 1, 1, 1 }; }
+Settings default_settings() { return { 1, ParagraphGap::FULL }; }
 
 bool same_settings(const Settings& a, const Settings& b)
 {
-    return a.line_spacing == b.line_spacing && a.top_margin == b.top_margin &&
-           a.bottom_margin == b.bottom_margin && a.arabic_shaping == b.arabic_shaping;
+    return a.line_spacing == b.line_spacing && a.paragraph_gap == b.paragraph_gap &&
+           a.arabic_shaping == b.arabic_shaping;
 }
 
 void clamp_settings(Settings& s)
 {
-    if(s.line_spacing < MIN_LINE_SPACING) s.line_spacing = MIN_LINE_SPACING;
     if(s.line_spacing > MAX_LINE_SPACING) s.line_spacing = MAX_LINE_SPACING;
-    if(s.top_margin < MIN_MARGIN) s.top_margin = MIN_MARGIN;
-    if(s.top_margin > MAX_MARGIN) s.top_margin = MAX_MARGIN;
-    if(s.bottom_margin < MIN_MARGIN) s.bottom_margin = MIN_MARGIN;
-    if(s.bottom_margin > MAX_MARGIN) s.bottom_margin = MAX_MARGIN;
+    if(uint8_t(s.paragraph_gap) >= PARAGRAPH_GAP_COUNT) s.paragraph_gap = ParagraphGap::FULL;
+}
+
+static int clamp_int(int value, int minimum, int maximum)
+{
+    return value < minimum ? minimum : value > maximum ? maximum : value;
 }
 
 void adjust_setting(Settings& s, SettingField field, int delta)
 {
-    uint8_t* value = field == SettingField::LINE_SPACING ? &s.line_spacing :
-                     field == SettingField::TOP_MARGIN ? &s.top_margin : &s.bottom_margin;
-    int maximum = MAX_LINE_SPACING;
-    int minimum = MIN_LINE_SPACING;
-    int result = int(*value) + delta;
-    if(result < minimum) result = minimum;
-    if(result > maximum) result = maximum;
-    *value = uint8_t(result);
+    if(field == SettingField::LINE_SPACING)
+        s.line_spacing = uint8_t(clamp_int(int(s.line_spacing) + delta, MIN_LINE_SPACING, MAX_LINE_SPACING));
+    else
+        s.paragraph_gap = ParagraphGap(clamp_int(int(s.paragraph_gap) + delta, 0, PARAGRAPH_GAP_COUNT - 1));
+}
+
+const char* paragraph_gap_name(ParagraphGap gap)
+{
+    switch(gap) {
+    case ParagraphGap::NONE: return "None";
+    case ParagraphGap::SMALL: return "Small";
+    case ParagraphGap::HALF: return "Half";
+    default: return "Full";
+    }
+}
+
+int paragraph_gap_pixels(const Settings& s)
+{
+    switch(s.paragraph_gap) {
+    case ParagraphGap::NONE: return 0;
+    case ParagraphGap::SMALL: return 3;
+    case ParagraphGap::HALF: return FONT_HEIGHT / 2;
+    default: return FONT_HEIGHT + s.line_spacing; // One empty line.
+    }
+}
+
+static int text_height(int lines, int spacing)
+{
+    return lines * FONT_HEIGHT + (lines - 1) * spacing;
+}
+
+int lines_per_page(const Settings& input)
+{
+    Settings s = input;
+    clamp_settings(s);
+    int lines = 1;
+    while(lines < PAGE_MAX_LINES && text_height(lines + 1, s.line_spacing) <= PAGE_HEIGHT) ++lines;
+    return lines;
+}
+
+int page_top(const Settings& input)
+{
+    Settings s = input;
+    clamp_settings(s);
+    return (PAGE_HEIGHT - text_height(lines_per_page(s), s.line_spacing)) / 2;
 }
 
 bool MemorySource::byte_at(uint32_t offset, unsigned char& value) const
@@ -230,17 +268,17 @@ bool layout_page(const ByteSource& source, uint32_t offset, const Settings& inpu
     Page result{};
     result.start_offset = offset;
     uint32_t cursor = offset;
-    const int bottom_limit = 160 - settings.bottom_margin;
-    int used_height = settings.top_margin;
+    const int height_limit = text_height(lines_per_page(settings), settings.line_spacing);
+    int used_height = 0;
     bool source_ok = true;
     while(cursor < source.size() && result.line_count < PAGE_MAX_LINES) {
         int gap_before = 0;
         if(result.line_count > 0) {
             gap_before = settings.line_spacing;
             if(result.lines[result.line_count - 1].paragraph_break)
-                gap_before += FONT_HEIGHT + settings.line_spacing;
+                gap_before += paragraph_gap_pixels(settings);
         }
-        if(used_height + gap_before + FONT_HEIGHT > bottom_limit) break;
+        if(used_height + gap_before + FONT_HEIGHT > height_limit) break;
         if(!make_line(source, cursor, glyph_width, result.lines[result.line_count], source_ok, settings.arabic_shaping)) break;
         used_height += gap_before + FONT_HEIGHT;
         ++result.line_count;

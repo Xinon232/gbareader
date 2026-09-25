@@ -8,27 +8,37 @@ namespace reader {
 constexpr int SCREEN_WIDTH = 240;
 constexpr int BODY_SIDE_MARGIN = 8;
 constexpr int FONT_HEIGHT = 16;
-constexpr int MIN_LINE_SPACING = 1;
+constexpr int PAGE_HEIGHT = 160;
+constexpr int MIN_LINE_SPACING = 0;
 constexpr int MAX_LINE_SPACING = 4;
-constexpr int MIN_MARGIN = 1;
-constexpr int MAX_MARGIN = 4;
 constexpr int PAGE_MAX_LINES = 10;
 constexpr int PAGE_LINE_BYTES = 256;
 constexpr int PAGE_HISTORY_MAX = 64;
 
+// Extra space after a paragraph break, ordered from tightest to widest.
+enum class ParagraphGap : uint8_t { NONE, SMALL, HALF, FULL };
+constexpr int PARAGRAPH_GAP_COUNT = 4;
+
 struct Settings {
     uint8_t line_spacing;
-    uint8_t top_margin;
-    uint8_t bottom_margin;
+    ParagraphGap paragraph_gap;
     bool arabic_shaping = false; // Per-document; never inherited from another open.
 };
 
-enum class SettingField : uint8_t { LINE_SPACING, TOP_MARGIN, BOTTOM_MARGIN };
+enum class SettingField : uint8_t { LINE_SPACING, PARAGRAPH_GAP };
+constexpr int SETTING_FIELD_COUNT = 2;
 
 Settings default_settings();
 bool same_settings(const Settings& a, const Settings& b);
 void clamp_settings(Settings& settings);
 void adjust_setting(Settings& settings, SettingField field, int delta);
+const char* paragraph_gap_name(ParagraphGap gap);
+// Pixels added after a paragraph break, on top of the normal line spacing.
+int paragraph_gap_pixels(const Settings& settings);
+// Lines of unbroken text that fit on a page; paragraph breaks can only reduce it.
+int lines_per_page(const Settings& settings);
+// First body row: a full page of unbroken text is centered vertically.
+int page_top(const Settings& settings);
 
 using TextSink = bool (*)(void* context, const unsigned char* bytes, uint32_t count);
 

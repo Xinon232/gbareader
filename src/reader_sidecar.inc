@@ -6,9 +6,8 @@ constexpr uint32_t SAV_SLOT_BYTES = 1024;
 constexpr uint32_t SAV_CACHE_START = 2048;
 constexpr uint32_t SAV_MAX_BYTES = EPUB_MAX_ARCHIVE_BYTES;
 bool valid_side_state(const TxtSaveFooter& state) {
-    if(state.settings.line_spacing<1 || state.settings.line_spacing>4 ||
-       state.settings.top_margin<1 || state.settings.top_margin>4 ||
-       state.settings.bottom_margin<1 || state.settings.bottom_margin>4 ||
+    if(state.settings.line_spacing>MAX_LINE_SPACING ||
+       uint8_t(state.settings.paragraph_gap)>=PARAGRAPH_GAP_COUNT ||
        state.history.count<0 || state.history.count>PAGE_HISTORY_MAX ||
        state.history.head<0 || state.history.head>=PAGE_HISTORY_MAX) return false;
     uint32_t previous=0;

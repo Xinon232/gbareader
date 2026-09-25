@@ -723,7 +723,7 @@ void test_public_name_and_footer_helpers()
     assert(!supported_book_name("a.epub.zip"));
     assert(!supported_book_name(".epub"));
 
-    TxtSaveFooter saved{}; saved.byte_offset = 1234; saved.settings = {2, 3, 4};
+    TxtSaveFooter saved{}; saved.byte_offset = 1234; saved.settings = {2, ParagraphGap::SMALL};
     unsigned char v3[TXT_SAVE_FOOTER_SIZE]; make_txt_save_footer(saved, v3);
     uint32_t logical = 0, footer = 0; bool valid = false;
     assert(book_size_without_footer("book.txt", 5000, v3, sizeof(v3), logical, valid, footer));

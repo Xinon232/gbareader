@@ -472,7 +472,7 @@ FooterWriteTestResult footer_write_transaction_for_tests(uint32_t old_size,int f
     static const unsigned char v1[]="\n[GBAR-SAVE:1;O= 0000123456;S=1;T=1;B=1;C=59AAEAA4                                             \n";
     if(old_size==TXT_SAVE_FOOTER_V1_SIZE) std::memcpy(old,v1,old_size);
     else if(old_size==TXT_SAVE_FOOTER_V2_SIZE){static const unsigned char v2_magic[]="\n[GBAR-SAVE:2]\n";std::memcpy(old,v2_magic,sizeof(v2_magic)-1);put32(old+16,TXT_SAVE_FOOTER_V2_SIZE);put32(old+20,123456);old[24]=old[25]=old[26]=1;old[383]='\n';uint32_t h=2166136261u;for(int i=0;i<TXT_SAVE_FOOTER_V2_SIZE;++i)if(i<28||i>=32)h=(h^old[i])*16777619u;put32(old+28,h);}
-    else { TxtSaveFooter saved{};saved.byte_offset=123456;saved.settings={1,1,1};make_txt_save_footer(saved,old); }
+    else { TxtSaveFooter saved{};saved.byte_offset=123456;saved.settings=default_settings();make_txt_save_footer(saved,old); }
     std::memset(replacement,0x5a,sizeof(replacement));
     struct Ops { unsigned char bytes[1024]{}; uint32_t size=8,pos=0; int limit; bool bad_sync; int writes=0; bool seek(uint32_t p){if(p>size)return false;pos=p;return true;} bool write(const unsigned char* p,uint32_t n){uint32_t take=writes++?n:(n>uint32_t(limit)?uint32_t(limit):n);if(pos+take>sizeof(bytes))return false;std::memcpy(bytes+pos,p,take);pos+=take;if(pos>size)size=pos;return take==n;} bool truncate(){size=pos;return true;} bool sync(){bool bad=bad_sync;bad_sync=false;return !bad;} } ops{{},8,0,first_limit,fail_sync};
     std::memcpy(ops.bytes+8,old,old_size);ops.size=8+old_size;

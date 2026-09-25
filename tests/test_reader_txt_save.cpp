@@ -18,7 +18,7 @@ void test_v2_round_trip_preserves_full_history_ring()
 {
     TxtSaveFooter input{};
     input.byte_offset = 123456;
-    input.settings = {2, 3, 4};
+    input.settings = {0, ParagraphGap::HALF};
     input.history.count = PAGE_HISTORY_MAX;
     input.history.head = 7;
     for(int index = 0; index < PAGE_HISTORY_MAX; ++index) {
@@ -33,9 +33,8 @@ void test_v2_round_trip_preserves_full_history_ring()
     assert(looks_like_txt_save_footer(bytes, sizeof(bytes)));
     assert(parse_txt_save_footer(bytes, sizeof(bytes), output));
     assert(output.byte_offset == input.byte_offset);
-    assert(output.settings.line_spacing == 2);
-    assert(output.settings.top_margin == 3);
-    assert(output.settings.bottom_margin == 4);
+    assert(output.settings.line_spacing == 0);
+    assert(output.settings.paragraph_gap == ParagraphGap::HALF);
     assert(output.history.count == PAGE_HISTORY_MAX);
     assert(output.history.head == 0);
     for(int index = 0; index < PAGE_HISTORY_MAX; ++index)
@@ -49,9 +48,7 @@ void test_v1_footer_remains_readable_and_requests_lazy_history()
     assert(looks_like_txt_save_footer(legacy_v1_footer, TXT_SAVE_FOOTER_V1_SIZE));
     assert(parse_txt_save_footer(legacy_v1_footer, TXT_SAVE_FOOTER_V1_SIZE, output));
     assert(output.byte_offset == 123456);
-    assert(output.settings.line_spacing == 1);
-    assert(output.settings.top_margin == 1);
-    assert(output.settings.bottom_margin == 1);
+    assert(same_settings(output.settings, default_settings()));
     assert(output.history.count == 0);
     assert(output.history.lazy);
     assert(output.history.lazy_anchor == 123456);
@@ -61,7 +58,7 @@ void test_checksum_rejects_corruption()
 {
     TxtSaveFooter input{};
     input.byte_offset = 123456;
-    input.settings = {1, 1, 1};
+    input.settings = default_settings();
     unsigned char bytes[TXT_SAVE_FOOTER_SIZE]{};
     make_txt_save_footer(input, bytes);
     bytes[100] ^= 1;
@@ -78,7 +75,7 @@ void test_v3_ascii_footer_restarts_incomplete_rebuild_safely()
     MemorySource source(text, sizeof(text));
     TxtSaveFooter input{};
     input.byte_offset = 4321;
-    input.settings = {2, 3, 4};
+    input.settings = {0, ParagraphGap::HALF};
     input.history.count = 2;
     input.history.offsets[0] = 100;
     input.history.offsets[1] = 200;
@@ -106,7 +103,7 @@ static void test_display_layout_marker_and_history_restore()
 {
     TxtSaveFooter input{};
     input.byte_offset = 4321;
-    input.settings = {2, 3, 4};
+    input.settings = {0, ParagraphGap::HALF};
     input.history.count = 2;
     input.history.offsets[0] = 100;
     input.history.offsets[1] = 200;
@@ -114,7 +111,7 @@ static void test_display_layout_marker_and_history_restore()
     input.history_rebuild.anchor = 4321;
     unsigned char bytes[TXT_SAVE_FOOTER_SIZE]{};
     make_txt_save_footer(input, bytes);
-    assert(!std::memcmp(bytes + 725, ";L=3", 4));
+    assert(!std::memcmp(bytes + 725, ";L=4", 4));
     TxtSaveFooter parsed{};
     assert(parse_txt_save_footer(bytes, sizeof(bytes), parsed));
     assert(parsed.display_layout == CURRENT_DISPLAY_LAYOUT);
@@ -147,7 +144,7 @@ static void test_display_layout_marker_and_history_restore()
     for(int i = 7; i >= 0; --i) { bytes[717 + i] = hex[checksum & 15]; checksum >>= 4; }
     assert(parse_txt_save_footer(bytes, sizeof(bytes), parsed));
     assert(parsed.display_layout == 0 && parsed.byte_offset == input.byte_offset);
-    assert(same_settings(parsed.settings, input.settings));
+    assert(same_settings(parsed.settings, default_settings()));
     restore_saved_history(parsed, history, rebuild);
     assert(history.count == 0 && history.lazy && history.lazy_anchor == input.byte_offset);
     assert(rebuild.state == HistoryRebuildState::BUILDING && rebuild.anchor == input.byte_offset);
@@ -195,8 +192,48 @@ static void test_sticky_mode_roundtrip()
     assert(!parsed.settings.arabic_shaping);
 }
 
+// Every line spacing and paragraph gap survives a save; pre-layout-4 footers stored
+// top/bottom margins in the same bytes, so they keep position but reset settings.
+static void test_layout_settings_roundtrip_and_old_margin_footers()
+{
+    for(int spacing = MIN_LINE_SPACING; spacing <= MAX_LINE_SPACING; ++spacing) {
+        for(int gap = 0; gap < PARAGRAPH_GAP_COUNT; ++gap) {
+            TxtSaveFooter input{};
+            input.byte_offset = 777;
+            input.settings = {uint8_t(spacing), ParagraphGap(gap)};
+            unsigned char bytes[TXT_SAVE_FOOTER_SIZE];
+            make_txt_save_footer(input, bytes);
+            TxtSaveFooter parsed{};
+            assert(parse_txt_save_footer(bytes, sizeof(bytes), parsed));
+            assert(same_settings(parsed.settings, input.settings));
+        }
+    }
+    TxtSaveFooter old{};
+    old.byte_offset = 777;
+    old.settings = {4, ParagraphGap::NONE};
+    old.display_layout = 3;
+    unsigned char bytes[TXT_SAVE_FOOTER_SIZE];
+    make_txt_save_footer(old, bytes);
+    TxtSaveFooter parsed{};
+    assert(parse_txt_save_footer(bytes, sizeof(bytes), parsed));
+    assert(parsed.byte_offset == 777 && parsed.display_layout == 3);
+    assert(same_settings(parsed.settings, default_settings()));
+
+    // A new footer with an out-of-range gap is rejected, not clamped.
+    TxtSaveFooter current{};
+    make_txt_save_footer(current, bytes);
+    bytes[34] = '4';
+    uint32_t checksum = 2166136261u;
+    for(int i = 0; i < TXT_SAVE_FOOTER_SIZE; ++i)
+        if(i < 717 || i >= 725) checksum = (checksum ^ bytes[i]) * 16777619u;
+    const char hex[] = "0123456789ABCDEF";
+    for(int i = 7; i >= 0; --i) { bytes[717 + i] = hex[checksum & 15]; checksum >>= 4; }
+    assert(!parse_txt_save_footer(bytes, sizeof(bytes), parsed));
+}
+
 int main()
 {
+    test_layout_settings_roundtrip_and_old_margin_footers();
     test_sticky_mode_roundtrip();
     test_display_layout_marker_and_history_restore();
     test_v2_round_trip_preserves_full_history_ring();

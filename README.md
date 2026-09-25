@@ -10,7 +10,7 @@ Reader Up/Down now require the same continuous solo hold as gbawriter Caps. A br
 
 All newly generated per-book data now lives in one companion alongside each book: `Title.txt.sav` for `Title.txt`, and `Title.epub.sav` for `Title.epub`. The original extension is retained, so the two formats do not collide. **The app opens books read-only and never writes, strips, truncates or replaces their bytes**, including during migration and failed saves.
 
-A companion holds the byte bookmark, line spacing, top/bottom margins, sticky Arabic ON/OFF, compatible 64-entry Back history/rebuild metadata, and the entire normalized EPUB text cache. Two fixed-size checked state banks are updated alternately. The large cache is separate: ordinary bookmarks neither grow a log nor rewrite that cache. TXT companions occupy at most 2048 bytes. EPUB companions use 2048 bytes plus a 32-byte cache header, normalized text and a four-byte checksum per 4096-byte block, capped at 128 MiB total.
+A companion holds the byte bookmark, line spacing, paragraph gap, sticky Arabic ON/OFF, compatible 64-entry Back history/rebuild metadata, and the entire normalized EPUB text cache. Two fixed-size checked state banks are updated alternately. The large cache is separate: ordinary bookmarks neither grow a log nor rewrite that cache. TXT companions occupy at most 2048 bytes. EPUB companions use 2048 bytes plus a 32-byte cache header, normalized text and a four-byte checksum per 4096-byte block, capped at 128 MiB total.
 
 This release changes storage, not page layout, fonts, shaping, input or ordinary page-turn behavior. It preserves the existing lazy cache policy: ZIP/package/spine guards, source fingerprint, header and checksum table are checked on opening; normalized blocks are checked as needed. Original chapter inflation/CRC is deferred on a valid cache hit. A failed block is not displayed: validated originals are used, or reading fails safely. New cache creation includes sequential saved-payload readback. No physical SD speed claim is made.
 
@@ -27,7 +27,7 @@ The final release is published from its own release tag/branch. Publishing it do
 - ZIP64, multi-disk archives, encrypted required entries and unsupported required compression are rejected. UTF-16 XML/XHTML, DRM, CSS presentation, scripts, embedded fonts, audio, video and SVG presentation are outside scope.
 - Native 16px SuperFW body font, the existing dedicated UI font, supported Latin/Greek/Cyrillic/Japanese/CJK/Hangul and supplemental publishing symbols. Smart quotes and selected hyphens use the existing display-only ASCII substitutes.
 - Word wrapping, CRLF/LF, UTF-8 BOM and safe malformed-input replacement. Runs of three or more spaces collapse on screen; repeated newlines collapse to one line break. None of this edits the source.
-- Line spacing and margins from 1 to 4; byte anchors rather than saved page numbers; incremental Back-history rebuilding when layout markers differ.
+- Line spacing from 0 to 4 and paragraph gap None/Small/Half/Full, with text centered vertically; byte anchors rather than saved page numbers; incremental Back-history rebuilding when layout markers differ.
 - Native Ghoulam Arabic joining/lam-alef and limited per-line RTL. Harakat are hidden only on screen. Latin and digit runs remain left-to-right. This is not full Unicode bidi or full Persian/Urdu support.
 
 ## Controls
@@ -58,8 +58,8 @@ Current-layout bookmarks retain previous page offsets. Older or unknown layouts 
 
 ### Settings
 
-- `Up` / `Down`: select line spacing, top margin or bottom margin.
-- `Left` / `Right`: change the selected value from 1 through 4.
+- `Up` / `Down`: select line spacing (0 through 4 pixels) or paragraph gap (None, Small, Half or Full line). The screen also shows how many lines of unbroken text fit on a page.
+- `Left` / `Right`: change the selected value.
 - `B` or `Start`: apply settings and return to reading. To retain them, press `Start` again from the reader. Rows stay 16px high; SuperFW is native 16px and Arabic Ghoulam native 11px. Settings changes keep the byte anchor and rebuild incompatible history.
 
 ### Arabic display

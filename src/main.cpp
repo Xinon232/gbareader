@@ -76,7 +76,7 @@ void draw_page(bn::palette_bitmap_bg_painter& painter)
 {
     painter.fill(0);
     uint8_t* pixels = reinterpret_cast<uint8_t*>(painter.page().data());
-    int y = settings.top_margin;
+    int y = reader::page_top(settings);
     for(int line = 0; line < page.line_count; ++line) {
         if(page.lines[line].text[0])
             reader::draw_body_line(
@@ -84,7 +84,7 @@ void draw_page(bn::palette_bitmap_bg_painter& painter)
                     pixels + y * 240 + reader::BODY_SIDE_MARGIN, settings.arabic_shaping);
         if(line + 1 < page.line_count) {
             y += reader::FONT_HEIGHT + settings.line_spacing;
-            if(page.lines[line].paragraph_break) y += reader::FONT_HEIGHT + settings.line_spacing;
+            if(page.lines[line].paragraph_break) y += reader::paragraph_gap_pixels(settings);
         }
     }
     painter.flip_page_later();
@@ -374,7 +374,7 @@ int main()
             }
         } else {
             if(bn::keypad::up_pressed() && settings_row > 0) { --settings_row; redraw_ui = true; }
-            if(bn::keypad::down_pressed() && settings_row < 2) { ++settings_row; redraw_ui = true; }
+            if(bn::keypad::down_pressed() && settings_row < reader::SETTING_FIELD_COUNT - 1) { ++settings_row; redraw_ui = true; }
             int delta = bn::keypad::left_pressed() ? -1 : bn::keypad::right_pressed() ? 1 : 0;
             if(delta) {
                 reader::adjust_setting(settings, reader::SettingField(settings_row), delta);
@@ -438,14 +438,15 @@ int main()
                 add_text(ui, 0, 68, "LEFT/RIGHT  B/START close", sprites);
             } else if(scene == Scene::SETTINGS) {
                 add_text(ui, 0, -62, "Reader settings", sprites);
-                const char* labels[3] = { "Line spacing", "Top margin", "Bottom margin" };
-                int values[3] = { settings.line_spacing, settings.top_margin,
-                                  settings.bottom_margin };
-                for(int i = 0; i < 3; ++i) {
-                    bn::string<48> row = i == settings_row ? "> " : "  ";
-                    row += labels[i]; row += ": "; row += bn::to_string<4>(values[i]);
-                    add_text(ui, 0, -28 + i * 22, row.data(), sprites);
-                }
+                bn::string<48> spacing = settings_row == 0 ? "> " : "  ";
+                spacing += "Line spacing: "; spacing += bn::to_string<4>(settings.line_spacing);
+                add_text(ui, 0, -32, spacing.data(), sprites);
+                bn::string<48> gap = settings_row == 1 ? "> " : "  ";
+                gap += "Paragraph gap: "; gap += reader::paragraph_gap_name(settings.paragraph_gap);
+                add_text(ui, 0, -10, gap.data(), sprites);
+                bn::string<48> lines = "Lines per page: ";
+                lines += bn::to_string<4>(reader::lines_per_page(settings));
+                add_text(ui, 0, 22, lines.data(), sprites);
                 add_text(ui, 0, 54, "LEFT/RIGHT change", sprites);
                 add_text(ui, 0, 68, "B/START close", sprites);
             }

@@ -37,7 +37,7 @@ Each bank:
 | 864 | 156 | Reserved, zero on write |
 | 1020 | 4 | Bank CRC over bytes 0 through 1019 |
 
-The highest valid matching generation wins. A damaged bank falls back to the other complete checked bank, not to embedded state. CRC/header/identity checks precede state parsing. The existing serializer/parser retains the byte anchor, 1–4 spacing/margins, explicit Arabic ON/OFF, display-layout marker 3 and up to 64 strictly increasing prior offsets. BUILDING history intentionally restarts from its anchor because a partial page/scan ring was never fully serialized. Unknown display layouts retain the safe anchor but rebuild boundaries. Unknown container/text versions are not interpreted or automatically overwritten.
+The highest valid matching generation wins. A damaged bank falls back to the other complete checked bank, not to embedded state. CRC/header/identity checks precede state parsing. The existing serializer/parser retains the byte anchor, 0–4 line spacing and paragraph gap (display-layout marker 4; older markers keep the anchor but reset settings), explicit Arabic ON/OFF and up to 64 strictly increasing prior offsets. BUILDING history intentionally restarts from its anchor because a partial page/scan ring was never fully serialized. Unknown display layouts retain the safe anchor but rebuild boundaries. Unknown container/text versions are not interpreted or automatically overwritten.
 
 ## Source identity and limitations
 

@@ -73,7 +73,7 @@ int main() {
     assert(open_document_page(book, &sticky, settings, nullptr, history, page, rebuild,
                               false, Save::write, &save) == OpenResult::OPENED);
     assert(settings.arabic_shaping && save.calls == 0);
-    adjust_setting(settings, SettingField::TOP_MARGIN, 1);
+    adjust_setting(settings, SettingField::PARAGRAPH_GAP, -1);
     assert(settings.arabic_shaping);
 
     // Failed immediate persistence is explicit; ON and the usable page stay in RAM.

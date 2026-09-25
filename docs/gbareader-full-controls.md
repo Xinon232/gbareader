@@ -26,8 +26,8 @@ Current-layout bookmarks retain previous page offsets. Older or unknown layouts 
 
 ### Settings
 
-- `Up` / `Down`: select line spacing, top margin or bottom margin.
-- `Left` / `Right`: change the selected value from 1 through 4.
+- `Up` / `Down`: select line spacing (0 through 4 pixels) or paragraph gap (None, Small, Half or Full line). The screen also shows how many lines of unbroken text fit on a page.
+- `Left` / `Right`: change the selected value.
 - `B` or `Start`: apply settings and return to reading. To retain them, press `Start` again from the reader. Rows stay 16px high; SuperFW is native 16px and Arabic Ghoulam native 11px. Settings changes keep the byte anchor and rebuild incompatible history.
 
 ### Arabic display
