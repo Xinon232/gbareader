@@ -117,6 +117,24 @@ bool next_page(const ByteSource& source, const Settings& settings, GlyphWidth gl
 bool previous_page(const ByteSource& source, const Settings& settings, GlyphWidth glyph_width,
                    PageHistory& history, Page& previous);
 void begin_history_rebuild(uint32_t anchor, PageHistoryRebuild& rebuild);
+
+// Background page numbering: counts pages from the book start up to `target`,
+// one page layout per step, like the Back-history rebuild.
+struct PageCount {
+    Page scan;
+    uint32_t target;
+    uint32_t pages; // Pages starting before target.
+    HistoryRebuildState state;
+    bool initialized;
+};
+void begin_page_count(uint32_t target, PageCount& count);
+HistoryRebuildState step_page_count(const ByteSource& source, const Settings& settings,
+                                    GlyphWidth glyph_width, PageCount& count);
+// 0-100 position of a page; the last page is always 100.
+int page_percent(const Page& page, uint32_t source_size);
+// Start of the paragraph holding `percent` of the book, or the next word when that
+// paragraph starts too far back. Always a valid page start below the source size.
+bool percent_offset(const ByteSource& source, int percent, uint32_t& offset);
 HistoryRebuildState step_history_rebuild(const ByteSource& source, const Settings& settings,
                                          GlyphWidth glyph_width, PageHistoryRebuild& rebuild);
 bool adopt_rebuilt_history(PageHistoryRebuild& rebuild, PageHistory& history);

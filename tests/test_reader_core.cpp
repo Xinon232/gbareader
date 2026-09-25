@@ -309,8 +309,62 @@ static void test_display_punctuation_preserves_source_offsets()
     assert(std::memcmp(original, text, sizeof(original)) == 0);
 }
 
+static void test_page_count_matches_sequential_pages()
+{
+    unsigned char text[12000];
+    for(uint32_t i = 0; i < sizeof(text); ++i) text[i] = (i % 37 == 36) ? '\n' : (i % 6 == 5 ? ' ' : 'a');
+    MemorySource source(text, sizeof(text));
+    const Settings settings = default_settings();
+    PageHistory history{};
+    Page page{}, next{};
+    assert(open_first_page(source, settings, mono_width, history, page));
+    PageCount count{};
+    begin_page_count(page.start_offset, count);
+    assert(count.state == HistoryRebuildState::READY && count.pages == 0);
+    for(uint32_t number = 1; !page.eof; ++number) {
+        begin_page_count(page.start_offset, count);
+        while(count.state == HistoryRebuildState::BUILDING)
+            step_page_count(source, settings, mono_width, count);
+        assert(count.state == HistoryRebuildState::READY);
+        assert(count.pages + 1 == number);
+        if(!next_page(source, settings, mono_width, history, page, next)) break;
+        page = next;
+    }
+    assert(page.eof && page_percent(page, source.size()) == 100);
+}
+
+static void test_percent_offset_snaps_to_paragraph_or_word()
+{
+    const char text[] = "first para\nsecond paragraph here\r\nthird\n\n";
+    MemorySource source(reinterpret_cast<const unsigned char*>(text), sizeof(text) - 1);
+    uint32_t offset = 99;
+    assert(percent_offset(source, 0, offset) && offset == 0);
+    assert(percent_offset(source, 5, offset) && offset == 0);
+    assert(percent_offset(source, 40, offset) && offset == 11); // inside "second"
+    assert(percent_offset(source, 100, offset) && offset == 34); // "third", not the trailing breaks
+    for(int percent = 0; percent <= 100; ++percent) {
+        assert(percent_offset(source, percent, offset));
+        assert(offset < source.size() && (offset == 0 || text[offset - 1] == '\n'));
+    }
+
+    // One huge paragraph: land on the next word, never inside a UTF-8 sequence.
+    static unsigned char long_text[6000];
+    for(uint32_t i = 0; i < sizeof(long_text); i += 3) {
+        long_text[i] = 0xC3; long_text[i + 1] = 0xA9; long_text[i + 2] = (i % 30 == 27) ? ' ' : 'e';
+    }
+    MemorySource long_source(long_text, sizeof(long_text));
+    for(int percent = 1; percent <= 100; ++percent) {
+        assert(percent_offset(long_source, percent, offset));
+        assert(offset < long_source.size() && (long_text[offset] & 0xC0) != 0x80);
+    }
+    MemorySource empty(long_text, 0);
+    assert(!percent_offset(empty, 50, offset));
+}
+
 int main()
 {
+    test_page_count_matches_sequential_pages();
+    test_percent_offset_snaps_to_paragraph_or_word();
     test_display_punctuation_preserves_source_offsets();
     test_page_does_not_read_unfittable_line();
     Settings original = default_settings(), changed = original;

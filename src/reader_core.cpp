@@ -381,6 +381,73 @@ HistoryRebuildState step_history_rebuild(const ByteSource& source, const Setting
     return rebuild.state;
 }
 
+void begin_page_count(uint32_t target, PageCount& count)
+{
+    count = {};
+    count.target = target;
+    count.state = target ? HistoryRebuildState::BUILDING : HistoryRebuildState::READY;
+}
+
+HistoryRebuildState step_page_count(const ByteSource& source, const Settings& settings,
+                                    GlyphWidth glyph_width, PageCount& count)
+{
+    if(count.state != HistoryRebuildState::BUILDING) return count.state;
+    const uint32_t offset = count.initialized ? count.scan.next_offset : 0;
+    if(count.initialized && (count.scan.eof || offset <= count.scan.start_offset)) {
+        count.state = HistoryRebuildState::FAILED;
+        return count.state;
+    }
+    if(!layout_page(source, offset, settings, glyph_width, count.scan)) {
+        count.state = HistoryRebuildState::FAILED;
+        return count.state;
+    }
+    count.initialized = true;
+    if(count.scan.start_offset < count.target) ++count.pages;
+    if(count.scan.eof || count.scan.next_offset >= count.target)
+        count.state = HistoryRebuildState::READY;
+    return count.state;
+}
+
+int page_percent(const Page& page, uint32_t source_size)
+{
+    if(page.eof || source_size == 0) return 100;
+    return int(uint64_t(page.start_offset) * 100 / source_size);
+}
+
+bool percent_offset(const ByteSource& source, int percent, uint32_t& offset)
+{
+    constexpr uint32_t SEARCH_LIMIT = 1024;
+    const uint32_t size = source.size();
+    if(size == 0) return false;
+    if(percent <= 0) { offset = 0; return true; }
+    uint32_t target = percent >= 100 ? size - 1 : uint32_t(uint64_t(size) * uint32_t(percent) / 100);
+    if(target >= size) target = size - 1;
+    unsigned char value = 0;
+    // Step off line ends so a target on a break belongs to the text before it.
+    uint32_t at = target;
+    while(at > 0 && target - at < SEARCH_LIMIT) {
+        if(!source.byte_at(at, value)) return false;
+        if(value != '\n' && value != '\r') break;
+        --at;
+    }
+    const uint32_t lowest = at > SEARCH_LIMIT ? at - SEARCH_LIMIT : 0;
+    for(uint32_t p = at; p > lowest; --p) {
+        if(!source.byte_at(p - 1, value)) return false;
+        if(value == '\n') { offset = p; return true; }
+    }
+    if(lowest == 0) { offset = 0; return true; }
+    // Long paragraph: start at the next word instead.
+    for(uint32_t p = target; p < size && p - target < SEARCH_LIMIT; ++p) {
+        if(!source.byte_at(p, value)) return false;
+        if((value == ' ' || value == '\n') && p + 1 < size) { offset = p + 1; return true; }
+    }
+    // No break nearby: at least avoid starting inside a UTF-8 sequence.
+    uint32_t p = target;
+    while(p > 0 && source.byte_at(p, value) && (value & 0xC0) == 0x80) --p;
+    offset = p;
+    return true;
+}
+
 bool adopt_rebuilt_history(PageHistoryRebuild& rebuild, PageHistory& history)
 {
     if(rebuild.state != HistoryRebuildState::READY) return false;

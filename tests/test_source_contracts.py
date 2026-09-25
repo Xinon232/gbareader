@@ -108,7 +108,10 @@ assert "history_rebuild = {}" not in settings_entry, "settings entry must preser
 assert "settings_before = settings" in settings_entry
 settings_ui = main[main.index("if(bn::keypad::up_pressed() && settings_row"):main.index("if(scene == Scene::READER && reader::tick_save_message")]
 assert "reader::layout_page" not in settings_ui, "no intermediate settings layout"
-assert "if(!reader::same_settings(settings_before, settings))" in settings_ui
+assert "if(jump || !reader::same_settings(settings_before, settings))" in settings_ui
+# Go to changes nothing until close, then relayouts once and restarts page numbering.
+assert "reader::percent_offset(*active_source, goto_percent, resume_offset)" in settings_ui
+assert "restart_page_count();" in settings_ui
 # Cached text is hashed once; the ZIP-member CRC combines finalized header/text CRCs.
 cache_load = epub_source[epub_source.index("bool EpubDocument::load_owned_cache()"):epub_source.index("bool EpubDocument::parse_zip()")]
 assert "whole_crc = crc32_update(whole_crc, block, take)" not in cache_load, "cache text must not be hashed twice"

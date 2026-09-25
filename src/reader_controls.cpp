@@ -22,7 +22,7 @@ const char* const controls_lines[CONTROLS_PAGE_COUNT][CONTROLS_LINES] = {
      "Wait for Saved/Save failed.", "Select: Home WITHOUT save.",
      "State/cache: book.ext.sav", "Copy both book and SAV."},
     {"Up/Down: choose setting.", "Left/Right: change value.",
-     "Line spacing 0 to 4, gap", "None/Small/Half/Full.",
+     "Spacing 0-4, gap None-Full.", "Go to %: L/R step 10.",
      "B/Start: apply and return.", "Reader Start: save changes."},
     {"Arabic: joined, right to left.", "Harakat hidden, not deleted.",
      "Latin and digits stay LTR.", "Ghoulam native 11px font.",

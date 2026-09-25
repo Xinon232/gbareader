@@ -43,7 +43,16 @@ BN_DATA_EWRAM_BSS reader::EpubDocument epub;
 BN_DATA_EWRAM_BSS reader::Page page;
 BN_DATA_EWRAM_BSS reader::PageHistory history;
 BN_DATA_EWRAM_BSS reader::PageHistoryRebuild history_rebuild;
+BN_DATA_EWRAM_BSS reader::PageCount page_count;
 reader::Settings settings;
+// Pages turned since page_count started; page number = counted pages + 1 + turns.
+int page_turns = 0;
+
+void restart_page_count()
+{
+    reader::begin_page_count(page.start_offset, page_count);
+    page_turns = 0;
+}
 
 constexpr int UI_SPRITE_CAPACITY = 127;
 constexpr int SAVE_OVERLAY_SPRITE_CAPACITY = 16;
@@ -183,7 +192,10 @@ int main()
     Scene scene = Scene::LIBRARY;
     int selected = 0;
     int settings_row = 0;
+    constexpr int GOTO_ROW = reader::SETTING_FIELD_COUNT;
     reader::Settings settings_before = settings;
+    int goto_percent = 0;
+    int goto_before = 0;
     // Deliberately session-only: shoulder page turns always start disabled.
     reader::ReaderHold reader_hold{};
     bool redraw_ui = true;
@@ -264,6 +276,7 @@ int main()
                 save_sprites.clear();
                 if(opened != reader::OpenResult::FAILED) {
                     pending_back = false;
+                    restart_page_count();
                     if(opened == reader::OpenResult::SAVE_FAILED) {
                         // ON remains usable in RAM; later Start retries its persistence.
                         show_save_result(save_ui, save_sprites, false);
@@ -297,11 +310,13 @@ int main()
                 pending_back = false;
                 if(reader::next_page(*active_source, settings, glyph_width, history, page, next)) {
                     page = next;
+                    ++page_turns;
                     redraw_page = true;
                 }
             } else if(back_pressed) {
                 if(reader::previous_page(*active_source, settings, glyph_width, history, next)) {
                     page = next;
+                    --page_turns;
                     redraw_page = true;
                 } else if(history_rebuild.state == reader::HistoryRebuildState::BUILDING ||
                           history_rebuild.state == reader::HistoryRebuildState::READY) {
@@ -312,6 +327,7 @@ int main()
             } else if(reader_action == 2) {
                 pending_back = false;
                 settings_before = settings;
+                goto_before = goto_percent = reader::page_percent(page, active_source->size());
                 reader::cancel_save_message(save_message_timer);
                 save_sprites.clear();
                 scene = Scene::SETTINGS;
@@ -340,10 +356,14 @@ int main()
                                     !bn::keypad::a_pressed() && !bn::keypad::b_pressed() &&
                                     !bn::keypad::start_pressed() && !bn::keypad::select_pressed() &&
                                     !bn::keypad::l_pressed() && !bn::keypad::r_pressed();
+            // At most one background page layout per idle frame; Back history first.
             if(scene == Scene::READER && idle_frame &&
                history_rebuild.state == reader::HistoryRebuildState::BUILDING)
                 reader::step_history_rebuild(
                         *active_source, settings, glyph_width, history_rebuild);
+            else if(scene == Scene::READER && idle_frame &&
+                    page_count.state == reader::HistoryRebuildState::BUILDING)
+                reader::step_page_count(*active_source, settings, glyph_width, page_count);
             if(scene == Scene::READER && history.count == 0 &&
                history_rebuild.state == reader::HistoryRebuildState::READY &&
                page.start_offset == history_rebuild.anchor) {
@@ -354,6 +374,7 @@ int main()
                     if(reader::previous_page(
                             *active_source, settings, glyph_width, history, next)) {
                         page = next;
+                        --page_turns;
                         redraw_page = true;
                     }
                 }
@@ -374,17 +395,29 @@ int main()
             }
         } else {
             if(bn::keypad::up_pressed() && settings_row > 0) { --settings_row; redraw_ui = true; }
-            if(bn::keypad::down_pressed() && settings_row < reader::SETTING_FIELD_COUNT - 1) { ++settings_row; redraw_ui = true; }
+            if(bn::keypad::down_pressed() && settings_row < GOTO_ROW) { ++settings_row; redraw_ui = true; }
             int delta = bn::keypad::left_pressed() ? -1 : bn::keypad::right_pressed() ? 1 : 0;
-            if(delta) {
+            if(settings_row == GOTO_ROW) {
+                if(bn::keypad::l_pressed()) delta = -10;
+                if(bn::keypad::r_pressed()) delta = 10;
+                if(delta) {
+                    goto_percent += delta;
+                    if(goto_percent < 0) goto_percent = 0;
+                    if(goto_percent > 100) goto_percent = 100;
+                    redraw_ui = true;
+                }
+            } else if(delta) {
                 reader::adjust_setting(settings, reader::SettingField(settings_row), delta);
                 redraw_ui = true;
             }
             if(bn::keypad::b_pressed() || bn::keypad::start_pressed()) {
-                if(!reader::same_settings(settings_before, settings)) {
-                    const uint32_t resume_offset = page.start_offset;
+                uint32_t resume_offset = page.start_offset;
+                const bool jump = goto_percent != goto_before &&
+                        reader::percent_offset(*active_source, goto_percent, resume_offset);
+                if(jump || !reader::same_settings(settings_before, settings)) {
                     reader::open_page_at(*active_source, resume_offset, settings, glyph_width, history, page);
                     reader::begin_history_rebuild(resume_offset, history_rebuild);
+                    restart_page_count();
                 }
                 pending_back = false;
                 save_sprites.clear();
@@ -440,15 +473,27 @@ int main()
                 add_text(ui, 0, -62, "Reader settings", sprites);
                 bn::string<48> spacing = settings_row == 0 ? "> " : "  ";
                 spacing += "Line spacing: "; spacing += bn::to_string<4>(settings.line_spacing);
-                add_text(ui, 0, -32, spacing.data(), sprites);
+                add_text(ui, 0, -40, spacing.data(), sprites);
                 bn::string<48> gap = settings_row == 1 ? "> " : "  ";
                 gap += "Paragraph gap: "; gap += reader::paragraph_gap_name(settings.paragraph_gap);
-                add_text(ui, 0, -10, gap.data(), sprites);
+                add_text(ui, 0, -24, gap.data(), sprites);
                 bn::string<48> lines = "Lines per page: ";
                 lines += bn::to_string<4>(reader::lines_per_page(settings));
-                add_text(ui, 0, 22, lines.data(), sprites);
-                add_text(ui, 0, 54, "LEFT/RIGHT change", sprites);
-                add_text(ui, 0, 68, "B/START close", sprites);
+                add_text(ui, 0, -8, lines.data(), sprites);
+                bn::string<48> go = settings_row == GOTO_ROW ? "> " : "  ";
+                go += "Go to: "; go += bn::to_string<4>(goto_percent); go += "%";
+                add_text(ui, 0, 16, go.data(), sprites);
+                bn::string<48> where = "Page ";
+                if(page_count.state == reader::HistoryRebuildState::READY) {
+                    const int number = int(page_count.pages) + 1 + page_turns;
+                    where += bn::to_string<12>(number > 0 ? number : 1);
+                } else {
+                    where += "...";
+                }
+                where += " - "; where += bn::to_string<4>(reader::page_percent(page, active_source->size()));
+                where += "%";
+                add_text(ui, 0, 32, where.data(), sprites);
+                add_text(ui, 0, 64, "LEFT/RIGHT change  B close", sprites);
             }
             redraw_ui = false;
         }

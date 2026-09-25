@@ -27,7 +27,7 @@ The final release is published from its own release tag/branch. Publishing it do
 - ZIP64, multi-disk archives, encrypted required entries and unsupported required compression are rejected. UTF-16 XML/XHTML, DRM, CSS presentation, scripts, embedded fonts, audio, video and SVG presentation are outside scope.
 - Native 16px SuperFW body font, the existing dedicated UI font, supported Latin/Greek/Cyrillic/Japanese/CJK/Hangul and supplemental publishing symbols. Smart quotes and selected hyphens use the existing display-only ASCII substitutes.
 - Word wrapping, CRLF/LF, UTF-8 BOM and safe malformed-input replacement. Runs of three or more spaces collapse on screen; repeated newlines collapse to one line break. None of this edits the source.
-- Line spacing from 0 to 4 and paragraph gap None/Small/Half/Full, with text centered vertically; byte anchors rather than saved page numbers; incremental Back-history rebuilding when layout markers differ.
+- Line spacing from 0 to 4 and paragraph gap None/Small/Half/Full, with text centered vertically; page number, percentage and Go to percentage in settings; byte anchors rather than saved page numbers; incremental Back-history rebuilding when layout markers differ.
 - Native Ghoulam Arabic joining/lam-alef and limited per-line RTL. Harakat are hidden only on screen. Latin and digit runs remain left-to-right. This is not full Unicode bidi or full Persian/Urdu support.
 
 ## Controls
@@ -58,8 +58,9 @@ Current-layout bookmarks retain previous page offsets. Older or unknown layouts 
 
 ### Settings
 
-- `Up` / `Down`: select line spacing (0 through 4 pixels) or paragraph gap (None, Small, Half or Full line). The screen also shows how many lines of unbroken text fit on a page.
-- `Left` / `Right`: change the selected value.
+- `Up` / `Down`: select line spacing (0 through 4 pixels), paragraph gap (None, Small, Half or Full line) or Go to. The screen also shows how many lines of unbroken text fit on a page, and the current page number and percentage (`Page ...` while the page count runs in the background).
+- `Left` / `Right`: change the selected value. On Go to, `L` / `R` change it by 10%.
+- Go to jumps to the chosen percentage of the book when settings close, starting at the beginning of that paragraph.
 - `B` or `Start`: apply settings and return to reading. To retain them, press `Start` again from the reader. Rows stay 16px high; SuperFW is native 16px and Arabic Ghoulam native 11px. Settings changes keep the byte anchor and rebuild incompatible history.
 
 ### Arabic display
