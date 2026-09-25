@@ -1,8 +1,12 @@
-# gbareader V1.5
+# gbareader V1.6
 
 Read TXT and EPUB books on your Game Boy Advance. Save your place and return to it later. Put books directly in `/gbareader` on a compatible Supercard SD card; they appear on Home.
 
-## V1.5: deliberate reader controls
+## V1.6: reader settings that change the page
+
+Top and bottom margin are replaced by settings that change how much text fits. Line spacing now goes from 0 to 4 (0 fits ten lines), and the new paragraph gap (None, Small, Half or Full line) controls the space after each paragraph. Text is centered vertically, and settings show lines per page, the current page number and percentage, and a Go to percentage that jumps when settings close. Defaults (spacing 1, Full gap) keep nine lines and the previous look. All V1.5 controls and V1.4 storage are preserved.
+
+## Preserved V1.5: deliberate reader controls
 
 Reader Up/Down now require the same continuous solo hold as gbawriter Caps. A brief foreground UI-font notice confirms shoulder page-turn mode. All V1.4 storage, rendering and other controls are preserved.
 

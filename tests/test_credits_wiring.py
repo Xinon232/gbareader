@@ -7,7 +7,7 @@ assert 'reader::handle_credits_input(' in main
 assert 'reader::draw_credits(' in main
 assert '"Start: Credits"' in main
 assert '"Select: Controls"' in main
-assert '"gbareader V1.5"' in main
+assert '"gbareader V1.6"' in main
 assert '"files: /gbareader"' in main
 assert 'reader::library_path(selected, path)' in main
 assert 'reader::handle_controls_input(' in main

@@ -1,35 +1,34 @@
-# gbareader V1.5 — final
+# gbareader V1.6
 
-Based on V1.4 sidecar release `5947a99ea9a40456e02f7307c05fe10041eee6b5`. Only reader hold controls, their notice, version/help and instructions change. This is a new final/latest release; main and all historical releases/tags/assets are preserved.
+Based on V1.5 release `b7d51688c810150d9274e878825e0bdf28ca5bd2`. Only reader settings, page layout, page numbering, version/help and instructions change. This is a new release; main and all historical releases/tags/assets are preserved.
 
-## Controls
+## Reader settings
 
-- While reading, hold **Up alone** to toggle the existing shoulder page-turn mode; hold **Down alone** to open reader settings.
-- Both require **48 held updates after the initial press**, exactly matching R-only Caps in current gbawriter V1.2 (`577ff2a88b80cd8673672fd16e8629649678fca5`, `InputState::CAPS_HOLD_DELAY = 2 * NAV_REPEAT_DELAY`, where the repeat delay is 24). At nominal GBA cadence this is about 0.8 seconds.
-- Short presses do nothing. A continuous hold acts once. Another key or leaving reading cancels it; release and press again to retry.
-- `L+R: On` / `L+R: Off` briefly appears in the foreground UI font at the top-right. The non-blocking notice lasts 60 application frames, about one second. When enabled, L goes back and R advances. Mode still starts OFF each app launch and is not saved.
-- Library/settings Up/Down remain immediate. All other controls are unchanged. In-app Controls now has nine complete pages.
+- **Line spacing: 0 to 4** pixels (was 1 to 4). 0 fits ten lines; the default 1 still fits nine.
+- **Paragraph gap: None, Small, Half or Full.** Full is one empty line, exactly as before, and is the default. Smaller gaps fit more text on pages with many paragraphs.
+- **Top and bottom margin are removed.** They rarely changed the number of lines. Text is now centered vertically instead of leaving a blank strip at the bottom.
+- **Lines per page** is shown and updates as you change the settings.
+- **Go to: percentage.** Left/Right change it by 1%, L/R by 10%. Nothing moves until settings close with B or Start; the reader then jumps to the start of that paragraph (or the next word inside a very long paragraph).
+- **Page number and percentage**, for example `Page 142 - 37%`. Pages are counted in the background from the start of the book, one page per idle reading frame and never in the same frame as Back-history rebuilding, so it shows `Page ...` for a while after opening, jumping or changing settings.
+
+With default settings the page looks as before, moved down by a few pixels.
 
 ## Files and preservation
 
 Put supported UTF-8 TXT and text-only, DRM-free EPUB books directly in `/gbareader` at the SD-card root. The ROM remains `gbareader.gba`.
 
-V1.4 storage is unchanged: books are opened read-only. State and EPUB cache stay in the full-filename companions `Title.txt.sav` / `Title.epub.sav`. Copy, rename and back up each book together with its companion. Existing migration, recovery, cache, Arabic, byte anchors, layout, fonts and history behavior remain intact. Full details and inherited limitations are in the controls manual and unchanged `sidecar-format.md`.
+V1.4 storage is unchanged: books are opened read-only, and state and EPUB cache stay in `Title.txt.sav` / `Title.epub.sav`. The new settings are stored in the same state fields: the former top-margin byte holds the paragraph gap, and display layout 4 marks the new meaning. Books saved by earlier versions keep their reading position, reset to the default settings, and rebuild Back history once.
 
 ## Verification
 
-- Vertical failing-then-passing tests exercise extracted production keypad sampling, dispatch, timer and render calls, including all short durations, exact threshold, long holds, rearming, every companion and scene interruption, notification reset/expiry and unchanged page/save actions.
-- Full host and ASan/UBSan suites pass. Both actual sector-backed FatFS fixture suites pass their successful-transaction and exercised transient-error gates, including read-only source-byte checks. Unhit fault selectors remain explicitly reported, not counted as tested.
-- Clean native devkitARM build. Unchanged gates: EWRAM 147328 bytes, IWRAM 9528 bytes, largest runtime stack frame 6736 bytes. The bounded keypad sampler uses a 24-byte frame; this is not a whole-call-tree or physical stack proof.
-- Exact release ROM exercised with libmGBA: cold boot V1.5; all nine Controls and seven Credits pages; short/long Up/Down; notice On/Off/expiry; interruption and settings/Home return. Reading uses one explicitly RAM-seeded synthetic page, followed by real emulated keypad input. No ROM/PC/SP/register patching or physical SD claim.
-- Complete four-page controls PDF: deterministic rebuild, Markdown/PDF text parity and every page visually inspected. Independent read-only review found no blocking defect.
+- Full host and ASan/UBSan suites pass. Both sector-backed FatFS fixture suites and the SAV companion suite pass.
+- New tests cover every spacing and gap value, lines per page and centering, save round trips and rejection of invalid values, older-layout saves, background page numbering against sequential paging, percentage snapping (paragraph start, long paragraph, UTF-8 boundaries, end of book) and page-turn counting in the extracted production input code.
+- The ROM is built by the repository's GitHub Actions workflow. It has not been tested on physical Supercard/SD hardware, and background page-count speed has not been measured.
 
-Physical Supercard/SD operation, arbitrary electrical power loss and exhaustive media-failure recovery are not claimed. Keep backups and never remove the card during storage operations.
+Keep backups and never remove the card during storage operations.
 
 ## Downloads
 
 - `gbareader.gba`: runnable ROM.
 - `gbareader-full-controls.pdf`: complete controls and instructions, credited to Halim Jarrar.
 - `gbareader-full-controls.md`: the same complete instructions as text.
-- `sidecar-format.md`: unchanged V1.4 SAV specification.
-- `SHA256SUMS`: checksums for the four files above.

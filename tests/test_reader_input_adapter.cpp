@@ -11,7 +11,7 @@ KEY(up,0) KEY(down,1) KEY(left,2) KEY(right,3) KEY(a,4) KEY(b,5) KEY(start,6) KE
 #undef KEY
 } namespace core {void update(){}} }
 namespace reader {
-struct ByteSource {};
+struct ByteSource {unsigned size() const {return 100;}};
 struct Page {unsigned start_offset=0;};
 struct Settings {};
 struct PageHistory {};
@@ -19,6 +19,7 @@ enum class HistoryRebuildState {BUILDING,READY,FAILED};
 struct PageHistoryRebuild {HistoryRebuildState state=HistoryRebuildState::FAILED;};
 struct TxtSaveFooter {unsigned anchor; Settings settings;PageHistory history;PageHistoryRebuild rebuild;};
 int forwards=0,backs=0,saves=0;
+int page_percent(const Page&,unsigned){return 37;}
 bool next_page(const ByteSource&,Settings,int,PageHistory&,Page&,Page&){++forwards;return true;}
 bool previous_page(const ByteSource&,Settings,int,PageHistory&,Page&){++backs;return true;}
 struct File:ByteSource {void close(){} bool save_footer(TxtSaveFooter,const ByteSource*){++saves;return true;}};
@@ -40,6 +41,7 @@ reader::PageHistoryRebuild history_rebuild;reader::SaveMessageTimer save_message
 reader::ByteSource* active_source=&file;int glyph_width=0,save_ui=0;Sprites save_sprites;
 Sprites sprites;
 bool pending_back=false,redraw_page=false,redraw_ui=false;
+int page_turns=0,goto_percent=0,goto_before=0;
 const char* open_name="synthetic.txt";
 void frame(unsigned keys){bn::keypad::pressed=keys&~bn::keypad::held;bn::keypad::held=keys;
 #include "reader_input.inc"
@@ -102,10 +104,12 @@ for(unsigned key : {1u,2u}) {
 App p;p.frame(0);reader::forwards=reader::backs=reader::saves=0;
 for(unsigned key : {8u,16u,4u,32u,64u}){p.frame(key);p.frame(0);}
 assert(reader::forwards==2 && reader::backs==2 && reader::saves==1);
+assert(p.page_turns==0); // Two forward and two back turns cancel out.
 p.frame(256|512);p.frame(0);assert(reader::forwards==2 && reader::backs==2);
 p.frame(1);for(int i=0;i<48;++i)p.frame(1);p.frame(0);
 assert(reader::forwards==2 && reader::backs==2);
 p.frame(512);p.frame(0);p.frame(256);p.frame(0);
 assert(reader::forwards==3 && reader::backs==3);
+assert(p.page_turns==0);
 puts("PASS: production controls: all 0..47 releases, 48 boundary, once/rearm, every companion/order, scene tails, unchanged navigation/save; overlay 59/60 expiry/reset/exit");
 }

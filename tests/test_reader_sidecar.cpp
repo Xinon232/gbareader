@@ -78,7 +78,7 @@ void fault_cases(const std::string& name,bool cache,bool fresh) {
                 assert(handles.empty());files=baseline;if(fresh)files.erase(name+".sav");
                 ReaderFile source;assert(source.open_read_only(name.c_str()));
                 EpubDocument doc;if(cache)assert(doc.open(source));
-                TxtSaveFooter state{};state.settings={3,2,1,true};state.byte_offset=411;
+                TxtSaveFooter state{};state.settings={3,ParagraphGap::HALF,true};state.byte_offset=411;
                 arm(kind,ordinal);
                 const bool saved=source.save_footer(state,cache?&doc:nullptr);
                 const bool hit=fault_hit;
@@ -107,7 +107,7 @@ void source_recovery_cases(const std::string& name) {
         ReaderFile source;assert(source.open_read_only(name.c_str()));
         EpubDocument doc;const bool epub=name=="Title.epub";
         if(epub)assert(doc.open(source));
-        TxtSaveFooter pending{};pending.byte_offset=411;pending.settings={3,2,1,true};
+        TxtSaveFooter pending{};pending.byte_offset=411;pending.settings={3,ParagraphGap::HALF,true};
         unsigned char expected[TXT_SAVE_FOOTER_SIZE];make_txt_save_footer(pending,expected);
         arm('r',1);assert(!source.save_footer(pending)&&fault_hit);disarm();
         // Fail inside recovery itself, not just the original normal-path sweep.
@@ -124,7 +124,7 @@ void source_recovery_cases(const std::string& name) {
         EpubDocument doc;const bool epub=name=="Title.epub";
         unsigned char warmed=0;
         if(epub)assert(doc.open(source)&&doc.byte_at(0,warmed));
-        TxtSaveFooter pending{};pending.byte_offset=411;pending.settings={3,2,1,true};
+        TxtSaveFooter pending{};pending.byte_offset=411;pending.settings={3,ParagraphGap::HALF,true};
         arm('r',1);assert(!source.save_footer(pending)&&fault_hit);disarm();
         if(resize)files[name].push_back('x');else files[name][0]^=1;
         unsigned char byte=0;assert(!source.byte_at(0,byte));
@@ -142,7 +142,7 @@ int main(int argc,char** argv) {
     files["Title.txt"]=std::vector<unsigned char>(12000,'a');
     const auto original=files.at("Title.txt");
     ReaderFile file; assert(file.open_read_only("Title.txt"));
-    TxtSaveFooter state{};state.byte_offset=300;state.settings={2,3,4,true};
+    TxtSaveFooter state{};state.byte_offset=300;state.settings={2,ParagraphGap::SMALL,true};
     state.history.count=2;state.history.offsets[0]=0;state.history.offsets[1]=100;
     assert(file.save_footer(state));
     assert(source_mutations==0);
@@ -177,7 +177,7 @@ int main(int argc,char** argv) {
     assert(reread==normalized && file.saved_footer(got) && got.byte_offset==state.byte_offset);
     assert(files.at("Title.epub")==epub_original);
     const auto before_invalid=files.at("Title.epub.sav");
-    state.settings.line_spacing=0;
+    state.settings.line_spacing=MAX_LINE_SPACING+1;
     assert(!file.save_footer(state,&epub));
     assert(files.at("Title.epub.sav")==before_invalid);
     state.settings.line_spacing=2;
