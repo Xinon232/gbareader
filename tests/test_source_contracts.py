@@ -112,6 +112,7 @@ assert "if(jump || !reader::same_settings(settings_before, settings))" in settin
 # Go to changes nothing until close, then relayouts once and restarts page numbering.
 assert "reader::percent_offset(*active_source, goto_percent, resume_offset)" in settings_ui
 assert "restart_page_count();" in settings_ui
+assert "settings_row == GOTO_ROW && bn::keypad::a_pressed()" in settings_ui
 # Cached text is hashed once; the ZIP-member CRC combines finalized header/text CRCs.
 cache_load = epub_source[epub_source.index("bool EpubDocument::load_owned_cache()"):epub_source.index("bool EpubDocument::parse_zip()")]
 assert "whole_crc = crc32_update(whole_crc, block, take)" not in cache_load, "cache text must not be hashed twice"

@@ -8,7 +8,7 @@ Based on V1.5 release `b7d51688c810150d9274e878825e0bdf28ca5bd2`. Only reader se
 - **Paragraph gap: None, Small, Half or Full.** Full is one empty line, exactly as before, and is the default. Smaller gaps fit more text on pages with many paragraphs.
 - **Top and bottom margin are removed.** They rarely changed the number of lines. Text is now centered vertically instead of leaving a blank strip at the bottom.
 - **Lines per page** is shown and updates as you change the settings.
-- **Go to: percentage.** Left/Right change it by 1%, L/R by 10%. Nothing moves until settings close with B or Start; the reader then jumps to the start of that paragraph (or the next word inside a very long paragraph).
+- **Go to: percentage.** Left/Right change it by 1%, L/R by 10%. Press A to jump straight away (closing settings with B or Start also jumps if the value changed); the reader jumps to the start of that paragraph (or the next word inside a very long paragraph).
 - **Page number and percentage**, for example `Page 142 - 37%`. Pages are counted in the background from the start of the book, one page per idle reading frame and never in the same frame as Back-history rebuilding, so it shows `Page ...` for a while after opening, jumping or changing settings.
 
 With default settings the page looks as before, moved down by a few pixels.

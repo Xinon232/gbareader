@@ -410,7 +410,9 @@ int main()
                 reader::adjust_setting(settings, reader::SettingField(settings_row), delta);
                 redraw_ui = true;
             }
-            if(bn::keypad::b_pressed() || bn::keypad::start_pressed()) {
+            // A on Go to jumps now; B/Start apply everything and return as before.
+            const bool go_now = settings_row == GOTO_ROW && bn::keypad::a_pressed();
+            if(go_now || bn::keypad::b_pressed() || bn::keypad::start_pressed()) {
                 uint32_t resume_offset = page.start_offset;
                 const bool jump = goto_percent != goto_before &&
                         reader::percent_offset(*active_source, goto_percent, resume_offset);
@@ -493,7 +495,8 @@ int main()
                 where += " - "; where += bn::to_string<4>(reader::page_percent(page, active_source->size()));
                 where += "%";
                 add_text(ui, 0, 32, where.data(), sprites);
-                add_text(ui, 0, 64, "LEFT/RIGHT change  B close", sprites);
+                add_text(ui, 0, 64, settings_row == GOTO_ROW ? "A go  L/R 10%  B close" :
+                                                               "LEFT/RIGHT change  B close", sprites);
             }
             redraw_ui = false;
         }
