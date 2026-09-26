@@ -1,8 +1,12 @@
-# gbareader V1.6
+# gbareader V1.7
 
 Read TXT and EPUB books on your Game Boy Advance. Save your place and return to it later. Put books directly in `/gbareader` on a compatible Supercard SD card; they appear on Home.
 
-## V1.6: reader settings that change the page
+## V1.7: quick Back after Go to, page numbers, gbamp3 UI font
+
+Back right after a Go to (or a resume deep in a book) no longer waits while the whole book up to that point is laid out: Back history is rebuilt from a nearby line start and the next older pages load ahead. The page number keeps counting while Settings is open, shows an estimate (`Page about 142`) until the exact number is known, and Go to keeps the pages already counted. UI text now uses the 5x7 font from gbamp3; the blue `>` cursor also marks the selected book on Home. Book text, storage and controls are unchanged.
+
+## Preserved V1.6: reader settings that change the page
 
 Top and bottom margin are replaced by settings that change how much text fits. Line spacing now goes from 0 to 4 (0 fits ten lines), and the new paragraph gap (None, Small, Half or Full line) controls the space after each paragraph. Text is centered vertically, and settings show lines per page, the current page number and percentage, and a Go to percentage that jumps when settings close. Defaults (spacing 1, Full gap) keep nine lines and the previous look. All V1.5 controls and V1.4 storage are preserved.
 

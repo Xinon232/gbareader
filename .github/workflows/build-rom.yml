@@ -13,11 +13,15 @@ on:
   workflow_dispatch:
     inputs:
       release_id:
-        description: 'Optional: numeric ID of a draft release to fill and publish from this build'
+        description: 'Optional: numeric ID of a draft release to fill and publish (empty with a tag: create the draft)'
         required: false
         default: ''
       tag:
-        description: 'Tag the release creates on this commit (with release_id)'
+        description: 'Tag the release creates on this commit; set it to publish'
+        required: false
+        default: ''
+      name:
+        description: 'Release title when the workflow creates the draft (default: the tag)'
         required: false
         default: ''
 
@@ -65,11 +69,12 @@ jobs:
           path: gbareader.gba
           if-no-files-found: error
 
-  # Manual only: attach this exact build and the controls manual to a draft release,
-  # add checksums, create the tag on this commit and publish it as the latest release.
+  # Manual only: attach this exact build and the controls manual to a draft release
+  # (created here when no release_id is given), add checksums, create the tag on this
+  # commit and publish it as the latest release.
   publish:
     needs: build
-    if: github.event_name == 'workflow_dispatch' && inputs.release_id != '' && inputs.tag != ''
+    if: github.event_name == 'workflow_dispatch' && inputs.tag != ''
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -86,10 +91,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_ID: ${{ inputs.release_id }}
           TAG: ${{ inputs.tag }}
+          NAME: ${{ inputs.name }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
           R="$GITHUB_REPOSITORY"
+          if [ -z "$RELEASE_ID" ]; then
+            if gh api "repos/$R/releases/tags/$TAG" > /dev/null 2>&1; then
+              echo "A release for $TAG already exists" >&2; exit 1
+            fi
+            RELEASE_ID=$(gh api -X POST "repos/$R/releases" -f tag_name="$TAG" \
+              -f target_commitish="$GITHUB_SHA" -f name="${NAME:-$TAG}" -F draft=true --jq '.id')
+          fi
           cp docs/gbareader-full-controls.pdf docs/gbareader-full-controls.md dist/
           cd dist
           test -s gbareader.gba
