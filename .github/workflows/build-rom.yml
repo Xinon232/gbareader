@@ -24,12 +24,17 @@ on:
         description: 'Release title when the workflow creates the draft (default: the tag)'
         required: false
         default: ''
+      gbawriter_ref:
+        description: 'Optional: build this Xinon232/gbawriter commit instead and publish it here as a pre-release (needs a tag)'
+        required: false
+        default: ''
 
 permissions:
   contents: read
 
 jobs:
   build:
+    if: ${{ !inputs.gbawriter_ref }}
     runs-on: ubuntu-latest
     container: devkitpro/devkitarm:20260610
     steps:
@@ -74,7 +79,7 @@ jobs:
   # commit and publish it as the latest release.
   publish:
     needs: build
-    if: github.event_name == 'workflow_dispatch' && inputs.tag != ''
+    if: github.event_name == 'workflow_dispatch' && inputs.tag != '' && !inputs.gbawriter_ref
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -122,3 +127,94 @@ jobs:
           done
           gh api -X PATCH "repos/$R/releases/$RELEASE_ID" -f tag_name="$TAG" -f target_commitish="$GITHUB_SHA" \
             -F body=@body.md -F draft=false -f make_latest=true --jq '.html_url'
+
+  # Manual only: gbawriter is kept in this repo's releases until it moves to its
+  # own. Runs gbawriter's own host tests, FatFS image tests, ROM build and
+  # memory gate on the given commit.
+  gbawriter:
+    if: github.event_name == 'workflow_dispatch' && inputs.gbawriter_ref != ''
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm:20260610
+    steps:
+      - name: Check out GBA Writer
+        uses: actions/checkout@v4
+        with:
+          repository: Xinon232/gbawriter
+          ref: ${{ inputs.gbawriter_ref }}
+      - name: Check out pinned Butano
+        uses: actions/checkout@v4
+        with:
+          repository: GValiente/butano
+          ref: 77dcbcb3d8783596a9f333c64eedbccec77b05dc
+          path: _butano
+      - name: Run host tests
+        run: bash tests/run_host_tests.sh
+      - name: Install FAT image test tools
+        run: apt-get update && apt-get install -y --no-install-recommends dosfstools
+      - name: Test actual FatFS and interrupted-save recovery
+        run: python3 tests/run_fatfs_tests.py
+      - name: Build complete ROM and check memory
+        env:
+          DEVKITPRO: /opt/devkitpro
+          DEVKITARM: /opt/devkitpro/devkitARM
+        run: |
+          make -j2 LIBBUTANO="$GITHUB_WORKSPACE/_butano/butano"
+          make memory-check LIBBUTANO="$GITHUB_WORKSPACE/_butano/butano"
+          test -s gbawriter.gba
+      - name: Record the built commit
+        env:
+          REF: ${{ inputs.gbawriter_ref }}
+        run: printf '%s\n' "$REF" > gbawriter-commit.txt
+      - name: Upload tested ROM and notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: gbawriter-${{ github.run_id }}
+          path: |
+            gbawriter.gba
+            gbawriter-full-controls.pdf
+            RELEASE_NOTES.md
+            gbawriter-commit.txt
+          if-no-files-found: error
+
+  gbawriter-publish:
+    needs: gbawriter
+    if: github.event_name == 'workflow_dispatch' && inputs.gbawriter_ref != '' && inputs.tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download tested ROM
+        uses: actions/download-artifact@v4
+        with:
+          name: gbawriter-${{ github.run_id }}
+          path: dist
+      - name: Publish pre-release (never marked latest)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          NAME: ${{ inputs.name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          R="$GITHUB_REPOSITORY"
+          if gh api "repos/$R/releases/tags/$TAG" > /dev/null 2>&1; then
+            echo "A release for $TAG already exists" >&2; exit 1
+          fi
+          cd dist
+          test -s gbawriter.gba
+          COMMIT=$(cat gbawriter-commit.txt)
+          sha256sum gbawriter.gba gbawriter-full-controls.pdf > SHA256SUMS
+          {
+            sed '/^## Previous release notes/,$d' RELEASE_NOTES.md
+            printf '\nBuilt from [Xinon232/gbawriter@%s](https://github.com/Xinon232/gbawriter/commit/%s) by this repository'"'"'s workflow ([run](%s)), which also ran gbawriter'"'"'s host, FatFS image and memory checks. Published here as a pre-release until gbawriter gets its own releases.\n\n```text\n' "$COMMIT" "$COMMIT" "$RUN_URL"
+            cat SHA256SUMS
+            printf '```\n'
+          } > body.md
+          ID=$(gh api -X POST "repos/$R/releases" -f tag_name="$TAG" -f target_commitish="$GITHUB_SHA" \
+            -f name="${NAME:-$TAG}" -F draft=true -F prerelease=true -f make_latest=false --jq '.id')
+          for name in gbawriter.gba gbawriter-full-controls.pdf SHA256SUMS; do
+            gh api -X POST "https://uploads.github.com/repos/$R/releases/$ID/assets?name=$name" \
+              -H "Content-Type: application/octet-stream" --input "$name" > /dev/null
+          done
+          gh api -X PATCH "repos/$R/releases/$ID" -F body=@body.md -F draft=false -F prerelease=true \
+            -f make_latest=false --jq '.html_url'
