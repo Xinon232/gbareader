@@ -22,11 +22,11 @@ Read TXT and EPUB books, save your reading position, and resume later. Place UTF
 
 Both holds require 48 consecutive held updates after the initial press (about 0.8 seconds), exactly matching gbawriter R-only Caps. Short presses do nothing. Each hold acts once; release before trying again. Any other key or leaving reading cancels that hold. Library/settings Up/Down stay immediate.
 
-Current-layout bookmarks retain previous page offsets. Older or unknown layouts keep the saved byte position but rebuild Back history incrementally. An early Back request shows `Loading back...` while reconstruction proceeds. A partly completed rebuild restarts safely at its saved anchor rather than resuming an incomplete page scan.
+Current-layout bookmarks retain previous page offsets. Older or unknown layouts keep the saved byte position but rebuild Back history incrementally. Back history is rebuilt from a line start about 8 KiB before the page (not from the book start) and the next older block loads ahead while few Back pages remain, so Back after Go to or resume is quick even deep in a book. An early Back request shows `Loading back...` while reconstruction proceeds. A partly completed rebuild restarts safely at its saved anchor rather than resuming an incomplete page scan.
 
 ### Settings
 
-- `Up` / `Down`: select line spacing (0 through 4 pixels), paragraph gap (None, Small, Half or Full line) or Go to. The screen also shows how many lines of unbroken text fit on a page, and the current page number and percentage (`Page ...` while the page count runs in the background).
+- `Up` / `Down`: select line spacing (0 through 4 pixels), paragraph gap (None, Small, Half or Full line) or Go to. The screen also shows how many lines of unbroken text fit on a page, and the current page number and percentage. While the page count runs in the background (also while Settings is open) it shows `Page ...`, then an estimate such as `Page about 142`, until the exact number is known. After Go to, pages already counted are kept.
 - `Left` / `Right`: change the selected value. On Go to, `L` / `R` change it by 10%.
 - Go to: press `A` to jump to the chosen percentage straight away (closing settings with `B` or `Start` also jumps if the value changed). The jump starts at the beginning of that paragraph.
 - `B` or `Start`: apply settings and return to reading. To retain them, press `Start` again from the reader. Rows stay 16px high; SuperFW is native 16px and Arabic Ghoulam native 11px. Settings changes keep the byte anchor and rebuild incompatible history.
@@ -76,7 +76,9 @@ UNSCII by Viznut: the included unscii-16-full-derived font pack is GPL, not whol
 
 GNU Unifont / Hangul: Roman Czyborra, Paul Hardy and Unifont contributors. GPL v2 or later with the GNU font embedding exception. https://www.unifoundry.com/unifont/. The inherited exact font snapshot version is not recorded; no claim of eligibility for a newer alternative OFL license is made.
 
-Butano engine and UI font: Gustavo Valiente, zlib license. Built with devkitARM / devkitPro. FatFs © 2022 ChaN, permissive redistribution terms in src/ff.c. Framework dependency notices remain in the Butano source distribution.
+UI font: the 5x7 font from gbamp3 v0.9.8 by Halim Jarrar, part of this project family (GPL v3 or later). https://github.com/Xinon232/gbamp3.
+
+Butano engine and cursor font: Gustavo Valiente, zlib license. Built with devkitARM / devkitPro. FatFs © 2022 ChaN, permissive redistribution terms in src/ff.c. Framework dependency notices remain in the Butano source distribution.
 
 miniz: MIT license; © 2010–2014 Rich Geldreich and Tenacious Software LLC; © 2013–2014 RAD Game Tools and Valve Software. Complete notice in third_party/miniz/LICENSE.
 

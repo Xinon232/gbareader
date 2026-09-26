@@ -29,7 +29,7 @@ The final release is published from its own release tag/branch. Publishing it do
 - Visible XHTML text including CDATA, block/table breaks and common XML/HTML entities. Images and image-only spine pages are skipped.
 - Limits remain 256 readable spine documents, 255-byte internal paths, 64 KiB uncompressed metadata, 32 MiB uncompressed XHTML per spine document, 16 MiB compressed required entry and 128 MiB source archive. A 32 KiB inflater dictionary and 16 KiB text window bound chapter processing. Applicable errors are reported, never silently truncated.
 - ZIP64, multi-disk archives, encrypted required entries and unsupported required compression are rejected. UTF-16 XML/XHTML, DRM, CSS presentation, scripts, embedded fonts, audio, video and SVG presentation are outside scope.
-- Native 16px SuperFW body font, the existing dedicated UI font, supported Latin/Greek/Cyrillic/Japanese/CJK/Hangul and supplemental publishing symbols. Smart quotes and selected hyphens use the existing display-only ASCII substitutes.
+- Native 16px SuperFW body font, the gbamp3 5x7 UI font (with the blue Butano `>` cursor), supported Latin/Greek/Cyrillic/Japanese/CJK/Hangul and supplemental publishing symbols. Smart quotes and selected hyphens use the existing display-only ASCII substitutes.
 - Word wrapping, CRLF/LF, UTF-8 BOM and safe malformed-input replacement. Runs of three or more spaces collapse on screen; repeated newlines collapse to one line break. None of this edits the source.
 - Line spacing from 0 to 4 and paragraph gap None/Small/Half/Full, with text centered vertically; page number, percentage and Go to percentage in settings; byte anchors rather than saved page numbers; incremental Back-history rebuilding when layout markers differ.
 - Native Ghoulam Arabic joining/lam-alef and limited per-line RTL. Harakat are hidden only on screen. Latin and digit runs remain left-to-right. This is not full Unicode bidi or full Persian/Urdu support.
@@ -58,11 +58,11 @@ See [the full controls PDF](docs/gbareader-full-controls.pdf) and [downloadable 
 
 Both holds require 48 consecutive held updates after the initial press (about 0.8 seconds), exactly matching gbawriter R-only Caps. Short presses do nothing. Each hold acts once; release before trying again. Any other key or leaving reading cancels that hold. Library/settings Up/Down stay immediate.
 
-Current-layout bookmarks retain previous page offsets. Older or unknown layouts keep the saved byte position but rebuild Back history incrementally. An early Back request shows `Loading back...` while reconstruction proceeds. A partly completed rebuild restarts safely at its saved anchor rather than resuming an incomplete page scan.
+Current-layout bookmarks retain previous page offsets. Older or unknown layouts keep the saved byte position but rebuild Back history incrementally. Back history is rebuilt from a line start about 8 KiB before the page (not from the book start) and the next older block loads ahead while few Back pages remain, so Back after Go to or resume is quick even deep in a book. An early Back request shows `Loading back...` while reconstruction proceeds. A partly completed rebuild restarts safely at its saved anchor rather than resuming an incomplete page scan.
 
 ### Settings
 
-- `Up` / `Down`: select line spacing (0 through 4 pixels), paragraph gap (None, Small, Half or Full line) or Go to. The screen also shows how many lines of unbroken text fit on a page, and the current page number and percentage (`Page ...` while the page count runs in the background).
+- `Up` / `Down`: select line spacing (0 through 4 pixels), paragraph gap (None, Small, Half or Full line) or Go to. The screen also shows how many lines of unbroken text fit on a page, and the current page number and percentage. While the page count runs in the background (also while Settings is open) it shows `Page ...`, then an estimate such as `Page about 142`, until the exact number is known. After Go to, pages already counted are kept.
 - `Left` / `Right`: change the selected value. On Go to, `L` / `R` change it by 10%.
 - Go to: press `A` to jump to the chosen percentage straight away (closing settings with `B` or `Start` also jumps if the value changed). The jump starts at the beginning of that paragraph.
 - `B` or `Start`: apply settings and return to reading. To retain them, press `Start` again from the reader. Rows stay 16px high; SuperFW is native 16px and Arabic Ghoulam native 11px. Settings changes keep the byte anchor and rebuild incompatible history.
@@ -135,7 +135,7 @@ Made by Halim Jarrar · © 2026 · halim-jarrar.de · monday@halim-jarrar.de
 
 Ghoulam Regular © 2025 Imad AlFil / mloukhiyye, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). [Font source](https://mloukhiyye.itch.io/ghoulam-arabic-pixel-art-font-version-1). Actual GSUB glyphs were converted to native 11px monochrome ROM rows; this modified representation is not author endorsement. See [Arabic policy and provenance](docs/arabic.md).
 
-The project derives from [`gba-vocab-trainer-CC` v0.2.5](https://github.com/Xinon232/gba-vocab-trainer-CC/releases/tag/v0.2.5). Its Supercard/FatFS integration and customized UI font are retained. SuperFW font-rendering sources and font packs retain upstream notices under `references/superfw/`. The inherited UNSCII full-derived pack includes GNU Unifont and public-domain Fixedsys Excelsior glyphs; it is not wholly public domain.
+The project derives from [`gba-vocab-trainer-CC` v0.2.5](https://github.com/Xinon232/gba-vocab-trainer-CC/releases/tag/v0.2.5). Its Supercard/FatFS integration is retained; its Butano UI font now only draws the `>` cursor, and UI text uses the 5x7 font from [gbamp3](https://github.com/Xinon232/gbamp3) v0.9.8 (generated by `tools/make_ui_small_font.py`). SuperFW font-rendering sources and font packs retain upstream notices under `references/superfw/`. The inherited UNSCII full-derived pack includes GNU Unifont and public-domain Fixedsys Excelsior glyphs; it is not wholly public domain.
 
 The tinfl-only miniz files are vendored from `77d0dce8627735138c51770d1799a1ef48f2117d`, without allocation, compression, zlib, stdio, time or miniz archive APIs. Provenance and MIT license: `third_party/miniz/`.
 

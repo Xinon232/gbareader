@@ -116,20 +116,41 @@ bool next_page(const ByteSource& source, const Settings& settings, GlyphWidth gl
                PageHistory& history, const Page& current, Page& next);
 bool previous_page(const ByteSource& source, const Settings& settings, GlyphWidth glyph_width,
                    PageHistory& history, Page& previous);
+// Back history is rebuilt from a line start about this far before its anchor, not from
+// the book start, so Back after a deep Go to or resume only lays out a few pages.
+constexpr uint32_t HISTORY_REBUILD_WINDOW = 8 * 1024;
+// With fewer remembered pages than this, the pages before the oldest one load ahead.
+constexpr int HISTORY_PREFETCH_PAGES = 8;
 void begin_history_rebuild(uint32_t anchor, PageHistoryRebuild& rebuild);
+// Where the next older window must end: the oldest remembered page, else `current`.
+uint32_t history_rebuild_anchor(const PageHistory& history, uint32_t current);
 
 // Background page numbering: counts pages from the book start up to `target`,
 // one page layout per step, like the Back-history rebuild.
+constexpr int PAGE_COUNT_CHECKPOINTS = 32;
 struct PageCount {
     Page scan;
     uint32_t target;
     uint32_t pages; // Pages starting before target.
+    uint32_t start_offset; // Where the scan resumes; `pages` already counts pages before it.
     HistoryRebuildState state;
     bool initialized;
+    // Page starts already counted with these settings (offset, pages before it), every
+    // `checkpoint_stride` pages, so a new target resumes instead of starting over.
+    uint32_t checkpoint_offsets[PAGE_COUNT_CHECKPOINTS];
+    uint32_t checkpoint_pages[PAGE_COUNT_CHECKPOINTS];
+    int checkpoint_count;
+    uint32_t checkpoint_stride;
 };
 void begin_page_count(uint32_t target, PageCount& count);
+// Same settings, new target (Go to): keep counted pages and resume from the nearest
+// counted page start before `target`.
+void retarget_page_count(uint32_t target, PageCount& count);
 HistoryRebuildState step_page_count(const ByteSource& source, const Settings& settings,
                                     GlyphWidth glyph_width, PageCount& count);
+// Pages before the target: exact when READY, projected from the pages counted so far
+// while BUILDING, -1 before there is anything to project from (or FAILED).
+int page_count_estimate(const PageCount& count);
 // 0-100 position of a page; the last page is always 100.
 int page_percent(const Page& page, uint32_t source_size);
 // Start of the paragraph holding `percent` of the book, or the next word when that
@@ -138,5 +159,8 @@ bool percent_offset(const ByteSource& source, int percent, uint32_t& offset);
 HistoryRebuildState step_history_rebuild(const ByteSource& source, const Settings& settings,
                                          GlyphWidth glyph_width, PageHistoryRebuild& rebuild);
 bool adopt_rebuilt_history(PageHistoryRebuild& rebuild, PageHistory& history);
+// Put a ready window that ends at the oldest remembered page in front of it (the newest
+// PAGE_HISTORY_MAX pages are kept).
+bool prepend_rebuilt_history(PageHistoryRebuild& rebuild, PageHistory& history);
 
 }

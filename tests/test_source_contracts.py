@@ -108,10 +108,18 @@ assert "history_rebuild = {}" not in settings_entry, "settings entry must preser
 assert "settings_before = settings" in settings_entry
 settings_ui = main[main.index("if(bn::keypad::up_pressed() && settings_row"):main.index("if(scene == Scene::READER && reader::tick_save_message")]
 assert "reader::layout_page" not in settings_ui, "no intermediate settings layout"
-assert "if(jump || !reader::same_settings(settings_before, settings))" in settings_ui
+assert "const bool relayout = !reader::same_settings(settings_before, settings);" in settings_ui
+assert "if(jump || relayout)" in settings_ui
 # Go to changes nothing until close, then relayouts once and restarts page numbering.
 assert "reader::percent_offset(*active_source, goto_percent, resume_offset)" in settings_ui
-assert "restart_page_count();" in settings_ui
+assert "if(relayout) restart_page_count();" in settings_ui
+# A plain Go to keeps the pages already counted with unchanged settings.
+assert "else retarget_page_count();" in settings_ui
+# Back history is rebuilt from a nearby line start, not the book start.
+assert "HISTORY_REBUILD_WINDOW" in core
+# UI text uses gbamp3's 5x7 font; the blue Butano font stays for the cursor.
+assert "bn::sprite_items::ui_small_font" in main
+assert 'add_text(cursor_ui, 8 - 120, y - 72, ">", sprites);' in main
 assert "settings_row == GOTO_ROW && bn::keypad::a_pressed()" in settings_ui
 # Cached text is hashed once; the ZIP-member CRC combines finalized header/text CRCs.
 cache_load = epub_source[epub_source.index("bool EpubDocument::load_owned_cache()"):epub_source.index("bool EpubDocument::parse_zip()")]

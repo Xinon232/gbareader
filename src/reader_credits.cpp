@@ -18,8 +18,8 @@ const char* const credits_lines[CREDITS_PAGE_COUNT][CREDITS_LINES] = {
      "Fixedsys: public domain.", "viznut.fi/unscii"},
     {"GNU Unifont / Hangul", "Roman Czyborra, Paul Hardy", "and Unifont contributors", "GPL v2+ with font exception",
      "unifoundry.com/unifont", "Full notices in source/manual."},
-    {"Butano engine and UI font", "Gustavo Valiente - zlib", "devkitARM / devkitPro", "FatFs (C) 2022 ChaN",
-     "Permissive FatFs license.", "See source license notices."},
+    {"Butano engine, cursor font", "Gustavo Valiente - zlib", "UI font: gbamp3 5x7 font",
+     "devkitARM / devkitPro", "FatFs (C) 2022 ChaN, permissive", "See source license notices."},
     {"miniz - MIT license", "Rich Geldreich / Tenacious", "RAD Game Tools / Valve", "Based on gba-vocab-trainer-CC",
      "v0.2.5; project GPL v3+", "github.com/Xinon232/gbareader"}
 };

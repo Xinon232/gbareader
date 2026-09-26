@@ -16,7 +16,7 @@ void* reader_font_base_addr;
 }
 using Pixels = std::array<uint16_t, 240 * 160 / 2>;
 struct Painter { Pixels pixels{}; Pixels& page() { return pixels; } };
-struct UI { bool left=false; void set_left_alignment() { left=true; } };
+struct UI { bool left=false; void set_left_alignment() { left=true; } void set_center_alignment() { left=false; } };
 using Label = std::tuple<int,int,std::string,bool>;
 using Labels = std::vector<Label>;
 static void add_text(UI& ui,int x,int y,const char* text,Labels& labels) {
@@ -28,7 +28,8 @@ int library_count() { return int(names.size()); }
 const char* library_name(int i) { return names.at(i).c_str(); }
 }
 static void render(Painter& painter,Labels& sprites,int selected,bool storage_ok,const char* library_status=nullptr) {
-    UI ui;
+    UI ui, hint_ui, cursor_ui;
+    cursor_ui.set_left_alignment();
     constexpr int LIBRARY_VISIBLE_ROWS=reader::LIBRARY_VISIBLE_ROWS;
 #include "library_branch.inc"
 }
@@ -56,7 +57,6 @@ int main(int argc,char** argv) {
                 const int first=count<=5?0:std::min(std::max(selected-1,0),count-5);
                 for(int i=first;i<count && i<first+5;++i) {
                     const int y=48+(i-first)*16;
-                    text(expected,i==selected?">":" ",8,y,12);
                     text(expected,names[i].c_str(),22,y,210);
                 }
             } else {
@@ -65,7 +65,14 @@ int main(int argc,char** argv) {
                 text(expected,"on SD root, then restart.",8,94,224);
             }
             assert(painter.pixels==expected); // Entire framebuffer, including blank margins.
-            assert(actual_labels==labels);
+            Labels expected_labels=labels;
+            if(count) {
+                const int first=count<=5?0:std::min(std::max(selected-1,0),count-5);
+                // Blue Butano cursor sprite, its 16 px cell on the selected name row.
+                expected_labels.insert(expected_labels.begin()+2,
+                        Label{8-120,48+(selected-first)*16-72,">",true});
+            }
+            assert(actual_labels==expected_labels);
         }
     }
     names.clear(); Painter missing; Labels missing_labels; Pixels expected{};

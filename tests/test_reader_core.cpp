@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstdio>
 #include <cstring>
+#include <initializer_list>
 
 using namespace reader;
 
@@ -309,6 +310,137 @@ static void test_display_punctuation_preserves_source_offsets()
     assert(std::memcmp(original, text, sizeof(original)) == 0);
 }
 
+static void test_deep_history_rebuild_starts_near_anchor()
+{
+    // Deep Go to / resume: Back history comes from a line start one window before the
+    // anchor, so it never lays out the book from byte zero.
+    static unsigned char text[200000];
+    for(uint32_t i = 0; i < sizeof(text); ++i) text[i] = (i % 37 == 36) ? '\n' : (i % 6 == 5 ? ' ' : 'a');
+    CountingSource source(text, sizeof(text));
+    const Settings settings = default_settings();
+    uint32_t anchor = 0;
+    assert(percent_offset(source, 80, anchor) && anchor > HISTORY_REBUILD_WINDOW);
+    PageHistory history{};
+    Page page{};
+    assert(open_page_at(source, anchor, settings, mono_width, history, page));
+    PageHistoryRebuild rebuild{};
+    begin_history_rebuild(anchor, rebuild);
+    source.zero_reads = 0;
+    int steps = 0;
+    while(rebuild.state == HistoryRebuildState::BUILDING && steps < 1000) {
+        step_history_rebuild(source, settings, mono_width, rebuild);
+        ++steps;
+    }
+    assert(rebuild.state == HistoryRebuildState::READY);
+    assert(source.zero_reads == 0);
+    // About one window of pages (~50 here), not the ~960 before the anchor.
+    assert(steps < 80);
+    assert(adopt_rebuilt_history(rebuild, history));
+    assert(history.count > 0);
+    // Pages walk back contiguously to a line start at most one window before the anchor.
+    uint32_t newer = anchor;
+    Page previous{};
+    while(previous_page(source, settings, mono_width, history, previous)) {
+        assert(previous.start_offset < newer);
+        // The newest rebuilt page reaches the anchor; older ones end where the next starts.
+        if(newer == anchor) assert(previous.next_offset >= anchor);
+        else assert(previous.next_offset == newer);
+        newer = previous.start_offset;
+    }
+    assert(newer + HISTORY_REBUILD_WINDOW + 1024 >= anchor);
+    // Back ran out: the next rebuild continues from the oldest page shown.
+    assert(history_rebuild_anchor(history, newer) == newer);
+    begin_history_rebuild(newer, rebuild);
+    while(rebuild.state == HistoryRebuildState::BUILDING)
+        step_history_rebuild(source, settings, mono_width, rebuild);
+    assert(adopt_rebuilt_history(rebuild, history));
+    assert(previous_page(source, settings, mono_width, history, previous));
+    assert(previous.start_offset < newer && previous.next_offset >= newer);
+    assert(source.zero_reads == 0);
+
+    // Prefetch: a window ending at the oldest remembered page goes in front of it.
+    const int kept = history.count;
+    const uint32_t oldest = history_rebuild_anchor(history, 0);
+    uint32_t remembered[PAGE_HISTORY_MAX];
+    for(int i = 0; i < kept; ++i) remembered[i] = history.offsets[(history.head + i) % PAGE_HISTORY_MAX];
+    begin_history_rebuild(oldest, rebuild);
+    while(rebuild.state == HistoryRebuildState::BUILDING)
+        step_history_rebuild(source, settings, mono_width, rebuild);
+    const int added = rebuild.rebuilt.count;
+    assert(prepend_rebuilt_history(rebuild, history));
+    assert(history.count == (kept + added < PAGE_HISTORY_MAX ? kept + added : PAGE_HISTORY_MAX));
+    for(int i = kept - 1; i >= 0; --i) {
+        assert(previous_page(source, settings, mono_width, history, previous));
+        assert(previous.start_offset == remembered[i]);
+    }
+    assert(previous_page(source, settings, mono_width, history, previous));
+    assert(previous.start_offset < oldest && previous.next_offset >= oldest);
+    // A window for another anchor is refused.
+    begin_history_rebuild(12345, rebuild);
+    while(rebuild.state == HistoryRebuildState::BUILDING)
+        step_history_rebuild(source, settings, mono_width, rebuild);
+    assert(!prepend_rebuilt_history(rebuild, history));
+}
+
+static void count_to(const ByteSource& source, const Settings& settings, PageCount& count)
+{
+    while(count.state == HistoryRebuildState::BUILDING)
+        step_page_count(source, settings, mono_width, count);
+    assert(count.state == HistoryRebuildState::READY);
+}
+
+static void test_page_count_estimate_tracks_progress()
+{
+    static unsigned char text[120000];
+    for(uint32_t i = 0; i < sizeof(text); ++i) text[i] = (i % 37 == 36) ? '\n' : (i % 6 == 5 ? ' ' : 'a');
+    MemorySource source(text, sizeof(text));
+    const Settings settings = default_settings();
+    uint32_t target = 0;
+    assert(percent_offset(source, 90, target));
+    PageCount exact{};
+    begin_page_count(target, exact);
+    count_to(source, settings, exact);
+    PageCount count{};
+    begin_page_count(target, count);
+    assert(page_count_estimate(count) == -1);
+    for(int i = 0; i < 20; ++i) step_page_count(source, settings, mono_width, count);
+    const int estimate = page_count_estimate(count);
+    // Uniform text: a projection from 20 pages lands within 10% of the exact count.
+    assert(estimate * 10 >= int(exact.pages) * 9 && estimate * 10 <= int(exact.pages) * 11);
+}
+
+static void test_page_count_retarget_resumes_counted_pages()
+{
+    static unsigned char text[120000];
+    for(uint32_t i = 0; i < sizeof(text); ++i) text[i] = (i % 37 == 36) ? '\n' : (i % 6 == 5 ? ' ' : 'a');
+    CountingSource source(text, sizeof(text));
+    const Settings settings = default_settings();
+    PageCount count{};
+    begin_page_count(0, count);
+    for(int percent : {50, 90, 10, 70, 0, 100, 30}) {
+        uint32_t target = 0;
+        assert(percent_offset(source, percent, target));
+        PageCount fresh{};
+        begin_page_count(target, fresh);
+        count_to(source, settings, fresh);
+        const uint32_t reads = source.reads;
+        retarget_page_count(target, count);
+        if(target) {
+            assert(page_count_estimate(count) == -1); // Nothing laid out since retarget yet.
+            step_page_count(source, settings, mono_width, count);
+            if(count.state == HistoryRebuildState::BUILDING) {
+                const int estimate = page_count_estimate(count);
+                assert(estimate >= int(count.pages));
+            }
+        }
+        count_to(source, settings, count);
+        assert(page_count_estimate(count) == int(count.pages));
+        assert(count.pages == fresh.pages); // Same number as counting from the book start.
+        if(percent == 10 || percent == 30 || percent == 70) // Already counted past these.
+            assert(source.reads - reads < 16 * 1024);
+    }
+}
+
 static void test_page_count_matches_sequential_pages()
 {
     unsigned char text[12000];
@@ -364,6 +496,9 @@ static void test_percent_offset_snaps_to_paragraph_or_word()
 int main()
 {
     test_page_count_matches_sequential_pages();
+    test_deep_history_rebuild_starts_near_anchor();
+    test_page_count_retarget_resumes_counted_pages();
+    test_page_count_estimate_tracks_progress();
     test_percent_offset_snaps_to_paragraph_or_word();
     test_display_punctuation_preserves_source_offsets();
     test_page_does_not_read_unfittable_line();

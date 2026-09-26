@@ -138,7 +138,7 @@ int main(int argc, char** argv)
             "unscii-16-full: GPL", "Fixedsys Excelsior", "public domain", "GNU Unifont / Hangul",
             "Roman Czyborra, Paul Hardy", "GPL v2+ with font exception", "Butano", "Gustavo Valiente",
             "zlib", "devkitARM / devkitPro", "FatFs (C) 2022 ChaN", "miniz - MIT", "Rich Geldreich",
-            "RAD Game Tools / Valve", "gba-vocab-trainer-CC"}) assert(notices.find(required) != std::string::npos);
+            "RAD Game Tools / Valve", "gba-vocab-trainer-CC", "UI font: gbamp3 5x7 font"}) assert(notices.find(required) != std::string::npos);
     assert(reader::CONTROLS_PAGE_COUNT == 9);
     assert(!std::strcmp(reader::controls_lines[8][0], "Hold Up/Down alone: 48 frames."));
     assert(!std::strcmp(reader::controls_lines[6][0], "Arabic starts OFF per book."));

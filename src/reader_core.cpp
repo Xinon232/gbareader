@@ -309,6 +309,40 @@ static void remember_page(PageHistory& history, uint32_t offset)
     }
 }
 
+// Start of the paragraph holding `target`, or the next word when that paragraph
+// starts too far back; never inside a UTF-8 sequence.
+static bool snap_to_break(const ByteSource& source, uint32_t target, uint32_t& offset)
+{
+    constexpr uint32_t SEARCH_LIMIT = 1024;
+    const uint32_t size = source.size();
+    if(size == 0) return false;
+    if(target >= size) target = size - 1;
+    unsigned char value = 0;
+    // Step off line ends so a target on a break belongs to the text before it.
+    uint32_t at = target;
+    while(at > 0 && target - at < SEARCH_LIMIT) {
+        if(!source.byte_at(at, value)) return false;
+        if(value != '\n' && value != '\r') break;
+        --at;
+    }
+    const uint32_t lowest = at > SEARCH_LIMIT ? at - SEARCH_LIMIT : 0;
+    for(uint32_t p = at; p > lowest; --p) {
+        if(!source.byte_at(p - 1, value)) return false;
+        if(value == '\n') { offset = p; return true; }
+    }
+    if(lowest == 0) { offset = 0; return true; }
+    // Long paragraph: start at the next word instead.
+    for(uint32_t p = target; p < size && p - target < SEARCH_LIMIT; ++p) {
+        if(!source.byte_at(p, value)) return false;
+        if((value == ' ' || value == '\n') && p + 1 < size) { offset = p + 1; return true; }
+    }
+    // No break nearby: at least avoid starting inside a UTF-8 sequence.
+    uint32_t p = target;
+    while(p > 0 && source.byte_at(p, value) && (value & 0xC0) == 0x80) --p;
+    offset = p;
+    return true;
+}
+
 bool open_page_at(const ByteSource& source, uint32_t offset, const Settings& settings,
                   GlyphWidth glyph_width, PageHistory& history, Page& page)
 {
@@ -353,7 +387,12 @@ HistoryRebuildState step_history_rebuild(const ByteSource& source, const Setting
     if(rebuild.state != HistoryRebuildState::BUILDING) return rebuild.state;
 
     if(!rebuild.initialized) {
-        if(!layout_page(source, 0, settings, glyph_width, rebuild.scan)) {
+        uint32_t start = 0;
+        if(rebuild.anchor > HISTORY_REBUILD_WINDOW &&
+           (!snap_to_break(source, rebuild.anchor - HISTORY_REBUILD_WINDOW, start) ||
+            start >= rebuild.anchor))
+            start = 0;
+        if(!layout_page(source, start, settings, glyph_width, rebuild.scan)) {
             rebuild.state = HistoryRebuildState::FAILED;
             return rebuild.state;
         }
@@ -385,14 +424,61 @@ void begin_page_count(uint32_t target, PageCount& count)
 {
     count = {};
     count.target = target;
+    count.checkpoint_stride = 1;
     count.state = target ? HistoryRebuildState::BUILDING : HistoryRebuildState::READY;
+}
+
+void retarget_page_count(uint32_t target, PageCount& count)
+{
+    if(count.checkpoint_stride == 0) { begin_page_count(target, count); return; }
+    uint32_t best_offset = 0, best_pages = 0;
+    for(int i = 0; i < count.checkpoint_count; ++i)
+        if(count.checkpoint_offsets[i] < target && count.checkpoint_offsets[i] >= best_offset) {
+            best_offset = count.checkpoint_offsets[i];
+            best_pages = count.checkpoint_pages[i];
+        }
+    // The page being scanned is the furthest counted page (index pages - 1).
+    if(count.initialized && count.state != HistoryRebuildState::FAILED && count.pages &&
+       count.scan.start_offset < target && count.scan.start_offset >= best_offset) {
+        best_offset = count.scan.start_offset;
+        best_pages = count.pages - 1;
+    }
+    count.target = target;
+    count.start_offset = best_offset;
+    count.pages = best_pages;
+    count.initialized = false;
+    count.state = target ? HistoryRebuildState::BUILDING : HistoryRebuildState::READY;
+    if(!target) count.pages = 0;
+}
+
+static void remember_checkpoint(PageCount& count, uint32_t offset, uint32_t index)
+{
+    if(index % count.checkpoint_stride) return;
+    for(int i = 0; i < count.checkpoint_count; ++i)
+        if(count.checkpoint_offsets[i] == offset) return;
+    if(count.checkpoint_count == PAGE_COUNT_CHECKPOINTS) {
+        // Full: keep every other checkpoint and space new ones twice as far apart.
+        int kept = 0;
+        count.checkpoint_stride *= 2;
+        for(int i = 0; i < count.checkpoint_count; ++i)
+            if(count.checkpoint_pages[i] % count.checkpoint_stride == 0) {
+                count.checkpoint_offsets[kept] = count.checkpoint_offsets[i];
+                count.checkpoint_pages[kept] = count.checkpoint_pages[i];
+                ++kept;
+            }
+        count.checkpoint_count = kept;
+        if(index % count.checkpoint_stride || kept == PAGE_COUNT_CHECKPOINTS) return;
+    }
+    count.checkpoint_offsets[count.checkpoint_count] = offset;
+    count.checkpoint_pages[count.checkpoint_count] = index;
+    ++count.checkpoint_count;
 }
 
 HistoryRebuildState step_page_count(const ByteSource& source, const Settings& settings,
                                     GlyphWidth glyph_width, PageCount& count)
 {
     if(count.state != HistoryRebuildState::BUILDING) return count.state;
-    const uint32_t offset = count.initialized ? count.scan.next_offset : 0;
+    const uint32_t offset = count.initialized ? count.scan.next_offset : count.start_offset;
     if(count.initialized && (count.scan.eof || offset <= count.scan.start_offset)) {
         count.state = HistoryRebuildState::FAILED;
         return count.state;
@@ -402,10 +488,19 @@ HistoryRebuildState step_page_count(const ByteSource& source, const Settings& se
         return count.state;
     }
     count.initialized = true;
+    if(count.checkpoint_stride) remember_checkpoint(count, count.scan.start_offset, count.pages);
     if(count.scan.start_offset < count.target) ++count.pages;
     if(count.scan.eof || count.scan.next_offset >= count.target)
         count.state = HistoryRebuildState::READY;
     return count.state;
+}
+
+int page_count_estimate(const PageCount& count)
+{
+    if(count.state == HistoryRebuildState::READY) return int(count.pages);
+    if(count.state != HistoryRebuildState::BUILDING || !count.initialized || !count.pages ||
+       count.scan.next_offset == 0) return -1;
+    return int(uint64_t(count.pages) * count.target / count.scan.next_offset);
 }
 
 int page_percent(const Page& page, uint32_t source_size)
@@ -416,36 +511,26 @@ int page_percent(const Page& page, uint32_t source_size)
 
 bool percent_offset(const ByteSource& source, int percent, uint32_t& offset)
 {
-    constexpr uint32_t SEARCH_LIMIT = 1024;
     const uint32_t size = source.size();
     if(size == 0) return false;
     if(percent <= 0) { offset = 0; return true; }
-    uint32_t target = percent >= 100 ? size - 1 : uint32_t(uint64_t(size) * uint32_t(percent) / 100);
-    if(target >= size) target = size - 1;
-    unsigned char value = 0;
-    // Step off line ends so a target on a break belongs to the text before it.
-    uint32_t at = target;
-    while(at > 0 && target - at < SEARCH_LIMIT) {
-        if(!source.byte_at(at, value)) return false;
-        if(value != '\n' && value != '\r') break;
-        --at;
-    }
-    const uint32_t lowest = at > SEARCH_LIMIT ? at - SEARCH_LIMIT : 0;
-    for(uint32_t p = at; p > lowest; --p) {
-        if(!source.byte_at(p - 1, value)) return false;
-        if(value == '\n') { offset = p; return true; }
-    }
-    if(lowest == 0) { offset = 0; return true; }
-    // Long paragraph: start at the next word instead.
-    for(uint32_t p = target; p < size && p - target < SEARCH_LIMIT; ++p) {
-        if(!source.byte_at(p, value)) return false;
-        if((value == ' ' || value == '\n') && p + 1 < size) { offset = p + 1; return true; }
-    }
-    // No break nearby: at least avoid starting inside a UTF-8 sequence.
-    uint32_t p = target;
-    while(p > 0 && source.byte_at(p, value) && (value & 0xC0) == 0x80) --p;
-    offset = p;
-    return true;
+    const uint32_t target = percent >= 100 ? size - 1 : uint32_t(uint64_t(size) * uint32_t(percent) / 100);
+    return snap_to_break(source, target, offset);
+}
+
+uint32_t history_rebuild_anchor(const PageHistory& history, uint32_t current)
+{
+    return history.count > 0 ? history.offsets[history.head] : current;
+}
+
+bool prepend_rebuilt_history(PageHistoryRebuild& rebuild, PageHistory& history)
+{
+    if(rebuild.state != HistoryRebuildState::READY || history.count <= 0 ||
+       rebuild.anchor != history.offsets[history.head]) return false;
+    PageHistory& merged = rebuild.rebuilt;
+    for(int i = 0; i < history.count; ++i)
+        remember_page(merged, history.offsets[(history.head + i) % PAGE_HISTORY_MAX]);
+    return adopt_rebuilt_history(rebuild, history);
 }
 
 bool adopt_rebuilt_history(PageHistoryRebuild& rebuild, PageHistory& history)
