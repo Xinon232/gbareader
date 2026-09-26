@@ -32,3 +32,4 @@ Keep backups and never remove the card during storage operations.
 - `gbareader.gba`: runnable ROM.
 - `gbareader-full-controls.pdf`: complete controls and instructions, credited to Halim Jarrar.
 - `gbareader-full-controls.md`: the same complete instructions as text.
+- `SHA256SUMS`: checksums for the three files above.

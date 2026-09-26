@@ -11,6 +11,15 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      release_id:
+        description: 'Optional: numeric ID of a draft release to fill and publish from this build'
+        required: false
+        default: ''
+      tag:
+        description: 'Tag the release creates on this commit (with release_id)'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -55,3 +64,48 @@ jobs:
           name: GBAReader-${{ github.sha }}
           path: gbareader.gba
           if-no-files-found: error
+
+  # Manual only: attach this exact build and the controls manual to a draft release,
+  # add checksums, create the tag on this commit and publish it as the latest release.
+  publish:
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.release_id != '' && inputs.tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out GBAReader
+        uses: actions/checkout@v4
+      - name: Download tested ROM
+        uses: actions/download-artifact@v4
+        with:
+          name: GBAReader-${{ github.sha }}
+          path: dist
+      - name: Upload assets and publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          TAG: ${{ inputs.tag }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          R="$GITHUB_REPOSITORY"
+          cp docs/gbareader-full-controls.pdf docs/gbareader-full-controls.md dist/
+          cd dist
+          test -s gbareader.gba
+          sha256sum gbareader-full-controls.md gbareader-full-controls.pdf gbareader.gba > SHA256SUMS
+          {
+            cat ../RELEASE_NOTES.md
+            printf '\nSource/tag: `%s` (`%s`). The ROM is the GitHub Actions build of this exact commit ([run](%s)), which also ran the host, sanitizer and FatFS test steps.\n\n```text\n' "$GITHUB_SHA" "$TAG" "$RUN_URL"
+            cat SHA256SUMS
+            printf '```\n'
+          } > body.md
+          for name in gbareader.gba gbareader-full-controls.pdf gbareader-full-controls.md SHA256SUMS; do
+            for id in $(gh api "repos/$R/releases/$RELEASE_ID/assets" --jq ".[] | select(.name == \"$name\") | .id"); do
+              gh api -X DELETE "repos/$R/releases/assets/$id"
+            done
+            gh api -X POST "https://uploads.github.com/repos/$R/releases/$RELEASE_ID/assets?name=$name" \
+              -H "Content-Type: application/octet-stream" --input "$name" > /dev/null
+          done
+          gh api -X PATCH "repos/$R/releases/$RELEASE_ID" -f tag_name="$TAG" -f target_commitish="$GITHUB_SHA" \
+            -F body=@body.md -F draft=false -f make_latest=true --jq '.html_url'
