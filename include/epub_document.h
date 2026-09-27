@@ -72,6 +72,9 @@ private:
     bool load_owned_cache();
     bool read_cache(uint32_t offset, unsigned char* bytes, uint32_t count) const;
     mutable bool _external_cache = false;
+    // Opened from a companion cache without the ZIP scan/spine (see open()).
+    mutable bool _structure_deferred = false;
+    bool load_structure() const;
     bool index_original() const;
     bool load_cache_block(uint32_t offset) const;
     bool fail(EpubError error) const;

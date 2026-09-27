@@ -64,6 +64,10 @@ jobs:
         env:
           GBAREADER_FATFS_FIXTURE: legacy-v047.epub
         run: python3 tests/fatfs/run.py
+      - name: Test fast cached open on a 303-entry EPUB
+        env:
+          GBAREADER_FATFS_FIXTURE: many-entries.epub
+        run: python3 tests/fatfs/run.py
       - name: Build complete ROM
         env:
           DEVKITPRO: /opt/devkitpro

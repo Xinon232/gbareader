@@ -40,6 +40,11 @@ bool side_write(FIL& f, uint32_t at, const unsigned char* bytes, uint32_t count)
 #include "reader_sidecar_cache.inc"
 #endif
 
+// Only while the source still matches the identity it was opened with.
+bool ReaderFile::archive_fingerprint(uint32_t& fingerprint) const {
+    if(!_has_archive_fingerprint || !ensure_source()) return false;
+    fingerprint=_archive_fingerprint; return true;
+}
 bool ReaderFile::companion_cache(uint32_t& bytes,uint32_t& crc) const {
     if(!ensure_source() || !_side_open || !_side_valid || !_side_cache_bytes)return false;
     bytes=_side_cache_bytes;crc=_side_cache_crc;return true;
@@ -112,6 +117,7 @@ bool ReaderFile::source_identity(uint32_t& result) const {
         ZipLayout layout{}; uint32_t fingerprint;
         if(!zip_layout(*this,layout) || !central_fingerprint(*this,layout,fingerprint)) return false;
         put32(bytes,fingerprint); crc=crc32_update(crc,bytes,4);
+        _archive_fingerprint=fingerprint; _has_archive_fingerprint=true;
     }
     result=~crc; return true;
 #else

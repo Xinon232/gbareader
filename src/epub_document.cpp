@@ -434,7 +434,7 @@ const char* epub_error_string(EpubError e)
 }
 
 EpubDocument::EpubDocument() { close(); }
-void EpubDocument::close() { _archive=nullptr;_central_offset=0;_central_size=0;_entry_count=0;_spine_count=0;_virtual_size=0;_error=EpubError::NONE;_cached_spine=-1;_window_start=0;_window_size=0;_buffer_size=0;_optimized=false;_cache_data_offset=0;_block_cache=false;_cache_written=false;_verified_block=0xffffffffu;_table_window=0xffffffffu;std::memset(_entry_lookup,0,sizeof(_entry_lookup)); }
+void EpubDocument::close() { _structure_deferred=false;_archive=nullptr;_central_offset=0;_central_size=0;_entry_count=0;_spine_count=0;_virtual_size=0;_error=EpubError::NONE;_cached_spine=-1;_window_start=0;_window_size=0;_buffer_size=0;_optimized=false;_cache_data_offset=0;_block_cache=false;_cache_written=false;_verified_block=0xffffffffu;_table_window=0xffffffffu;std::memset(_entry_lookup,0,sizeof(_entry_lookup)); }
 bool EpubDocument::fail(EpubError e) const { _error=e; return false; }
 
 bool EpubDocument::open(const ByteSource& archive)
@@ -444,6 +444,19 @@ bool EpubDocument::open(const ByteSource& archive)
         _virtual_size=archive.optimized_size();_optimized=true;return true;
     }
     if(archive.size()>EPUB_MAX_ARCHIVE_BYTES)return fail(EpubError::ARCHIVE_TOO_LARGE);
+    // Companion cache hit: the companion was accepted for this exact source (size,
+    // samples and central-directory fingerprint), and the cache header names the
+    // same fingerprint. Every entry's checksum is part of that fingerprint, so the
+    // ZIP structure and spine it was built from are unchanged: skip re-scanning
+    // local headers and re-inflating container/OPF. They are loaded only if a
+    // cached block later fails its CRC and the originals are needed.
+    uint32_t trusted=0;
+    if(archive.companion_present() && archive.archive_fingerprint(trusted)) {
+        _source_fingerprint=trusted;
+        // Block caches only: an older whole-text cache is upgraded by the full path.
+        if(load_owned_cache() && _external_cache && _block_cache) { _structure_deferred=true; return true; }
+        close(); _archive=&archive;
+    }
     if(!parse_zip()||!build_spine()){_virtual_size=0;return false;}
     // ZIP/package and required-entry metadata are checked before trusting the
     // source fingerprint/version and authenticated normalized-cache metadata. A hit
@@ -452,8 +465,22 @@ bool EpubDocument::open(const ByteSource& archive)
     return index_original();
 }
 
+// The ZIP scan and spine skipped by a companion cache hit; the directory must
+// still carry the fingerprint the cache was trusted for.
+bool EpubDocument::load_structure() const
+{
+    if(!_structure_deferred) return true;
+    const uint32_t trusted = _source_fingerprint;
+    auto& self = const_cast<EpubDocument&>(*this); // EpubDocument objects are never const
+    if(!self.parse_zip() || !self.build_spine()) return false;
+    if(_source_fingerprint != trusted) return fail(EpubError::MALFORMED_ZIP);
+    _structure_deferred = false;
+    return true;
+}
+
 bool EpubDocument::index_original() const
 {
+    if(!load_structure()) { _virtual_size = 0; return false; }
     _optimized = false; _external_cache = false; _block_cache = false; _cache_written = false; _verified_block = 0xffffffffu; _table_window = 0xffffffffu;
     _virtual_size = 0; _cached_spine = -1;
     _error = EpubError::NONE;

@@ -11,6 +11,7 @@
 #include <unistd.h>
 using namespace reader;
 static int fd=-1, target=0, seen=0, hits=0;
+static long disk_reads=0;
 static char kind='-', policy='o';
 static bool armed=false;
 static bool fault(char k) {
@@ -24,7 +25,7 @@ static bool fault(char k) {
 extern "C" {
 DSTATUS disk_initialize(BYTE){return fd<0?STA_NOINIT:0;}
 DSTATUS disk_status(BYTE){return fd<0?STA_NOINIT:0;}
-DRESULT disk_read(BYTE,BYTE* b,LBA_t s,UINT n){if(fault('r'))return RES_ERROR;return pread(fd,b,size_t(n)*512,off_t(s)*512)==ssize_t(n)*512?RES_OK:RES_ERROR;}
+DRESULT disk_read(BYTE,BYTE* b,LBA_t s,UINT n){++disk_reads;if(fault('r'))return RES_ERROR;return pread(fd,b,size_t(n)*512,off_t(s)*512)==ssize_t(n)*512?RES_OK:RES_ERROR;}
 DRESULT disk_write(BYTE,const BYTE* b,LBA_t s,UINT n){if(fault('w'))return RES_ERROR;return pwrite(fd,b,size_t(n)*512,off_t(s)*512)==ssize_t(n)*512?RES_OK:RES_ERROR;}
 DRESULT disk_ioctl(BYTE,BYTE cmd,void* b){if(cmd==CTRL_SYNC){if(fault('s'))return RES_ERROR;return fsync(fd)==0?RES_OK:RES_ERROR;}if(cmd==GET_SECTOR_COUNT){*(LBA_t*)b=lseek(fd,0,SEEK_END)/512;return RES_OK;}if(cmd==GET_SECTOR_SIZE){*(WORD*)b=512;return RES_OK;}if(cmd==GET_BLOCK_SIZE){*(DWORD*)b=1;return RES_OK;}return RES_PARERR;}
 }
@@ -45,7 +46,7 @@ int main(int argc,char**argv){
   assert(found);
  }
  ReaderFile file;bool opened=file.open_read_only(argv[2]);if(!opened){puts("{\"opened\":false}");return 0;}
- bool txt=txt_book_name(argv[2]);EpubDocument doc;bool doc_ok=txt||doc.open(file);
+ bool txt=txt_book_name(argv[2]);EpubDocument doc;const long reads_before_open=disk_reads;bool doc_ok=txt||doc.open(file);const long doc_open_reads=disk_reads-reads_before_open;
  if(std::strncmp(argv[3],"mode",4)==0) {
   assert(doc_ok);
   const ByteSource& source = txt ? static_cast<const ByteSource&>(file) : static_cast<const ByteSource&>(doc);
@@ -126,6 +127,6 @@ int main(int argc,char**argv){
  }else if(doc_ok){kind=argv[5][0];target=atoi(argv[6]);policy=argv[7][0];armed=true;saved=file.save_footer(wanted,strcmp(argv[3],"cache")==0?&doc:nullptr);armed=false;}
  TxtSaveFooter actual{};bool footer=file.saved_footer(actual);bool state_match=false;
  if(footer){unsigned char b[TXT_SAVE_FOOTER_SIZE];make_txt_save_footer(actual,b);state_match=memcmp(b,expected,sizeof(b))==0;snprintf(path,sizeof(path),"%s.footer",argv[8]);dump(path,b,sizeof(b));}
- printf("{\"opened\":true,\"document\":%s,\"optimized\":%u,\"saved\":%s,\"hits\":%d,\"footer\":%s,\"bookmark\":%u,\"state_match\":%s}\n",doc_ok?"true":"false",txt?0:doc.optimized_size(),saved?"true":"false",hits,footer?"true":"false",actual.byte_offset,state_match?"true":"false");
+ printf("{\"opened\":true,\"doc_open_reads\":%ld,\"document\":%s,\"optimized\":%u,\"saved\":%s,\"hits\":%d,\"footer\":%s,\"bookmark\":%u,\"state_match\":%s}\n",doc_open_reads,doc_ok?"true":"false",txt?0:doc.optimized_size(),saved?"true":"false",hits,footer?"true":"false",actual.byte_offset,state_match?"true":"false");
  file.close();f_mount(nullptr,"0:",0);fsync(fd);::close(fd);return 0;
 }

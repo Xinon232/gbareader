@@ -1,8 +1,12 @@
-# gbareader V1.7
+# gbareader V1.8
 
 Read TXT and EPUB books on your Game Boy Advance. Save your place and return to it later. Put books directly in `/gbareader` on a compatible Supercard SD card; they appear on Home.
 
-## V1.7: quick Back after Go to, page numbers, gbamp3 UI font
+## V1.8: faster opening of EPUBs
+
+Reopening an EPUB that already has its `.sav` cache no longer re-checks the whole ZIP file or rebuilds the chapter list: the companion already proves the book is unchanged, so only the small cache table is read (in tests with a 1.9 MB, 200-chapter book, the EPUB step went from 668 disk reads / 9,728 sectors to 6 / 6). The full checks still run when there is no valid cache, and if a cached block ever fails its checksum the original chapters are checked and used as before. The first open of a new EPUB also reads much less: isolated header lookups read one 512-byte sector instead of refilling an 8 KiB window (636 disk reads / 7,146 sectors instead of 1,148 / 17,498 for the same book). Reading, storage and controls are unchanged.
+
+## Preserved V1.7: quick Back after Go to, page numbers, gbamp3 UI font
 
 Back right after a Go to (or a resume deep in a book) no longer waits while the whole book up to that point is laid out: Back history is rebuilt from a nearby line start and the next older pages load ahead. The page number keeps counting while Settings is open, shows an estimate (`Page about 142`) until the exact number is known, and Go to keeps the pages already counted. UI text now uses the 5x7 font from gbamp3; the blue `>` cursor also marks the selected book on Home. Book text, storage and controls are unchanged.
 

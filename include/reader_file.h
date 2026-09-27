@@ -91,6 +91,7 @@ public:
     bool companion_present() const override { return _side_present; }
     bool companion_cache(uint32_t& bytes, uint32_t& crc) const override;
     bool companion_read(uint32_t offset, unsigned char* output, uint32_t count) const override;
+    bool archive_fingerprint(uint32_t& fingerprint) const override;
 
 private:
 #ifdef __DEVKITARM__
@@ -107,6 +108,9 @@ private:
     bool _side_created = false;
     bool _side_valid = false;
     uint32_t _source_identity = 0;
+    // EPUB central-directory fingerprint folded into _source_identity.
+    mutable uint32_t _archive_fingerprint = 0;
+    mutable bool _has_archive_fingerprint = false;
     uint32_t _side_generation = 0;
     uint32_t _side_slot = 0;
     uint32_t _side_cache_bytes = 0;
@@ -123,6 +127,11 @@ private:
     // 8 KiB EWRAM read window amortizes FatFS sector traffic during EPUB parsing.
     static constexpr uint32_t FILE_WINDOW_BYTES = 8 * 1024;
     mutable unsigned char _cache[FILE_WINDOW_BYTES];
+    // One sector for isolated metadata reads (see window_at).
+    static constexpr uint32_t SMALL_WINDOW_BYTES = 512;
+    mutable unsigned char _small[SMALL_WINDOW_BYTES];
+    mutable uint32_t _small_start = 0, _small_size = 0;
+    const unsigned char* window_at(uint32_t offset, uint32_t& available) const;
     unsigned char _write_cache[512];
     uint32_t _size;
     uint32_t _physical_size;

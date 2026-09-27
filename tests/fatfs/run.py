@@ -81,6 +81,15 @@ for version,action in [(1,'cache'),(2,'state'),(3,'state')]:
     previous_cache=payload[2048:]
     rows.append(dict(case=label,save=save,verification=v))
     if version==1:shutil.copyfile(success,RUN/'cached.img')
+# A companion cache hit opens without re-scanning the ZIP or rebuilding the spine:
+# only the cache header/table are read, far fewer disk reads than a fresh open.
+fresh_open=invoke(base,'book.epub','probe',0,RUN/'open-cost-fresh')
+cached_open=invoke(RUN/'cached.img','book.epub','probe',1,RUN/'open-cost-cached')
+assert cached_open['document'] and cached_open['optimized'] and fresh_open['document'],(fresh_open,cached_open)
+assert cached_open['doc_open_reads']<=16,(fresh_open,cached_open)
+# Books larger than the first read window (many-entries.epub in CI) need reads to open fresh.
+if fresh_open['doc_open_reads']>16:assert cached_open['doc_open_reads']*4<fresh_open['doc_open_reads'],(fresh_open,cached_open)
+print('OPEN_COST fresh=%d cached=%d disk reads'%(fresh_open['doc_open_reads'],cached_open['doc_open_reads']))
 for mode in ['fresh','cached','fallback']:
     image=RUN/('repeat-'+mode+'.img');shutil.copyfile(base if mode=='fresh' else RUN/'cached.img',image)
     if mode=='fallback':

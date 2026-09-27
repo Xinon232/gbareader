@@ -1,4 +1,4 @@
-// gbareader V1.7 -- streaming Supercard SD TXT/EPUB reader.
+// gbareader V1.8 -- streaming Supercard SD TXT/EPUB reader.
 
 #include "bn_bg_palette_item.h"
 #include "bn_core.h"
@@ -81,7 +81,7 @@ constexpr int UI_SPRITE_CAPACITY = 127;
 constexpr int SAVE_OVERLAY_SPRITE_CAPACITY = 24;
 constexpr int LIBRARY_VISIBLE_ROWS = reader::LIBRARY_VISIBLE_ROWS;
 constexpr int LIBRARY_WORST_CASE_SPRITES =
-        int(sizeof("gbareader V1.7") - 1) +
+        int(sizeof("gbareader V1.8") - 1) +
         int(sizeof("files: /gbareader") - 1) +
         int(sizeof("UP/DOWN select   A open") - 1) +
         int(sizeof("Select: Controls") - 1) + int(sizeof("Start: Credits") - 1) + 1;
@@ -522,7 +522,7 @@ int main()
             sprites.clear();
             ui.set_center_alignment();
             if(scene == Scene::LIBRARY) {
-                add_text(ui, 0, -68, "gbareader V1.7", sprites);
+                add_text(ui, 0, -68, "gbareader V1.8", sprites);
                 add_text(ui, 0, -48, "files: /gbareader", sprites);
                 auto* pixels = reinterpret_cast<uint8_t*>(painter.page().data());
                 if(!storage_ok || !reader::library_count()) {

@@ -1,16 +1,16 @@
-# gbareader V1.7
+# gbareader V1.8
 
-Based on V1.6 (`v1.6.0`, commit `8428a14`). Fixes slow Back and missing page numbers after Go to, and replaces the Butano UI font with the gbamp3 5x7 font. Book text, storage (`.sav` companions) and controls are unchanged; V1.6 saves open as before.
+Based on V1.7 (`v1.7.0`). Opening EPUBs is faster; reading, storage (`.sav` companions) and controls are unchanged. V1.7 companions and caches work as they are.
 
-## Fixes
+## Faster reopening of cached EPUBs
 
-- **Back after Go to is quick.** Back history used to be rebuilt by laying out every page from the start of the book, so Back right after a deep Go to (or after resuming deep in a book) could show `Loading back...` for a minute or more. It is now rebuilt from a line start about 8 KiB before the page, and the next older pages load ahead while you page back. Page layout is also about twice as fast (cached character widths). In mGBA with a 1 MB book: Go to 50% and Back at once took about 62 s before, about 0.5 s now.
-- **Page number after Go to.** Settings used to stay on `Page ...` after a jump. Page counting now also runs while Settings is open, shows an estimate such as `Page about 1500` while it counts, and the exact number when done. A Go to with unchanged settings keeps the pages already counted, so jumping back and forth is quick.
+- When an EPUB already has its `.sav` cache, gbareader no longer re-checks every file inside the ZIP or re-reads the book's chapter list before showing the text. Opening the companion already proves the book is unchanged (size, sampled bytes and a fingerprint of the ZIP directory, which includes every file's checksum), so only the small cache table is read.
+- The full checks still run whenever there is no valid cache. If a cached text block ever fails its checksum, the original chapters are checked and used, exactly as before.
+- Measured on a FAT32 disk image with a 1.9 MB, 200-chapter EPUB: the EPUB part of a cached reopen went from 668 disk reads (9,728 sectors, about 4.9 MB) to 6 reads (6 sectors).
 
-## Look
+## Less reading on the first open
 
-- **UI font: the 5x7 font from gbamp3** (v0.9.8) for titles, settings and key hints (hints in gbamp3 grey). Messages over book text (`save...`, `Loading back...`, `L+R: On`) sit on a white box, like gbamp3 messages.
-- **The blue `>` cursor** (Butano font) stays in Settings and now also marks the selected book on Home. Settings rows share one left edge.
-- Book text, file names and the Controls/Credits pages keep the SuperFW font. Credits name the new UI font.
+- Isolated lookups (a ZIP file header, one directory entry) now read a single 512-byte sector instead of refilling an 8 KiB window; sequential reading still uses the 8 KiB window.
+- Same book, first open: 636 disk reads / 7,146 sectors instead of 1,148 / 17,498.
 
-The ROM is `gbareader.gba`. Put books in `/gbareader` at the SD-card root, as before.
+These are disk-image measurements; real Supercard SD timings have not been measured.

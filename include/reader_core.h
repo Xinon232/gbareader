@@ -61,6 +61,9 @@ public:
     virtual bool companion_present() const { return false; }
     virtual bool companion_cache(uint32_t&, uint32_t&) const { return false; }
     virtual bool companion_read(uint32_t, unsigned char*, uint32_t) const { return false; }
+    // CRC of the ZIP central directory (gbareader's own entries excluded), as
+    // verified against the companion when the source was opened.
+    virtual bool archive_fingerprint(uint32_t&) const { return false; }
 };
 
 class MemorySource final : public ByteSource {

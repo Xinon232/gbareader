@@ -1,4 +1,4 @@
-# gbareader V1.7
+# gbareader V1.8
 
 ## Full controls
 

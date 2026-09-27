@@ -348,26 +348,65 @@ if(_source_owned) { if(f_close(&_file)!=FR_OK)return; _source_owned=false; }
 _source_verify=_source_checking=_source_changed=false;
 #endif
 _side_present=_side_created=_side_valid=false;_side_generation=0;
-_open=false;_size=_physical_size=_footer_size=_footer_offset=_epub_cache_start=_epub_cache_size=0;_cache_size=0;_has_footer=_has_valid_cache=false;_name[0]=0;}
-bool ReaderFile::physical_byte_at(uint32_t offset,unsigned char&value)const{if(!ensure_source()||offset>=_physical_size)return false;if(offset<_cache_start||offset>=_cache_start+uint32_t(_cache_size)){
+_open=false;_has_archive_fingerprint=false;_small_size=0;_size=_physical_size=_footer_size=_footer_offset=_epub_cache_start=_epub_cache_size=0;_cache_size=0;_has_footer=_has_valid_cache=false;_name[0]=0;}
+// Bytes at offset from one of two read windows: the 8 KiB window serves
+// sequential reading (text, the central directory); a lone jump elsewhere (a
+// ZIP local header, an entry lookup) reads just its 512-byte sector instead of
+// refilling 8 KiB. The book is opened read-only, so the small window stays
+// valid until the file is closed or reopened.
+const unsigned char* ReaderFile::window_at(uint32_t offset,uint32_t& available)const{
+    if(!ensure_source()||offset>=_physical_size)return nullptr;
+    if(_cache_size&&offset>=_cache_start&&offset-_cache_start<uint32_t(_cache_size)){
+        available=uint32_t(_cache_size)-(offset-_cache_start);
+        return _cache+(offset-_cache_start);
+    }
+    if(_small_size&&offset>=_small_start&&offset-_small_start<_small_size){
+        available=_small_size-(offset-_small_start);
+        return _small+(offset-_small_start);
+    }
 #ifdef __DEVKITARM__
-_cache_start=offset&~uint32_t(FILE_WINDOW_BYTES-1);_cache_size=0;UINT n=0;if(f_lseek(&_file,_cache_start)!=FR_OK||f_read(&_file,_cache,sizeof(_cache),&n)!=FR_OK)return false;_cache_size=n;
+    // Next to, or just past, a window: sequential reading keeps the 8 KiB window.
+    auto near=[offset](uint32_t start,uint32_t size){
+        return size&&(offset<start?start-offset<=SMALL_WINDOW_BYTES:offset-(start+size)<FILE_WINDOW_BYTES);
+    };
+    UINT n=0;
+    if(!near(_cache_start,uint32_t(_cache_size))&&!near(_small_start,_small_size)){
+        _small_start=offset&~uint32_t(SMALL_WINDOW_BYTES-1);
+        _small_size=0;
+        const uint32_t left=_physical_size-_small_start;
+        const uint32_t want=left<SMALL_WINDOW_BYTES?left:SMALL_WINDOW_BYTES;
+        if(f_lseek(&_file,_small_start)!=FR_OK||f_read(&_file,_small,want,&n)!=FR_OK||n!=want)
+            return nullptr;
+        _small_size=n;
+        available=_small_size-(offset-_small_start);
+        return _small+(offset-_small_start);
+    }
+    _cache_start=offset&~uint32_t(FILE_WINDOW_BYTES-1);
+    _cache_size=0;
+    if(f_lseek(&_file,_cache_start)!=FR_OK||f_read(&_file,_cache,sizeof(_cache),&n)!=FR_OK)
+        return nullptr;
+    _cache_size=int(n);
+    if(offset-_cache_start>=uint32_t(_cache_size))
+        return nullptr;
+    available=uint32_t(_cache_size)-(offset-_cache_start);
+    return _cache+(offset-_cache_start);
 #else
-return false;
+    return nullptr;
 #endif
-}if(offset-_cache_start>=uint32_t(_cache_size))return false;value=_cache[offset-_cache_start];return true;}
+}
+bool ReaderFile::physical_byte_at(uint32_t offset,unsigned char&value)const{uint32_t available=0;const unsigned char* at=window_at(offset,available);if(!at)return false;value=*at;return true;}
 bool ReaderFile::byte_at(uint32_t o,unsigned char&v)const{return o<_size&&physical_byte_at(o,v);}bool ReaderFile::optimized_byte_at(uint32_t o,unsigned char&v)const{return _has_valid_cache&&o<_epub_cache_size&&physical_byte_at(_epub_cache_start+o,v);}
 bool ReaderFile::read_range(uint32_t offset, unsigned char* output, uint32_t count) const
 {
     if(!output || offset > _size || count > _size - offset) return false;
     while(count) {
-        // Reuse the physical window refill/error handling once per block, not
-        // the virtual byte-at fallback once per byte. Copy only valid bytes.
-        unsigned char first;
-        if(!physical_byte_at(offset, first)) return false;
-        uint32_t take = uint32_t(_cache_size) - (offset - _cache_start);
+        // Reuse the window refill/error handling once per block, not the
+        // virtual byte-at fallback once per byte. Copy only valid bytes.
+        uint32_t take = 0;
+        const unsigned char* at = window_at(offset, take);
+        if(!at) return false;
         if(take > count) take = count;
-        std::memcpy(output, _cache + offset - _cache_start, take);
+        std::memcpy(output, at, take);
         output += take; offset += take; count -= take;
     }
     return true;
