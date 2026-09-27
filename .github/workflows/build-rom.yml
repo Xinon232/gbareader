@@ -28,13 +28,17 @@ on:
         description: 'Optional: build this Xinon232/gbawriter commit instead and publish it here as a pre-release (needs a tag)'
         required: false
         default: ''
+      gbavocab_ref:
+        description: 'Optional: build this Xinon232/gbavocab commit instead and publish it here as a pre-release (needs a tag)'
+        required: false
+        default: ''
 
 permissions:
   contents: read
 
 jobs:
   build:
-    if: ${{ !inputs.gbawriter_ref }}
+    if: ${{ !inputs.gbawriter_ref && !inputs.gbavocab_ref }}
     runs-on: ubuntu-latest
     container: devkitpro/devkitarm:20260610
     steps:
@@ -79,7 +83,7 @@ jobs:
   # commit and publish it as the latest release.
   publish:
     needs: build
-    if: github.event_name == 'workflow_dispatch' && inputs.tag != '' && !inputs.gbawriter_ref
+    if: github.event_name == 'workflow_dispatch' && inputs.tag != '' && !inputs.gbawriter_ref && !inputs.gbavocab_ref
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -213,6 +217,110 @@ jobs:
           ID=$(gh api -X POST "repos/$R/releases" -f tag_name="$TAG" -f target_commitish="$GITHUB_SHA" \
             -f name="${NAME:-$TAG}" -F draft=true -F prerelease=true -f make_latest=false --jq '.id')
           for name in gbawriter.gba gbawriter-full-controls.pdf SHA256SUMS; do
+            gh api -X POST "https://uploads.github.com/repos/$R/releases/$ID/assets?name=$name" \
+              -H "Content-Type: application/octet-stream" --input "$name" > /dev/null
+          done
+          gh api -X PATCH "repos/$R/releases/$ID" -F body=@body.md -F draft=false -F prerelease=true \
+            -f make_latest=false --jq '.html_url'
+
+  # Manual only: gbavocab, like gbawriter above, until it publishes from its own
+  # repository. Mirrors gbavocab's CI: host and sanitized dictionary suites, then
+  # the ROM build.
+  gbavocab-tests:
+    if: github.event_name == 'workflow_dispatch' && inputs.gbavocab_ref != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out gbavocab
+        uses: actions/checkout@v4
+        with:
+          repository: Xinon232/gbavocab
+          ref: ${{ inputs.gbavocab_ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install host test dependencies
+        run: python -m pip install Pillow==12.3.0
+      - name: Run host correctness suite
+        run: bash tests/run_host_tests.sh --correctness-only
+      - name: Run dictionary suites with sanitizers
+        run: bash tests/run_dictionary_tests.sh --sanitize
+
+  gbavocab:
+    needs: gbavocab-tests
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm:20260610
+    steps:
+      - name: Check out gbavocab
+        uses: actions/checkout@v4
+        with:
+          repository: Xinon232/gbavocab
+          ref: ${{ inputs.gbavocab_ref }}
+      - name: Check out pinned Butano
+        uses: actions/checkout@v4
+        with:
+          repository: GValiente/butano
+          ref: 77dcbcb3d8783596a9f333c64eedbccec77b05dc
+          path: _butano
+      - name: Build complete ROM
+        env:
+          DEVKITPRO: /opt/devkitpro
+          DEVKITARM: /opt/devkitpro/devkitARM
+        run: |
+          make -j2 LIBBUTANO="$GITHUB_WORKSPACE/_butano/butano"
+          test -s gbavocab.gba
+      - name: Collect ROM, manual and release notes
+        env:
+          REF: ${{ inputs.gbavocab_ref }}
+        run: |
+          set -eu
+          mkdir -p out
+          cp gbavocab.gba docs/gbavocab-full-controls.pdf out/
+          cp "docs/release-$(cat VERSION).md" out/RELEASE_NOTES.md
+          printf '%s\n' "$REF" > out/gbavocab-commit.txt
+      - name: Upload tested ROM and notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: gbavocab-${{ github.run_id }}
+          path: out
+          if-no-files-found: error
+
+  gbavocab-publish:
+    needs: gbavocab
+    if: github.event_name == 'workflow_dispatch' && inputs.gbavocab_ref != '' && inputs.tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download tested ROM
+        uses: actions/download-artifact@v4
+        with:
+          name: gbavocab-${{ github.run_id }}
+          path: dist
+      - name: Publish pre-release (never marked latest)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          NAME: ${{ inputs.name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          R="$GITHUB_REPOSITORY"
+          if gh api "repos/$R/releases/tags/$TAG" > /dev/null 2>&1; then
+            echo "A release for $TAG already exists" >&2; exit 1
+          fi
+          cd dist
+          test -s gbavocab.gba
+          COMMIT=$(cat gbavocab-commit.txt)
+          sha256sum gbavocab.gba gbavocab-full-controls.pdf > SHA256SUMS
+          {
+            cat RELEASE_NOTES.md
+            printf '\nBuilt from [Xinon232/gbavocab@%s](https://github.com/Xinon232/gbavocab/commit/%s) by this repository'"'"'s workflow ([run](%s)), which also ran gbavocab'"'"'s host and sanitized dictionary suites. Published here as a pre-release until gbavocab publishes it itself.\n\n```text\n' "$COMMIT" "$COMMIT" "$RUN_URL"
+            cat SHA256SUMS
+            printf '```\n'
+          } > body.md
+          ID=$(gh api -X POST "repos/$R/releases" -f tag_name="$TAG" -f target_commitish="$GITHUB_SHA" \
+            -f name="${NAME:-$TAG}" -F draft=true -F prerelease=true -f make_latest=false --jq '.id')
+          for name in gbavocab.gba gbavocab-full-controls.pdf SHA256SUMS; do
             gh api -X POST "https://uploads.github.com/repos/$R/releases/$ID/assets?name=$name" \
               -H "Content-Type: application/octet-stream" --input "$name" > /dev/null
           done
