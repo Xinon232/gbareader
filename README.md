@@ -1,8 +1,12 @@
-# gbareader V1.8
+# gbareader V1.9
 
 Read TXT and EPUB books on your Game Boy Advance. Save your place and return to it later. Put books directly in `/gbareader` on a compatible Supercard SD card; they appear on Home.
 
-## V1.8: faster opening of EPUBs
+## V1.9: no limit on the number of books
+
+Home lists every supported book in `/gbareader`, no longer only the first 64. Names are read from the folder 64 at a time as you move through the list, so RAM use is unchanged; moving past a block of names rereads the folder once. Books keep folder order. Everything else is as in V1.8.
+
+## Preserved V1.8: faster opening of EPUBs
 
 Reopening an EPUB that already has its `.sav` cache no longer re-checks the whole ZIP file or rebuilds the chapter list: the companion already proves the book is unchanged, so only the small cache table is read (in tests with a 1.9 MB, 200-chapter book, the EPUB step went from 668 disk reads / 9,728 sectors to 6 / 6). The full checks still run when there is no valid cache, and if a cached block ever fails its checksum the original chapters are checked and used as before. The first open of a new EPUB also reads much less: isolated header lookups read one 512-byte sector instead of refilling an 8 KiB window (636 disk reads / 7,146 sectors instead of 1,148 / 17,498 for the same book). Reading, storage and controls are unchanged.
 
@@ -30,7 +34,7 @@ The final release is published from its own release tag/branch. Publishing it do
 
 ## Features and bounds
 
-- Case-insensitive UTF-8 `.txt` and a bounded text-only subset of EPUB 2/3; up to 64 files directly in `/gbareader`, five visible at once. No subfolder browser, root fallback or demo book.
+- Case-insensitive UTF-8 `.txt` and a bounded text-only subset of EPUB 2/3; any number of files directly in `/gbareader` (names are read from the folder 64 at a time), five visible at once. No subfolder browser, root fallback or demo book.
 - Filenames remain intact and are clipped only on screen. Discovery accepts up to 255 UTF-8 bytes; saving needs room for `.sav`, so the full book filename must be at most 251 UTF-8 bytes. Longer names remain readable but cannot be saved until renamed on a computer.
 - Streaming FatFS reads through an 8 KiB window; no whole-book RAM allocation.
 - Stored/raw-DEFLATE ZIP entries, container/OPF manifest and declared spine order; URI percent-decoding and XML entities in references; preferred package selection for multiple rootfiles.
@@ -44,7 +48,7 @@ The final release is published from its own release tag/branch. Publishing it do
 
 ## Controls
 
-Read TXT and EPUB books, save your reading position, and resume later. Place UTF-8 `.txt` and supported `.epub` files directly in `/gbareader` on the SD-card root, then restart the app. It lists up to 64 files, not subfolders, with five books visible at once. A missing or empty folder shows instructions; Controls and Credits remain available. This reader has no text editing, typing or user-facing export controls.
+Read TXT and EPUB books, save your reading position, and resume later. Place UTF-8 `.txt` and supported `.epub` files directly in `/gbareader` on the SD-card root, then restart the app. It lists every supported file (no limit), not subfolders, with five books visible at once. A missing or empty folder shows instructions; Controls and Credits remain available. This reader has no text editing, typing or user-facing export controls.
 
 See [the full controls PDF](docs/gbareader-full-controls.pdf) and [downloadable instructions Markdown](docs/gbareader-full-controls.md).
 

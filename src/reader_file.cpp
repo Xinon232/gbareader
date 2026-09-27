@@ -21,7 +21,9 @@ namespace {
 __attribute__((section(".sbss")))
 #endif
 char names[LIBRARY_MAX_FILES][LIBRARY_NAME_MAX];
-int name_count;
+// Every supported book is counted; names are kept for a window of
+// LIBRARY_MAX_FILES of them, reloaded from the folder as the selection moves.
+int name_count, window_start, window_count;
 #ifdef __DEVKITARM__
 FATFS fatfs;
 #endif
@@ -301,26 +303,48 @@ REG_WAITCNT=0x40c0;set_supercard_mode(MAPPED_SDRAM,true,true);t_card_info info;i
 return false;
 #endif
 }
-bool scan_library() {
-    name_count = 0;
+namespace {
+// One pass over /gbareader in directory order: counts every supported book and
+// keeps the names of books first .. first+LIBRARY_MAX_FILES-1.
+bool read_library(int first, int& total, int& kept) {
+    total = kept = 0;
 #ifdef __DEVKITARM__
     DIR directory; FILINFO entry;
     if(f_opendir(&directory, "/gbareader") != FR_OK) return false;
     bool ok = true;
-    while(name_count < LIBRARY_MAX_FILES) {
+    for(;;) {
         if(f_readdir(&directory, &entry) != FR_OK) { ok = false; break; }
         if(!entry.fname[0]) break;
-        if(!(entry.fattrib & AM_DIR) && supported_book_name(entry.fname))
-            copy_book_name(names[name_count++], entry.fname);
+        if((entry.fattrib & AM_DIR) || !supported_book_name(entry.fname)) continue;
+        if(total >= first && kept < LIBRARY_MAX_FILES) copy_book_name(names[kept++], entry.fname);
+        ++total;
     }
     if(f_closedir(&directory) != FR_OK) ok = false;
-    if(!ok) name_count = 0;
     return ok;
 #else
-    return false;
+    (void)first; return false;
 #endif
 }
-int library_count(){return name_count;}const char* library_name(int i){return i>=0&&i<name_count?names[i]:nullptr;}
+}
+bool scan_library() {
+    name_count = window_start = window_count = 0;
+    int total = 0, kept = 0;
+    if(!read_library(0, total, kept)) return false;
+    name_count = total; window_count = kept;
+    return true;
+}
+int library_count(){return name_count;}
+const char* library_name(int i){
+    if(i<0||i>=name_count)return nullptr;
+    if(i<window_start||i>=window_start+window_count){
+        // Centre the new window on i so moving either way stays inside it.
+        int first=i-LIBRARY_MAX_FILES/2; if(first<0)first=0;
+        int total=0,kept=0;
+        if(!read_library(first,total,kept)||total!=name_count||i-first>=kept){window_count=0;return nullptr;}
+        window_start=first;window_count=kept;
+    }
+    return names[i-window_start];
+}
 bool library_path(int index, char (&path)[LIBRARY_PATH_MAX]) {
     path[0] = 0;
     const char* name = library_name(index);

@@ -14,7 +14,7 @@ const char* const controls_lines[CONTROLS_PAGE_COUNT][CONTROLS_LINES] = {
      "Text-only EPUB; no DRM.", "No text editing or export."},
     {"Up/Down: select a book.", "A: open selected book.",
      "Select: Controls.", "Start: Credits.",
-     "Credits: Left/Right pages.", "Up to 64 files; no folders."},
+     "Credits: Left/Right pages.", "Any number of files; no folders."},
     {"Right or A: next page.", "Left or B: previous page.",
      "Hold Down: settings.", "Hold Up: shoulder turns.",
      "When on: L back, R next.", "Shoulders start off each run."},

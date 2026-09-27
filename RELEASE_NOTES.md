@@ -1,16 +1,11 @@
-# gbareader V1.8
+# gbareader V1.9 (pre-release)
 
-Based on V1.7 (`v1.7.0`). Opening EPUBs is faster; reading, storage (`.sav` companions) and controls are unchanged. V1.7 companions and caches work as they are.
+Based on V1.8 (`v1.8.0`). Reading, storage (`.sav` companions) and controls are unchanged.
 
-## Faster reopening of cached EPUBs
+## No limit on the number of books
 
-- When an EPUB already has its `.sav` cache, gbareader no longer re-checks every file inside the ZIP or re-reads the book's chapter list before showing the text. Opening the companion already proves the book is unchanged (size, sampled bytes and a fingerprint of the ZIP directory, which includes every file's checksum), so only the small cache table is read.
-- The full checks still run whenever there is no valid cache. If a cached text block ever fails its checksum, the original chapters are checked and used, exactly as before.
-- Measured on a FAT32 disk image with a 1.9 MB, 200-chapter EPUB: the EPUB part of a cached reopen went from 668 disk reads (9,728 sectors, about 4.9 MB) to 6 reads (6 sectors).
+- Home now lists every supported TXT/EPUB file in `/gbareader`. Earlier versions stopped at 64 files.
+- Names are kept in RAM 64 at a time (the same memory as before) and reread from the folder when you move past them: about one folder read per 32 books scrolled. Books stay in folder order.
+- If the folder cannot be read while scrolling, the row shows `?` instead of a wrong name.
 
-## Less reading on the first open
-
-- Isolated lookups (a ZIP file header, one directory entry) now read a single 512-byte sector instead of refilling an 8 KiB window; sequential reading still uses the 8 KiB window.
-- Same book, first open: 636 disk reads / 7,146 sectors instead of 1,148 / 17,498.
-
-These are disk-image measurements; real Supercard SD timings have not been measured.
+Physical hardware has not been tested with this version.

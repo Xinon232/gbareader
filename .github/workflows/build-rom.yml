@@ -24,6 +24,11 @@ on:
         description: 'Release title when the workflow creates the draft (default: the tag)'
         required: false
         default: ''
+      prerelease:
+        description: 'Publish the gbareader release as a pre-release (not marked latest)'
+        type: boolean
+        required: false
+        default: false
       gbawriter_ref:
         description: 'Optional: build this Xinon232/gbawriter commit instead and publish it here as a pre-release (needs a tag)'
         required: false
@@ -105,10 +110,12 @@ jobs:
           RELEASE_ID: ${{ inputs.release_id }}
           TAG: ${{ inputs.tag }}
           NAME: ${{ inputs.name }}
+          PRERELEASE: ${{ inputs.prerelease && 'true' || 'false' }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
           R="$GITHUB_REPOSITORY"
+          if [ "$PRERELEASE" = true ]; then LATEST=false; else LATEST=true; fi
           if [ -z "$RELEASE_ID" ]; then
             if gh api "repos/$R/releases/tags/$TAG" > /dev/null 2>&1; then
               echo "A release for $TAG already exists" >&2; exit 1
@@ -134,7 +141,7 @@ jobs:
               -H "Content-Type: application/octet-stream" --input "$name" > /dev/null
           done
           gh api -X PATCH "repos/$R/releases/$RELEASE_ID" -f tag_name="$TAG" -f target_commitish="$GITHUB_SHA" \
-            -F body=@body.md -F draft=false -f make_latest=true --jq '.html_url'
+            -F body=@body.md -F draft=false -F prerelease="$PRERELEASE" -f make_latest="$LATEST" --jq '.html_url'
 
   # Manual only: gbawriter is kept in this repo's releases until it moves to its
   # own. Runs gbawriter's own host tests, FatFS image tests, ROM build and

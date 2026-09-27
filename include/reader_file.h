@@ -13,6 +13,8 @@
 
 namespace reader {
 
+// Names held in RAM at once. The library itself has no file limit: names
+// outside this window are reread from /gbareader when selected or shown.
 constexpr int LIBRARY_MAX_FILES = 64;
 constexpr int LIBRARY_NAME_MAX = 256;
 constexpr int LIBRARY_PATH_MAX = LIBRARY_NAME_MAX + sizeof("/gbareader/") - 1;
