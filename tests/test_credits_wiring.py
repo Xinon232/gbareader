@@ -7,7 +7,12 @@ assert 'reader::handle_credits_input(' in main
 assert 'reader::draw_credits(' in main
 assert '"Start: Credits"' in main
 assert '"Select: Controls"' in main
-assert '"gbareader V1.9"' in main
+home = main[main.index('if(scene == Scene::LIBRARY) {', main.index('if(redraw_ui) {')):main.index('} else if(scene == Scene::CONTROLS)', main.index('if(redraw_ui) {'))]
+assert 'add_text(ui, 0, -68, "gbareader", sprites);' in home
+assert 'V3.0' not in home and 'V1.9' not in home
+credits = (root / 'src/reader_credits.cpp').read_text()
+assert '"Credits 7/7: gbareader V3.0"' in credits
+assert '"Made by Halim Jarrar", "(C) 2026", "halim-jarrar.de", "monday@halim-jarrar.de", "", ""' in credits
 assert '"files: /gbareader"' in main
 assert 'reader::library_path(selected, path)' in main
 assert 'reader::handle_controls_input(' in main

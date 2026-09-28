@@ -1,6 +1,10 @@
-# gbareader V1.9
+# gbareader V3.0
 
 Read TXT and EPUB books on your Game Boy Advance. Save your place and return to it later. Put books directly in `/gbareader` on a compatible Supercard SD card; they appear on Home.
+
+## V3.0: version in Credits
+
+Home shows only `gbareader`; the V3.0 label appears on the last Credits page, after the personal author page. Reading, storage and controls are unchanged from V1.9.
 
 ## V1.9: no limit on the number of books
 

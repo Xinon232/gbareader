@@ -119,6 +119,7 @@ int main(int argc, char** argv)
     assert(actual != Pixels{});
     for(int i = 0; i < 4; ++i) assert(!std::strcmp(reader::credits_lines[0][i], lines[i]));
     assert(!reader::credits_lines[0][4][0] && !reader::credits_lines[0][5][0]);
+    assert(!std::strcmp(reader::credits_titles[6], "Credits 7/7: gbareader V3.0"));
     std::string notices;
     for(int p = 1; p < reader::CREDITS_PAGE_COUNT; ++p) {
         actual = {}; expected = {};

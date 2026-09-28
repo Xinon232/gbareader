@@ -6,7 +6,7 @@ namespace reader {
 const char* const credits_titles[CREDITS_PAGE_COUNT] = {
     "Credits 1/7: Author", "Credits 2/7: Ghoulam", "Credits 3/7: SuperFW",
     "Credits 4/7: UNSCII", "Credits 5/7: Unifont", "Credits 6/7: Framework",
-    "Credits 7/7: Sources"
+    "Credits 7/7: gbareader V3.0"
 };
 const char* const credits_lines[CREDITS_PAGE_COUNT][CREDITS_LINES] = {
     {"Made by Halim Jarrar", "(C) 2026", "halim-jarrar.de", "monday@halim-jarrar.de", "", ""},

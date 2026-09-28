@@ -1,5 +1,5 @@
 #---------------------------------------------------------------------------------------------------------------------
-# gbareader V1.9
+# gbareader V3.0
 #
 # Stack: butano + devkitPro devkitARM, C++.
 # Adapted from /home/hlm/butano/examples/text/Makefile (canonical butano template).
