@@ -2,9 +2,9 @@
 
 Read TXT and EPUB books on your Game Boy Advance. Save your place and return to it later. Put books directly in `/gbareader` on a compatible Supercard SD card; they appear on Home.
 
-## V3.0: version in Credits
+## V3.0: global settings and last-book selection
 
-Home shows only `gbareader`; the V3.0 label appears on the last Credits page, after the personal author page. Reading, storage and controls are unchanged from V1.9.
+Line spacing, paragraph gap and `L/R on startup` are now shared across books and saved when Settings closes. Home starts with the last successfully opened book selected (never auto-opened), or the first book if that exact filename is missing. Two small checked files, `/gbareader/SETTINGS0.DAT` and `SETTINGS1.DAT`, hold these globals independently of each book's position/Arabic/cache. Hold Up remains a temporary session toggle. Home still shows only `gbareader`; V3.0 remains on the last Credits page.
 
 ## V1.9: no limit on the number of books
 
@@ -30,11 +30,11 @@ Reader Up/Down now require the same continuous solo hold as gbawriter Caps. A br
 
 All newly generated per-book data now lives in one companion alongside each book: `Title.txt.sav` for `Title.txt`, and `Title.epub.sav` for `Title.epub`. The original extension is retained, so the two formats do not collide. **The app opens books read-only and never writes, strips, truncates or replaces their bytes**, including during migration and failed saves.
 
-A companion holds the byte bookmark, line spacing, paragraph gap, sticky Arabic ON/OFF, compatible 64-entry Back history/rebuild metadata, and the entire normalized EPUB text cache. Two fixed-size checked state banks are updated alternately. The large cache is separate: ordinary bookmarks neither grow a log nor rewrite that cache. TXT companions occupy at most 2048 bytes. EPUB companions use 2048 bytes plus a 32-byte cache header, normalized text and a four-byte checksum per 4096-byte block, capped at 128 MiB total.
+A companion holds the byte bookmark, sticky Arabic ON/OFF, compatible 64-entry Back history/rebuild metadata, and the entire normalized EPUB text cache. Saved spacing/gap remain only as history-layout metadata; they never override global preferences. Two fixed-size checked state banks are updated alternately. The large cache is separate: ordinary bookmarks neither grow a log nor rewrite that cache. TXT companions occupy at most 2048 bytes. EPUB companions use 2048 bytes plus a 32-byte cache header, normalized text and a four-byte checksum per 4096-byte block, capped at 128 MiB total.
 
-This release changes storage, not page layout, fonts, shaping, input or ordinary page-turn behavior. It preserves the existing lazy cache policy: ZIP/package/spine guards, source fingerprint, header and checksum table are checked on opening; normalized blocks are checked as needed. Original chapter inflation/CRC is deferred on a valid cache hit. A failed block is not displayed: validated originals are used, or reading fails safely. New cache creation includes sequential saved-payload readback. No physical SD speed claim is made.
+The V1.4 storage design preserved page layout, fonts, shaping, input and ordinary page-turn behavior. It preserves the existing lazy cache policy: ZIP/package/spine guards, source fingerprint, header and checksum table are checked on opening; normalized blocks are checked as needed. Original chapter inflation/CRC is deferred on a valid cache hit. A failed block is not displayed: validated originals are used, or reading fails safely. New cache creation includes sequential saved-payload readback. No physical SD speed claim is made.
 
-The final release is published from its own release tag/branch. Publishing it does not update `main` or replace historical releases, tags or assets. Technical details: [SAV format, limits and recovery](docs/sidecar-format.md).
+V3.0 publication is separate from updating `main`; unrelated historical releases remain unchanged. Technical details: [SAV format, limits and recovery](docs/sidecar-format.md).
 
 ## Features and bounds
 
@@ -47,7 +47,7 @@ The final release is published from its own release tag/branch. Publishing it do
 - ZIP64, multi-disk archives, encrypted required entries and unsupported required compression are rejected. UTF-16 XML/XHTML, DRM, CSS presentation, scripts, embedded fonts, audio, video and SVG presentation are outside scope.
 - Native 16px SuperFW body font, the gbamp3 5x7 UI font (with the blue Butano `>` cursor), supported Latin/Greek/Cyrillic/Japanese/CJK/Hangul and supplemental publishing symbols. Smart quotes and selected hyphens use the existing display-only ASCII substitutes.
 - Word wrapping, CRLF/LF, UTF-8 BOM and safe malformed-input replacement. Runs of three or more spaces collapse on screen; repeated newlines collapse to one line break. None of this edits the source.
-- Line spacing from 0 to 4 and paragraph gap None/Small/Half/Full, with text centered vertically; page number, percentage and Go to percentage in settings; byte anchors rather than saved page numbers; incremental Back-history rebuilding when layout markers differ.
+- Line spacing from 0 to 4 and paragraph gap None/Small/Half/Full, with text centered vertically; page number, percentage and Go to percentage in settings; byte anchors rather than saved page numbers; incremental Back-history rebuilding when layout markers or effective spacing/gap/Arabic differ.
 - Native Ghoulam Arabic joining/lam-alef and limited per-line RTL. Harakat are hidden only on screen. Latin and digit runs remain left-to-right. This is not full Unicode bidi or full Persian/Urdu support.
 
 ## Controls
@@ -59,8 +59,8 @@ See [the full controls PDF](docs/gbareader-full-controls.pdf) and [downloadable 
 ### Library
 
 - `Up` / `Down`: select a `.txt` or `.epub` book.
-- `A`: open the selected book.
-- `Select`: show Controls. `Left` / `Right` changes its nine help pages; `B` returns Home.
+- `A`: open the selected book. Each successful open remembers its full filename, including the extension. On next launch Home selects the last successfully opened book and scrolls it into view, without opening it. Missing, renamed or unremembered books fall back to the first entry; cursor movement and failed opens are not remembered.
+- `Select`: show Controls. `Left` / `Right` changes its eleven help pages; `B` returns Home.
 - `Start`: show Credits, beginning with the personal author page. `Left` / `Right` changes its seven pages; `B` or `Start` returns Home. Font/framework/license attribution is on subsequent pages.
 
 ### Reader
@@ -68,20 +68,20 @@ See [the full controls PDF](docs/gbareader-full-controls.pdf) and [downloadable 
 - `Right` or `A`: next page.
 - `Left` or `B`: previous page.
 - Hold `Down` alone: open reader settings.
-- Hold `Up` alone: toggle shoulder-button page turns. `L` goes back and `R` forward when enabled. A UI-font `L+R: On` or `L+R: Off` notice appears for about one second. This mode starts disabled each app launch and is not saved.
-- `Start`: save the current byte position, reader settings, Arabic mode and up to 64 previous page offsets to the book's `.sav` companion. A `save...` message appears while writing, followed temporarily by `Saved` or `Save failed`.
-- `Select`: close the book and return Home without saving later changes.
+- Hold `Up` alone: toggle shoulder-button page turns. `L` goes back and `R` forward when enabled. A UI-font `L+R: On` or `L+R: Off` notice appears for about one second. The saved `L/R on startup` preference initializes it once at launch (default Off). Hold Up is never saved and survives book switches; changing the startup preference affects only the next launch.
+- `Start`: save the current byte position, Arabic mode and up to 64 previous page offsets to the book's `.sav`; also independently retry pending global settings. After `save...`, the result is `Saved`, `Position save failed`, `Settings save failed` or `Both saves failed`. No cross-file atomic save is promised.
+- `Select`: close the book and return Home without saving later position changes.
 
 Both holds require 48 consecutive held updates after the initial press (about 0.8 seconds), exactly matching gbawriter R-only Caps. Short presses do nothing. Each hold acts once; release before trying again. Any other key or leaving reading cancels that hold. Library/settings Up/Down stay immediate.
 
-Current-layout bookmarks retain previous page offsets. Older or unknown layouts keep the saved byte position but rebuild Back history incrementally. Back history is rebuilt from a line start about 8 KiB before the page (not from the book start) and the next older block loads ahead while few Back pages remain, so Back after Go to or resume is quick even deep in a book. An early Back request shows `Loading back...` while reconstruction proceeds. A partly completed rebuild restarts safely at its saved anchor rather than resuming an incomplete page scan.
+History is reused only when its renderer marker and effective spacing/gap/Arabic match. Otherwise the exact saved byte anchor survives while history and page information rebuild. Back rebuilds incrementally from a nearby line start (about 8 KiB back, not the book start), prefetching older blocks. Early Back shows `Loading back...`; partial rebuilds restart safely at their anchor, not an incomplete scan.
 
 ### Settings
 
-- `Up` / `Down`: select line spacing (0 through 4 pixels), paragraph gap (None, Small, Half or Full line) or Go to. The screen also shows how many lines of unbroken text fit on a page, and the current page number and percentage. While the page count runs in the background (also while Settings is open) it shows `Page ...`, then an estimate such as `Page about 142`, until the exact number is known. After Go to, pages already counted are kept.
+- `Up` / `Down`: select line spacing (0 through 4 pixels), paragraph gap (None, Small, Half or Full line), `L/R on startup` (Off/On), or Go to. Grey Lines per page and page/percentage readouts are information only; the blue cursor skips them. While the page count runs in the background (also while Settings is open) it shows `Page ...`, then an estimate such as `Page about 142`, until the exact number is known. After Go to, pages already counted are kept.
 - `Left` / `Right`: change the selected value. On Go to, `L` / `R` change it by 10%.
 - Go to: press `A` to jump to the chosen percentage straight away (closing settings with `B` or `Start` also jumps if the value changed). The jump starts at the beginning of that paragraph.
-- `B` or `Start`: apply settings and return to reading. To retain them, press `Start` again from the reader. Rows stay 16px high; SuperFW is native 16px and Arabic Ghoulam native 11px. Settings changes keep the byte anchor and rebuild incompatible history.
+- `B` or `Start`: apply and return. All three exit routes (including A on Go to) save changed global preferences once; unchanged or reverted values do not write. Spacing/gap apply to every book, defaulting to 1/Full when no config exists, never to the first book's old values. Layout changes preserve the byte anchor and rebuild incompatible history, not the EPUB text cache. Startup-only edits do not change layout or the current shoulder mode. SuperFW remains native 16px and Arabic Ghoulam native 11px.
 
 ### Arabic display
 
@@ -91,31 +91,35 @@ Later pages are not checked in an OFF session. To activate Arabic found later, s
 
 ### Files and automatic saves
 
-Every book has its own companion: `Title.txt` uses `Title.txt.sav`; `Title.epub` uses `Title.epub.sav`. All newly generated state and the EPUB normalized-text cache are in that SAV, not in the book. Book bytes stay unchanged. The book may be marked read-only, but its directory and companion must be writable. Leave sufficient free card space and keep backups.
+Every book has its own companion: `Title.txt` uses `Title.txt.sav`; `Title.epub` uses `Title.epub.sav`. All newly generated per-book state and the EPUB normalized-text cache are in that SAV, not in the book. Book bytes stay unchanged. The book may be marked read-only, but its directory and companion must be writable. Leave sufficient free card space and keep backups.
 
-An EPUB can show `Preparing cache...` on first opening, cache migration or rebuilding. This automatically saves its cache and current state in its SAV. Opening-page Arabic activation also saves automatically, combined with cache preparation when needed. Ordinary page turns do not save; later position, history and settings changes require a successful Reader `Start` before leaving. An interrupted initial cache may leave a complete state without a usable cache; a later open rebuilds from the originals.
+An EPUB can show `Preparing cache...` on first opening, cache migration or rebuilding. This automatically saves its cache and current state in its SAV. Opening-page Arabic activation also saves automatically, combined with cache preparation when needed. Ordinary page turns do not save; later position/history changes require a successful Reader `Start` before leaving. Global-only saves never write a book bookmark, SAV or cache. An interrupted initial cache may leave a complete state without a usable cache; a later open rebuilds from the originals.
+
+Global settings and the last-opened filename use `SETTINGS0.DAT` / `SETTINGS1.DAT` in `/gbareader`. A successful book open saves a changed filename even without visiting Settings or pressing Start; reopening the same book is a no-op when globals are clean. Recording a filename preserves preferences, and applying preferences preserves the filename. This remembers selection only, not a new bookmark.
 
 ### Moving, renaming and resetting
 
 Copy or move the book AND its SAV together. When renaming `Title.epub` to `Novel.epub`, rename `Title.epub.sav` to `Novel.epub.sav` too. Do not reuse a same-name SAV after replacing or editing its book. Delete or move aside that SAV deliberately, after keeping a backup. Discovery accepts filenames up to 255 UTF-8 bytes, but companion saving requires a book filename of at most 251 bytes to leave room for `.sav`.
 
-Deleting a SAV loses its latest position, settings, Arabic flag, history and EPUB cache; the cache can be rebuilt. Old embedded metadata, if present, was never removed: deleting the SAV can therefore restore an older embedded bookmark or Arabic flag rather than a completely fresh start. Use a clean original book if a complete reset is wanted.
+Deleting a SAV loses its latest position, Arabic flag, history and EPUB cache, not global preferences; the cache can be rebuilt. To carry preferences and Home selection to another card, copy both SETTINGS files too. Back up then move both aside to reset globals to defaults and no remembered book. Old embedded metadata, if present, was never removed: deleting the SAV can therefore restore an older embedded bookmark or Arabic flag rather than a completely fresh start. Use a clean original book if a complete reset is wanted.
 
 ### Migration and failed saves
 
 Without a SAV, valid legacy TXT footers and EPUB state are read; TXT footers remain hidden from displayed text. A successful save imports state into the companion without removing old bytes. A usable embedded EPUB cache is read and migrated automatically; otherwise the cache is rebuilt from the original chapters. A valid matching SAV takes precedence. An unreadable, mismatched or unknown SAV (even empty) suppresses embedded state instead of reviving a possibly stale bookmark, and is not overwritten automatically.
 
-After `Save failed`, keep the book open and retry `Start`; pending changes are not durable. A transient source read error can be retried read-only after checking size and identity. A complete previous state bank can survive a torn update. A newly created empty SAV is retryable only while that book stays open; after reopening, an empty SAV has no ownership proof. Back up and move aside unknown or mismatched SAVs on a computer, including empty interrupted creations. A damaged record with a valid matching identity header remains retryable. Persistent media faults, arbitrary power loss and filesystem damage are not guaranteed recoverable. Never remove the card or switch off during storage operations.
+After a position-save failure, keep the book open and retry Reader `Start`. A settings-save failure leaves edited globals and the remembered filename pending in RAM; retry on the next Settings close, successful book open or Reader `Start`. Pending changes are not durable. One save can succeed while the other fails. A transient source read error can be retried read-only after checking size and identity. A complete previous state bank can survive a torn update. A newly created empty SAV is retryable only while that book stays open; after reopening, an empty SAV has no ownership proof. Back up and move aside unknown or mismatched SAVs on a computer, including empty interrupted creations. A damaged record with a valid matching identity header remains retryable. Persistent media faults, arbitrary power loss and filesystem damage are not guaranteed recoverable. Never remove the card or switch off during storage operations.
+
+Global loading selects the newest valid record, falling back to the other copy. `Settings recovered` warns of a damaged/unreadable partner; `Settings load failed` uses defaults when neither is usable. Unknown versions, unrelated collisions and empty files left by a previous process are preserved. Back them up and move them aside on a computer before retrying; do not remove the card during writes. Two copies cannot guarantee recovery from arbitrary media or filesystem damage.
 
 ### Compatibility and identity
 
 EPUB support is text-only: no DRM, images, CSS presentation, scripts, embedded fonts, audio or video. Supported text uses UTF-8. The source identity uses file sizes, three bounded physical samples and, for EPUB, original central-directory metadata. It avoids a full-book hash on each open, but cannot detect every same-size edit outside those samples or malicious checksum replacement. Treat books as unchanged while their companions are in use; after any external edit, move aside the old SAV.
 
-Requires compatible Supercard SD hardware. Host filesystem tests and emulator UI checks do not prove physical card operation. Keep backups of both books and companions.
+Requires compatible Supercard SD hardware. Host filesystem tests and emulator UI checks do not prove physical card operation. Keep backups of books, companions and both SETTINGS files.
 
 ## Hardware and files
 
-The Supercard SD driver, FatFS configuration, fonts, normal page-turn inputs, Arabic geometry and existing OAM capacity assertions are retained. Shoulder-page-turn mode is session-only; it is not per-book generated persistent data. Reading state uses the existing checked 800-byte serializer within the SAV banks, including its original history-validation/rebuild semantics. Read-only legacy handling remains in the reader; the old embedded writer is retained only as a host fixture generator, not a device save route.
+The Supercard SD driver, FatFS configuration, fonts, normal page-turn inputs, Arabic geometry and existing OAM capacity assertions are retained. The live shoulder-page-turn mode is session-only; its startup default is global, never per-book. Reading state uses the existing checked 800-byte serializer within the SAV banks, including history-layout metadata checked against the effective global-plus-book layout before reuse. Read-only legacy handling remains in the reader; the old embedded writer is retained only as a host fixture generator, not a device save route.
 
 ## Building and testing
 
@@ -141,7 +145,8 @@ The inherited `make test` frontend smoke wrapper is not sufficient boot evidence
 - `reader_sidecar_cache.inc`: bounded normalized export and checksum-table construction; no cache rewrite for ordinary state saves.
 - `epub_document`: ZIP/container/OPF parsing, chapter normalization, legacy/companion cache validation and checked lazy block fallback. The archive and external cache remain distinct byte sources.
 - `reader_txt_save`: existing versioned state codec, reused without dropping byte/history/Arabic semantics.
-- `main`: existing Butano UI and automatic/manual save triggers; updated version and storage help.
+- `reader_global_settings`: bounded explicit versioned global records, full remembered filename, checked alternating save/readback and dirty retry.
+- `main`: Butano UI, global startup/open/apply saving, independent manual bookmark save and session-only hold mode.
 
 Body text uses the existing double-buffered bitmap renderer rather than one OAM sprite per glyph. The menu remains sprite-based.
 

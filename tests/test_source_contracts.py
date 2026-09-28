@@ -135,7 +135,7 @@ assert 'arabic::contains(page.lines[line].text)' in opening
 assert 'reader::open_document_page(' in main
 assert 'settings.arabic_shaping);' in main
 assert 'reader::OpenResult::SAVE_FAILED' in main
-assert 'show_save_result(save_ui, save_sprites, false);' in main
+assert 'opened != reader::OpenResult::SAVE_FAILED, globals_saved' in main
 assert 'file.save_footer(state, context.cache)' in main
 assert 'epub.needs_cache_persistence()' in main, 'Opening must migrate a valid legacy embedded cache too'
 print("PASS: source contracts")

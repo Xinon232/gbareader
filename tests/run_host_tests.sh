@@ -11,9 +11,17 @@ if [[ -n "${EXTRA_CXXFLAGS:-}" ]]; then
     CXXFLAGS+=("${EXTRA_CXXFLAGS_ARRAY[@]}")
 fi
 
+g++ "${CXXFLAGS[@]}" "$ROOT/tests/test_reader_global_settings.cpp"     "$ROOT/src/reader_global_settings.cpp" "$ROOT/src/reader_ui_state.cpp" -o "$OUT/test_reader_global_settings"
+"$OUT/test_reader_global_settings"
+g++ "${CXXFLAGS[@]}" -D__DEVKITARM__ "$ROOT/tests/test_reader_global_storage.cpp"     "$ROOT/src/reader_global_settings.cpp" -o "$OUT/test_reader_global_storage"
+"$OUT/test_reader_global_storage"
+python3 "$ROOT/tests/test_global_wiring.py"
 python3 "$ROOT/tests/extract_reader_input.py" "$OUT/reader_input.inc"
+python3 "$ROOT/tests/extract_global_app.py" "$OUT"
+g++ "${CXXFLAGS[@]}" -D__DEVKITARM__ -I"$OUT" "$ROOT/tests/test_reader_global_app.cpp"     "$ROOT/src/reader_global_settings.cpp" "$ROOT/src/reader_core.cpp" "$ROOT/src/reader_ui_state.cpp"     "$ROOT/src/reader_txt_save.cpp" -o "$OUT/test_reader_global_app"
+"$OUT/test_reader_global_app"
 g++ "${CXXFLAGS[@]}" -I"$OUT" "$ROOT/tests/test_reader_input_adapter.cpp" \
-    "$ROOT/src/reader_ui_state.cpp" -o "$OUT/test_reader_input_adapter"
+    "$ROOT/src/reader_ui_state.cpp" "$ROOT/src/reader_global_settings.cpp" -o "$OUT/test_reader_input_adapter"
 "$OUT/test_reader_input_adapter"
 python3 "$ROOT/tests/extract_overlay.py" "$OUT/overlay.inc"
 g++ "${CXXFLAGS[@]}" -I"$OUT" "$ROOT/tests/test_reader_overlay.cpp" -o "$OUT/test_reader_overlay"

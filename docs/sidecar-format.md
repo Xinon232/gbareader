@@ -4,7 +4,7 @@
 
 Append `.sav` to the complete book filename in the same directory. `Title.txt.sav` and `Title.epub.sav` are distinct. The native library remains `/gbareader`, up to 64 discovered books; SAV files are not library entries. Source names up to 255 UTF-8 bytes remain readable; the conservative saving limit is 251 bytes, leaving room for the suffix under FatFS's 255-unit LFN limit. Names are never silently truncated to make a companion.
 
-All source handles use `FA_READ | FA_OPEN_EXISTING`. Only the separately owned companion FIL is writable. There are no source renames, writes or truncates and no temporary aliases. The second FIL replaces the old 800-byte footer rollback array, rather than adding a second file plus another state buffer. The 8 KiB source window is invalidated and exclusively borrowed for state and cache readback. Export retains the existing 512-byte write scratch, parser/inflater workspace, 4096-byte checked blocks and 512-byte checksum-table window.
+All source handles use `FA_READ | FA_OPEN_EXISTING`. Only the separately owned companion FIL and independent global-settings FIL are writable. There are no source renames, writes or truncates and no temporary aliases. The second FIL replaces the old 800-byte footer rollback array, rather than adding a second file plus another state buffer. The 8 KiB source window is invalidated and exclusively borrowed for state and cache readback. Export retains the existing 512-byte write scratch, parser/inflater workspace, 4096-byte checked blocks and 512-byte checksum-table window.
 
 ## Version 1 on-disk layout
 
@@ -37,7 +37,7 @@ Each bank:
 | 864 | 156 | Reserved, zero on write |
 | 1020 | 4 | Bank CRC over bytes 0 through 1019 |
 
-The highest valid matching generation wins. A damaged bank falls back to the other complete checked bank, not to embedded state. CRC/header/identity checks precede state parsing. The existing serializer/parser retains the byte anchor, 0–4 line spacing and paragraph gap (display-layout marker 4; older markers keep the anchor but reset settings), explicit Arabic ON/OFF and up to 64 strictly increasing prior offsets. BUILDING history intentionally restarts from its anchor because a partial page/scan ring was never fully serialized. Unknown display layouts retain the safe anchor but rebuild boundaries. Unknown container/text versions are not interpreted or automatically overwritten.
+The highest valid matching generation wins. A damaged bank falls back to the other complete checked bank, not to embedded state. CRC/header/identity checks precede state parsing. The existing serializer/parser retains the byte anchor, 0–4 line spacing and paragraph gap as history-layout metadata (display-layout marker 4), explicit Arabic ON/OFF and up to 64 strictly increasing prior offsets. Opening always applies the global spacing/gap, never the old book values. Saved history is reused only for a valid byte anchor, matching renderer marker and identical effective spacing/gap/Arabic; otherwise that exact anchor is retained and history/page-derived information rebuilds. This does not invalidate the layout-independent EPUB text cache. BUILDING history intentionally restarts from its anchor because a partial page/scan ring was never fully serialized. Unknown display layouts retain the safe anchor but rebuild boundaries. Unknown container/text versions are not interpreted or automatically overwritten.
 
 ## Source identity and limitations
 
@@ -77,6 +77,33 @@ FatFS latches source read/seek errors in `FIL.err`. A subsequent live save or un
 - A successful save puts that state into the SAV. A valid embedded EPUB normalized cache is read and exported into the companion; otherwise original chapter normalization supplies it. Current embedded cache hits are now eligible for automatic companion preparation.
 - Valid matching companion state wins over embedded state. Existing unreadable, invalid, mismatched or unknown companions suppress embedded state rather than reviving stale anchors/Arabic/history. An incomplete initial migration can consequently expose no saved state on reopen while the old embedded bytes remain recoverable in the untouched source.
 - Deleting/moving aside a companion permits legacy fallback again. Thus deleting SAV is not necessarily a total reset for an old book; use its clean original bytes for that purpose.
+
+## V3.0 independent global store
+
+`/gbareader/SETTINGS0.DAT` and `SETTINGS1.DAT` are separate from every book companion. The reader does not create a missing library directory. Defaults are spacing 1, gap Full, shoulder startup Off and no remembered filename; old book values never seed the globals. The live shoulder mode initializes once at launch. Hold Up never persists; startup-only edits neither affect that mode now nor invalidate history/cache.
+
+The latest supported global record is explicit **version 2**, 32 + N bytes, where N is 0..255. This bounded variable extension replaces the original 32-byte proposal to support the complete last-successfully-opened filename, including UTF-8 and its extension, without truncation or hash collisions. No native struct or numeric list index is stored.
+
+| Offset | Bytes | Meaning |
+|---|---:|---|
+| 0 | 8 | ASCII `GBARCFG1` |
+| 8 | 4 | Little-endian version = 2 |
+| 12 | 4 | Nonzero generation, no wrap after 0xffffffff |
+| 16 | 1 | Line spacing, 0..4 |
+| 17 | 1 | Gap, None=0 / Small=1 / Half=2 / Full=3 |
+| 18 | 1 | L/R startup, strictly 0 or 1 |
+| 19 | 1 | N: exact filename byte length, zero means none |
+| 20 | 8 | Reserved, all zero |
+| 28 | N | Full base filename bytes, no NUL or path separators |
+| 28+N | 4 | CRC32/IEEE of all preceding 28+N bytes |
+
+Physical length must match exactly. Version 1 is still read at exactly 32 bytes: byte 19 and bytes 20..27 must all be zero, CRC is at 28, and no filename is remembered. Future/unknown versions are collisions, never automatically replaced. A name is matched byte-for-byte against the current scanned list, including extension and case. Matching selects/scrolls only, never opens; absence, rename or a failed scan selects index zero. A replacement book with the same filename is still that selection, not a content-identity claim.
+
+Highest valid generation wins; equal generations prefer slot zero. A damaged partner produces a recovery warning when a valid record exists; neither usable produces defaults plus a load error (two missing files use quiet defaults). Settings close by B, Start or A on Go to writes once only if values differ from the last verified snapshot. Every successful book opening updates the filename and saves changed/pending globals; failed opens and moving the Home cursor do not. Reader Start saves position and retries globals independently. One failure never suppresses the other write or produces blanket success. Global writes do not touch book position, Arabic, SAV or cache bytes.
+
+Saving probes the inactive slot, creates missing files with CREATE_NEW, and checks seek, complete write count, final length/truncate, sync, close, reopen and exact intended byte readback. Only then do the generation, active slot and persisted snapshot advance. A single bounded FIL and record buffer belong to the global object in EWRAM; a failed close quarantines that same FIL until a later close succeeds, never opening over it. Failed preferences/filename remain pending in RAM; there is no per-frame or per-key retry. Explicit Settings close, successful opening or Reader Start retries. Changing back to a clean verified snapshot before a save needs no record write. After an attempted write has failed verification, an uncertainty flag keeps even a reverted value dirty until verified replacement: the failed attempt may already have reached disk.
+
+Existing unrelated, unknown-version and empty previous-process files are preserved. Only the current object's successful CREATE_NEW permits retrying an empty first-write artifact. A recognizable damaged supported record can be replaced while retaining a valid active copy; when neither copy is valid, damaged diagnostic files are not silently erased. Back up and move colliding files aside on a computer. These noncryptographic ownership/checksum checks are not protection against deliberate spoofing or concurrent external file replacement. Keep both SETTINGS files when moving preferences to another card; move both aside to reset globals. Book SAV deletion does not reset them. Two small copies improve recovery, not arbitrary media/controller/filesystem failure guarantees. The maximum record pair is 574 payload bytes; FAT allocation is larger.
 
 ## Verification scope
 

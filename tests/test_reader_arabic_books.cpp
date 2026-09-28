@@ -1,5 +1,6 @@
 #include "reader_body.h"
 #include "reader_file.h"
+#include "reader_open.h"
 #include "epub_document.h"
 #include <cassert>
 #include <cstdio>
@@ -61,7 +62,23 @@ static void exercise(const reader::ByteSource& source) {
   assert(next_page(source,settings,body_glyph_width,h,back,next));
   assert(next.start_offset==back.next_offset);
  }
- printf("%u pages: shaped bounds, contiguous next/back, resume, layouts 0/1/2/3/9 passed\n",pages);
+ // Real shipped font metrics: global layout overrides SAV metadata without
+ // moving the byte anchor or invalidating the normalized source/cache.
+ const auto optimized_before=source.optimized_size();
+ for(int spacing:{0,4})for(auto gap:{ParagraphGap::NONE,ParagraphGap::FULL}) {
+  TxtSaveFooter saved{};saved.byte_offset=anchor;saved.settings=settings;
+  saved.history.count=1;saved.history.offsets[0]=0;
+  Settings globals{uint8_t(spacing),gap,false};PageHistoryRebuild rebuild{};
+  assert(open_document_page(source,&saved,globals,body_glyph_width,h,p,rebuild,false,nullptr,nullptr)==OpenResult::OPENED);
+  assert(globals.line_spacing==spacing&&globals.paragraph_gap==gap&&globals.arabic_shaping&&p.start_offset==anchor);
+  assert(h.count==0&&rebuild.anchor==anchor);
+  while(rebuild.state==HistoryRebuildState::BUILDING)assert(step_history_rebuild(source,globals,body_glyph_width,rebuild)!=HistoryRebuildState::FAILED);
+  assert(adopt_rebuilt_history(rebuild,h));assert(previous_page(source,globals,body_glyph_width,h,back));
+  assert(back.start_offset<anchor&&back.next_offset>=anchor);
+  assert(next_page(source,globals,body_glyph_width,h,back,next)&&next.start_offset==back.next_offset);
+  assert(source.optimized_size()==optimized_before);
+ }
+ printf("%u pages: shaped bounds, contiguous next/back, resume, layouts 0/1/2/3/9 and global font-metric overrides passed\n",pages);
 }
 int main(int argc,char** argv) {
  assert(argc==6); auto base=load(argv[1]),symbols=load(argv[2]); font_base_addr=base.data();reader_font_base_addr=symbols.data();

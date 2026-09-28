@@ -19,6 +19,7 @@ enum class HistoryRebuildState {BUILDING,READY,FAILED};
 struct PageHistoryRebuild {HistoryRebuildState state=HistoryRebuildState::FAILED;};
 struct TxtSaveFooter {unsigned anchor; Settings settings;PageHistory history;PageHistoryRebuild rebuild;};
 int forwards=0,backs=0,saves=0;
+const char* save_status_message(bool,bool);
 int page_percent(const Page&,unsigned){return 37;}
 bool next_page(const ByteSource&,Settings,int,PageHistory&,Page&,Page&){++forwards;return true;}
 bool previous_page(const ByteSource&,Settings,int,PageHistory&,Page&){++backs;return true;}
@@ -32,6 +33,8 @@ std::string last_overlay;
 void show_overlay(int,Sprites& sprites,const char* text,int=64){last_overlay=text;sprites.visible=true;}
 void show_saving_overlay(int,Sprites&){}
 void show_save_result(int,Sprites&,bool){}
+struct GlobalStub {bool save(){return true;}};
+GlobalStub global_settings;
 struct App {
 reader::ReaderHold reader_hold{};
 

@@ -30,6 +30,7 @@ extern "C" {
 #include "reader_hold.h"
 #include "epub_document.h"
 #include "reader_file.h"
+#include "reader_global_settings.h"
 
 #include <cstring>
 
@@ -45,6 +46,8 @@ constexpr bn::color palette_colors[16] = {
 constexpr bn::bg_palette_item palette_item(bn::span<const bn::color>(palette_colors), bn::bpp_mode::BPP_8);
 
 BN_DATA_EWRAM_BSS reader::ReaderFile file;
+BN_DATA_EWRAM_BSS reader::GlobalSettingsStore global_settings;
+static_assert(reader::GLOBAL_BOOK_NAME_MAX == reader::LIBRARY_NAME_MAX);
 BN_DATA_EWRAM_BSS reader::EpubDocument epub;
 BN_DATA_EWRAM_BSS reader::Page page;
 BN_DATA_EWRAM_BSS reader::PageHistory history;
@@ -178,13 +181,6 @@ void show_saving_overlay(bn::sprite_text_generator& generator,
     show_overlay(generator, sprites, "save...");
 }
 
-void show_save_result(bn::sprite_text_generator& generator,
-                      bn::vector<bn::sprite_ptr, SAVE_OVERLAY_SPRITE_CAPACITY>& sprites,
-                      bool saved)
-{
-    show_overlay(generator, sprites, reader::save_result_string(saved));
-}
-
 // Keep keypad temporaries out of the existing reader main-stack budget.
 [[gnu::noinline]] unsigned sample_reader_hold(reader::ReaderHold& hold, Scene scene)
 {
@@ -240,21 +236,26 @@ int main()
 
     settings = reader::default_settings();
     bool storage_ok = reader::storage_init();
+    const auto globals_loaded = storage_ok ? global_settings.load() : reader::GlobalLoadResult::ERROR;
     Scene scene = Scene::LIBRARY;
-    int selected = 0;
+    int selected = storage_ok ? reader::remembered_library_selection(
+            global_settings.values.last_book, reader::library_count(), reader::library_name) : 0;
     int settings_row = 0;
-    constexpr int GOTO_ROW = reader::SETTING_FIELD_COUNT;
+    constexpr int STARTUP_ROW = reader::SETTING_FIELD_COUNT;
+    constexpr int GOTO_ROW = STARTUP_ROW + 1;
     reader::Settings settings_before = settings;
     int goto_percent = 0;
     int goto_before = 0;
     int count_refresh_frames = 0;
-    // Deliberately session-only: shoulder page turns always start disabled.
+    // The saved default initializes the live session only once at launch.
     reader::ReaderHold reader_hold{};
+    reader_hold.shoulder_page_turns = global_settings.values.shoulder_startup;
     bool redraw_ui = true;
     bool redraw_page = false;
     const char* open_name = nullptr;
     const reader::ByteSource* active_source = &file;
-    const char* library_status = nullptr;
+    const char* library_status = globals_loaded == reader::GlobalLoadResult::ERROR ? "Settings load failed" :
+            globals_loaded == reader::GlobalLoadResult::RECOVERED ? "Settings recovered" : nullptr;
     reader::SaveMessageTimer save_message_timer{};
     bool pending_back = false;
     reader::CreditsInputGate credits_gate{};
@@ -317,6 +318,8 @@ int main()
                     bn::core::update();
                     return file.save_footer(state, context.cache);
                 };
+                settings.line_spacing = global_settings.values.line_spacing;
+                settings.paragraph_gap = global_settings.values.paragraph_gap;
                 auto opened = library_status ? reader::OpenResult::FAILED : reader::open_document_page(
                         *active_source, footer_loaded ? &footer : nullptr, settings, glyph_width,
                         history, page, history_rebuild, prepare_cache, opening_save, &save_context);
@@ -329,9 +332,12 @@ int main()
                 if(opened != reader::OpenResult::FAILED) {
                     pending_back = false;
                     restart_page_count();
-                    if(opened == reader::OpenResult::SAVE_FAILED) {
-                        // ON remains usable in RAM; later Start retries its persistence.
-                        show_save_result(save_ui, save_sprites, false);
+                    reader::remember_global_book(global_settings.values, open_name);
+                    const bool globals_saved = global_settings.save();
+                    if(opened == reader::OpenResult::SAVE_FAILED || !globals_saved) {
+                        // Both independently pending states remain usable in RAM.
+                        show_overlay(save_ui, save_sprites, reader::save_status_message(
+                                opened != reader::OpenResult::SAVE_FAILED, globals_saved));
                         reader::start_save_message(save_message_timer);
                     }
                     scene = Scene::READER;
@@ -398,7 +404,8 @@ int main()
                 bn::core::update();
                 const bool saved = file.save_footer(
                         footer, active_source == &epub ? active_source : nullptr);
-                show_save_result(save_ui, save_sprites, saved);
+                const bool globals_saved = global_settings.save();
+                show_overlay(save_ui, save_sprites, reader::save_status_message(saved, globals_saved));
                 reader::start_save_message(save_message_timer);
             } else if(bn::keypad::select_pressed()) {
                 pending_back = false;
@@ -485,6 +492,9 @@ int main()
                     if(goto_percent > 100) goto_percent = 100;
                     redraw_ui = true;
                 }
+            } else if(settings_row == STARTUP_ROW && delta) {
+                global_settings.values.shoulder_startup = delta > 0;
+                redraw_ui = true;
             } else if(delta) {
                 reader::adjust_setting(settings, reader::SettingField(settings_row), delta);
                 redraw_ui = true;
@@ -504,6 +514,12 @@ int main()
                 }
                 pending_back = false;
                 save_sprites.clear();
+                global_settings.values.line_spacing = settings.line_spacing;
+                global_settings.values.paragraph_gap = settings.paragraph_gap;
+                if(!global_settings.save()) {
+                    show_overlay(save_ui, save_sprites, "Settings save failed");
+                    reader::start_save_message(save_message_timer);
+                }
                 scene = Scene::READER; sprites.clear(); redraw_page = true; redraw_ui = false;
             }
         }
@@ -560,7 +576,7 @@ int main()
                 add_text(ui, 0, -62, "Reader settings", sprites);
                 // Rows share one left edge; the Butano ">" marks the selected row.
                 constexpr int ROW_X = -60;
-                const int row_y[GOTO_ROW + 1] = { -40, -24, 16 };
+                const int row_y[GOTO_ROW + 1] = { -40, -24, 8, 24 };
                 add_text(cursor_ui, ROW_X - 12, row_y[settings_row], ">", sprites);
                 ui.set_left_alignment();
                 bn::string<48> spacing = "Line spacing: ";
@@ -571,7 +587,11 @@ int main()
                 add_text(ui, ROW_X, row_y[1], gap.data(), sprites);
                 bn::string<48> lines = "Lines per page: ";
                 lines += bn::to_string<4>(reader::lines_per_page(settings));
-                add_text(ui, ROW_X, -8, lines.data(), sprites);
+                hint_ui.set_left_alignment();
+                add_text(hint_ui, ROW_X, -8, lines.data(), sprites);
+                bn::string<48> startup = "L/R on startup: ";
+                startup += global_settings.values.shoulder_startup ? "On" : "Off";
+                add_text(ui, ROW_X, row_y[STARTUP_ROW], startup.data(), sprites);
                 bn::string<48> go = "Go to: "; go += bn::to_string<4>(goto_percent); go += "%";
                 add_text(ui, ROW_X, row_y[GOTO_ROW], go.data(), sprites);
                 bn::string<48> where = "Page ";
@@ -585,7 +605,7 @@ int main()
                 }
                 where += " - "; where += bn::to_string<4>(reader::page_percent(page, active_source->size()));
                 where += "%";
-                add_text(ui, ROW_X, 32, where.data(), sprites);
+                add_text(hint_ui, ROW_X, 40, where.data(), sprites);
                 hint_ui.set_center_alignment();
                 add_text(hint_ui, 0, 64, settings_row == GOTO_ROW ? "A go  L/R 10%  B close" :
                                                                   "LEFT/RIGHT change  B close", sprites);

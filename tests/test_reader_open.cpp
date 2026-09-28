@@ -112,5 +112,32 @@ int main() {
                               false, Save::write, &save) == OpenResult::SAVED);
     assert(settings.arabic_shaping && page.start_offset == 0);
 
+    // The caller's globals beat every saved book layout. History is metadata.
+    settings = default_settings();
+    assert(open_document_page(book,nullptr,settings,nullptr,history,page,rebuild,false,Save::write,&save)==OpenResult::OPENED);
+    assert(next_page(book,settings,nullptr,history,page,next));page=next;
+    TxtSaveFooter matching{page.start_offset,settings,history,{}};
+    assert(matching.history.count>0);
+    assert(open_document_page(book,&matching,settings,nullptr,history,page,rebuild,false,Save::write,&save)==OpenResult::OPENED);
+    assert(history.count==matching.history.count && page.start_offset==matching.byte_offset);
+    for(int change=0;change<3;++change) {
+        settings=default_settings();auto conflicting=matching;
+        if(change==0)conflicting.settings.line_spacing=4;
+        if(change==1)conflicting.settings.paragraph_gap=ParagraphGap::NONE;
+        if(change==2)conflicting.display_layout=99;
+        assert(open_document_page(book,&conflicting,settings,nullptr,history,page,rebuild,false,Save::write,&save)==OpenResult::OPENED);
+        assert(settings.line_spacing==1 && settings.paragraph_gap==ParagraphGap::FULL);
+        assert(page.start_offset==matching.byte_offset && history.count==0 && rebuild.anchor==matching.byte_offset);
+        while(rebuild.state==HistoryRebuildState::BUILDING)assert(step_history_rebuild(book,settings,nullptr,rebuild)!=HistoryRebuildState::FAILED);
+        assert(adopt_rebuilt_history(rebuild,history));
+        assert(previous_page(book,settings,nullptr,history,next)&&next.next_offset>=matching.byte_offset);
+    }
+    settings={4,ParagraphGap::NONE,false};auto latin=matching;
+    latin.settings={0,ParagraphGap::SMALL,true};
+    assert(open_document_page(book,&latin,settings,nullptr,history,page,rebuild,false,Save::write,&save)==OpenResult::OPENED);
+    assert(settings.line_spacing==4&&settings.paragraph_gap==ParagraphGap::NONE&&settings.arabic_shaping);
+    assert(open_document_page(book,nullptr,settings,nullptr,history,page,rebuild,false,Save::write,&save)==OpenResult::OPENED);
+    assert(settings.line_spacing==4&&settings.paragraph_gap==ParagraphGap::NONE&&!settings.arabic_shaping);
+    puts("PASS: global priority, matching history reuse, mismatched anchor rebuild and isolated sticky Arabic");
     puts("PASS: per-document reset, delayed discovery, sticky resume, mode migration, failure RAM, one cache save and wrap-edge probe");
 }

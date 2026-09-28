@@ -1,5 +1,6 @@
 #include "reader_file.h"
 #include "reader_open.h"
+#include "reader_global_settings.h"
 #include "epub_document.h"
 #include "diskio.h"
 #include <cstdio>
@@ -35,6 +36,29 @@ int main(int argc,char**argv){
  if(argc!=9)return 2; // image book action version fault ordinal policy out-prefix
  fd=::open(argv[1],O_RDWR);if(fd<0)return 3;
  FATFS fs{};if(f_mount(&fs,"0:",1)!=FR_OK)return 4;
+ if(std::strncmp(argv[3],"global-",7)==0 && std::strcmp(argv[3],"global-book")) {
+  {
+   GlobalSettingsStore globals;const auto loaded=globals.load();
+   kind=argv[5][0];target=atoi(argv[6]);policy=argv[7][0];
+   const bool probe=std::strcmp(argv[3],"global-probe")==0;
+   if(!probe) {
+    const int v=atoi(argv[4]);
+    if(std::strcmp(argv[3],"global-remember")) {
+     globals.values.line_spacing=v%5;globals.values.paragraph_gap=ParagraphGap(v%4);globals.values.shoulder_startup=v%2;
+    }
+    if(std::strcmp(argv[3],"global-prefs"))assert(remember_global_book(globals.values,argv[2]));
+   }
+   armed=!probe;bool saved=probe||globals.save();armed=false;
+   if(std::strcmp(argv[3],"global-retry")==0 && !saved) {assert(globals.dirty());saved=globals.save();}
+   assert(scan_library());
+   const int selected=remembered_library_selection(globals.values.last_book,library_count(),library_name);
+   printf("{\"load\":%d,\"saved\":%s,\"dirty\":%s,\"generation\":%u,\"active\":%d,\"spacing\":%d,\"gap\":%d,\"startup\":%s,\"name_match\":%s,\"selected\":%d,\"hits\":%d}\n",
+    int(loaded),saved?"true":"false",globals.dirty()?"true":"false",globals.generation(),globals.active_slot(),
+    globals.values.line_spacing,int(globals.values.paragraph_gap),globals.values.shoulder_startup?"true":"false",
+    !strcmp(globals.values.last_book,argv[2])?"true":"false",selected,hits);
+  }
+  f_mount(nullptr,"0:",0);fsync(fd);::close(fd);return 0;
+ }
  if(std::strncmp(argv[2],"/gbareader/",11)==0) {
   assert(scan_library()); assert(library_count()==2);
   bool found=false;
@@ -47,6 +71,24 @@ int main(int argc,char**argv){
  }
  ReaderFile file;bool opened=file.open_read_only(argv[2]);if(!opened){puts("{\"opened\":false}");return 0;}
  bool txt=txt_book_name(argv[2]);EpubDocument doc;const long reads_before_open=disk_reads;bool doc_ok=txt||doc.open(file);const long doc_open_reads=disk_reads-reads_before_open;
+ if(std::strcmp(argv[3],"global-book")==0) {
+  assert(doc_ok);
+  {
+   GlobalSettingsStore globals;globals.load();
+   const ByteSource& source=txt?static_cast<const ByteSource&>(file):static_cast<const ByteSource&>(doc);
+   TxtSaveFooter saved{};assert(file.saved_footer(saved));
+   Settings settings{globals.values.line_spacing,globals.values.paragraph_gap,false};
+   Page page{};PageHistory history{};PageHistoryRebuild rebuild{};
+   auto opened_page=open_document_page(source,&saved,settings,nullptr,history,page,rebuild,false,nullptr,nullptr);
+   assert(opened_page==OpenResult::OPENED && settings.arabic_shaping==saved.settings.arabic_shaping);
+   const auto anchor=saved.byte_offset<source.size()?saved.byte_offset:0;
+   assert(page.start_offset==anchor);
+   if(!same_settings(saved.settings,settings))assert(history.count==0&&rebuild.anchor==anchor);
+   printf("{\"anchor\":%u,\"spacing\":%d,\"gap\":%d,\"arabic\":%s,\"cache\":%u}\n",page.start_offset,
+     settings.line_spacing,int(settings.paragraph_gap),settings.arabic_shaping?"true":"false",source.optimized_size());
+  }
+  file.close();f_mount(nullptr,"0:",0);fsync(fd);::close(fd);return 0;
+ }
  if(std::strncmp(argv[3],"mode",4)==0) {
   assert(doc_ok);
   const ByteSource& source = txt ? static_cast<const ByteSource&>(file) : static_cast<const ByteSource&>(doc);

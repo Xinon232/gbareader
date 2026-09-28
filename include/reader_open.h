@@ -12,7 +12,7 @@ inline OpenResult open_document_page(const ByteSource& source, const TxtSaveFoot
         Settings& settings, GlyphWidth width, PageHistory& history, Page& page,
         PageHistoryRebuild& rebuild, bool prepare_cache, OpeningSave persist, void* context)
 {
-    if(saved) settings = saved->settings;
+    // Spacing/gap are caller-owned globals; SAV fields describe old history only.
     settings.arabic_shaping = saved && saved->settings.arabic_shaping;
     const uint32_t offset = saved && saved->byte_offset < source.size() ? saved->byte_offset : 0;
     bool detected = false;
@@ -27,7 +27,8 @@ inline OpenResult open_document_page(const ByteSource& source, const TxtSaveFoot
     }
     history = {};
     rebuild = {};
-    if(saved && offset == saved->byte_offset && !detected) {
+    if(saved && offset == saved->byte_offset && !detected &&
+       same_settings(saved->settings, settings)) {
         restore_saved_history(*saved, history, rebuild);
     } else {
         history.lazy = page.start_offset > 0;

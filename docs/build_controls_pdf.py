@@ -50,7 +50,7 @@ pdf=PdfReader(out)
 joined='\n'.join('\n'.join(line for line in page.extract_text().splitlines()
     if line not in ('gbareader · Full controls · Halim Jarrar',str(index)))
     for index,page in enumerate(pdf.pages,1))
-for required in ['Read TXT and EPUB','/gbareader','Select','Start','Left','Right','Up','Down','previous page','shoulder','Settings','Save failed','Halim Jarrar','no text editing']:
+for required in ['Read TXT and EPUB','/gbareader','Select','Start','Left','Right','Up','Down','previous page','shoulder','Settings','Save failed','Halim Jarrar','no text editing','L/R on startup','SETTINGS0.DAT','last successfully','Settings save failed']:
  assert required.lower() in joined.lower(),required
 instructions='\n\n'.join(b for b in text.strip().split('\n\n') if not b.startswith('See ['))
 markdown='# gbareader V3.0\n\n## Full controls\n\n'+instructions+'\n\n## Credits and font licenses\n\nMade by Halim Jarrar\n(C) 2026\nhalim-jarrar.de\nmonday@halim-jarrar.de\n\n'+'\n\n'.join(notices)+'\n'

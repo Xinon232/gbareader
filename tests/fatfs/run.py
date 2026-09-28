@@ -3,7 +3,8 @@
 import pathlib, subprocess, shutil, json, hashlib, sys, zipfile, shlex, tempfile, os, struct, zlib
 ROOT=pathlib.Path(__file__).resolve().parent
 SOURCE=pathlib.Path(sys.argv[1]).resolve() if len(sys.argv)>1 else ROOT.parents[1]
-for tool in ['gcc','g++','mkfs.fat','mcopy','fsck.fat','mattrib','mren']:
+SEED=os.environ.get('GBAREADER_FATFS_SEED_IMAGE')
+for tool in ['gcc','g++','mcopy','fsck.fat','mattrib','mren','mmd']+([] if SEED else ['mkfs.fat']):
     if not shutil.which(tool): raise SystemExit('Required test dependency missing: '+tool)
 RUN=pathlib.Path(tempfile.mkdtemp(prefix='gbareader-sidecar-fatfs-',dir=os.environ.get('TMPDIR')))
 SNAP=RUN/'snapshot'; SNAP.mkdir(); LOG=RUN/'commands.log'
@@ -21,16 +22,23 @@ for folder in ['src','include','tests']:
 stub=RUN/'stubs';stub.mkdir();(stub/'bn_core.h').write_text('#pragma once\n')
 common=['-O1','-g','-ffunction-sections','-fdata-sections','-D__DEVKITARM__','-I'+str(stub),'-I'+str(SNAP/'include')]
 objects=[]
-for name in ['ff.c','ffunicode.c','miniz_tinfl.c','reader_core.cpp','reader_txt_save.cpp','epub_document.cpp','reader_file.cpp']:
+for name in ['ff.c','ffunicode.c','miniz_tinfl.c','reader_core.cpp','reader_txt_save.cpp','epub_document.cpp','reader_file.cpp','reader_global_settings.cpp']:
     obj=RUN/(name+'.o');objects.append(obj)
     cmd(['gcc' if name.endswith('.c') else 'g++',*common,'-c',SNAP/'src'/name,'-o',obj])
 cmd(['g++','-std=c++17',*common,SNAP/'tests/fatfs/harness.cpp',*objects,'-Wl,--gc-sections','-o',RUN/'harness'])
+cmd(['g++','-std=c++17',*common,SNAP/'tests/fatfs/global_boot.cpp',*objects,'-Wl,--gc-sections','-o',RUN/'global-boot'])
 cmd(['python3',SNAP/'tests/generate_epub_fixtures.py',RUN/'fixtures'])
 fixture=RUN/'fixtures'/os.environ.get('GBAREADER_FATFS_FIXTURE','window-cross.epub')
 legacy=RUN/'legacy.txt';legacy.write_bytes(b'Original text body.\n'*80+b'\n[GBAR-SAVE:1;O= 0000123456;S=1;T=1;B=1;C=59AAEAA4                                             \n')
 base=RUN/'base.img'
-with base.open('wb') as f:f.truncate(32*1024*1024)
-cmd(['mkfs.fat','-F','16',base])
+# Optional preformatted EMPTY FAT seed for environments that forbid formatting.
+# Always operate on a copy; the supplied seed and fault semantics stay unchanged.
+if SEED:
+    shutil.copyfile(SEED,base)
+    cmd(['fsck.fat','-n',base])
+else:
+    with base.open('wb') as f:f.truncate(32*1024*1024)
+    cmd(['mkfs.fat','-F','16',base])
 for src,name in [(fixture,'book.epub'),(legacy,'legacy.txt')]:
     cmd(['mcopy','-i',base,src,'::'+name]);cmd(['mattrib','-i',base,'+r','::'+name])
 def invoke(image,book,action,version,prefix,kind='-',ordinal=0,policy='o'):
@@ -160,3 +168,7 @@ for name in ['book.epub','legacy.txt']:cmd(['mattrib','-i',base,'-r','::'+name])
 sys.dont_write_bytecode=True
 from mode_cases import run as run_mode_cases
 run_mode_cases(RUN,base,invoke,cmd)
+from global_cases import run as run_global_cases
+run_global_cases(RUN,success,invoke,cmd,extract)
+from global_boot_cases import run as run_global_boot_cases
+run_global_boot_cases(RUN,base,cmd)
