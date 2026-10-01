@@ -53,6 +53,14 @@ ifndef LIBBUTANOABS
 endif
 
 #---------------------------------------------------------------------------------------------------------------------
+# Reproducible ROM: strip the checkout and butano locations from paths embedded in the
+# ROM (__FILE__), so the same commit gives the same bytes in any folder or repository.
+# The project root is fixed here because butano re-runs make from inside $(BUILD).
+#---------------------------------------------------------------------------------------------------------------------
+export GBAREADER_ROOT ?= $(CURDIR)
+USERFLAGS   +=  -ffile-prefix-map=$(GBAREADER_ROOT)/= -ffile-prefix-map=$(LIBBUTANOABS)/=butano/
+
+#---------------------------------------------------------------------------------------------------------------------
 # Include main makefile:
 #---------------------------------------------------------------------------------------------------------------------
 include $(LIBBUTANOABS)/butano.mak
