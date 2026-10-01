@@ -114,26 +114,22 @@ Choose a book with `A`. gbareader asks `Import into /gbareader?`; `No` is select
 
 ## Credits and licenses
 
-gbareader is made by Halim Jarrar, (C) 2026. Website: https://halimj.itch.io - Contact: gba@halim-jarrar.de
+Made by Halim Jarrar, (C) 2026. Website: https://halimj.itch.io - Contact: gba@halim-jarrar.de
 
-gbareader is free software under the GNU General Public License 3.0 or later. The complete source code, the license and all notices: https://github.com/Xinon232/gbareader
+gbareader is free software under the GNU GPL v3 or later. Source code: https://github.com/Xinon232/gbareader
 
-gbareader uses work by these people and projects. Thank you!
+gbareader builds on the work of others:
 
 | Part | Made by | License |
 | --- | --- | --- |
-| Text renderer, fonts and SD card driver (SuperFW) | David Guillen Fandos | GPL 3.0 or later |
-| UNSCII font | Viznut | GPL; includes public-domain Fixedsys Excelsior glyphs |
-| GNU Unifont (with Hangul) | Roman Czyborra, Paul Hardy and Unifont contributors | GPL 2.0 or later with the font embedding exception |
-| Ghoulam Regular Arabic font | Imad AlFil (mloukhiyye), (C) 2025 | CC BY 4.0 |
-| FatFs file system | ChaN | FatFs license (BSD style) |
-| miniz (EPUB unpacking) | Rich Geldreich and Tenacious Software LLC; RAD Game Tools and Valve Software | MIT |
-| Butano engine | Gustavo Valiente | zlib |
-| 5x7 menu font (from gbamp3) | Halim Jarrar | part of this project |
-| Build tools | devkitPro / devkitARM | |
+| SuperFW font rendering and font packs | David Guillen Fandos | GPL v3 or later. The UNSCII-based pack includes GNU Unifont and public-domain Fixedsys Excelsior glyphs. |
+| Ghoulam Arabic pixel font | (C) 2025 Imad AlFil / mloukhiyye | CC BY 4.0 |
+| Butano game engine | Gustavo Valiente | zlib |
+| FatFs | ChaN | permissive license |
+| The decompression part of miniz | Rich Geldreich and others | MIT |
 
-Ghoulam Regular was converted to an 11 pixel bitmap font for gbareader; this changed version is not endorsed by its author. Font: https://mloukhiyye.itch.io/ghoulam-arabic-pixel-art-font-version-1 - License: https://creativecommons.org/licenses/by/4.0/
+The Ghoulam font was converted to fit the Game Boy screen. This conversion is not endorsed by the font's author. Font: https://mloukhiyye.itch.io/ghoulam-arabic-pixel-art-font-version-1 - License: https://creativecommons.org/licenses/by/4.0/
 
-More about the other parts: SuperFW https://superfw.davidgf.net - UNSCII https://viznut.fi/unscii - GNU Unifont https://unifoundry.com/unifont - Butano https://github.com/GValiente/butano
+Butano: https://github.com/GValiente/butano
 
-gbareader is based on gba-vocab-trainer-CC v0.2.5. The full license texts are in the source code.
+The credits are also shown in the app under Settings > About.
