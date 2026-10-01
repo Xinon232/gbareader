@@ -77,11 +77,13 @@ assert 'show_overlay(save_ui, save_sprites, "Loading back...")' in main
 
 assert 'draw_list(pixels, "gbareader", home' in main
 assert '"gbareader V' not in main  # the version is shown on About only
-assert "release/v0.8.0" in workflow
 assert "pull_request:" in workflow and "      - main" in workflow
 assert "contents: read" in workflow
 assert "tests/fatfs/run.py" in workflow
-assert "GBAReader-${{ github.sha }}" in workflow
+assert "GBAReader-demo-${{ github.sha }}" in workflow
+# Source only: the full ROM is built and tested but never uploaded or published.
+assert "path: gbareader.gba" not in workflow
+assert "test ! -e gbareader.gba" in workflow
 assert "Publish v0.5.0" not in workflow
 
 assert "EPUB_MAX_ZIP_ENTRIES" not in epub_header
