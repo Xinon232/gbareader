@@ -122,19 +122,29 @@ int main(){
     // Settings rows, as drawn: Back to Files, Go to (page info), spacing (lines info), gap, L/R, About.
     files.clear();reset_fault();
     {App a;a.boot();a.opened(reader::OpenResult::OPENED,"one.txt");a.enter();a.goto_percent=a.goto_before=0;a.settings_draw();
-     assert(title=="Settings"&&rows.size()==6);
+     assert(title=="Settings"&&rows.size()==7);
      assert(std::get<1>(rows[0])=="Back to Files"&&std::get<2>(rows[0])&&std::get<3>(rows[0]).empty());
      assert(std::get<1>(rows[1])=="Go to: 0%"&&std::get<3>(rows[1]).find("Page ")==0);
      assert(std::get<1>(rows[2])=="Line spacing: 1"&&std::get<3>(rows[2])==std::to_string(reader::lines_per_page(a.settings))+" lines");
      assert(std::get<1>(rows[3])=="Paragraph gap: Full"&&std::get<3>(rows[3]).empty());
-     assert(std::get<1>(rows[4])=="L/R page turns: Off"&&std::get<1>(rows[5])=="About");
-     for(int i=1;i<6;++i)assert(!std::get<2>(rows[i]));
+     assert(std::get<1>(rows[4])=="L/R page turns: Off"&&std::get<1>(rows[5])=="Show file extensions: On"&&
+            std::get<1>(rows[6])=="About");
+     for(int i=1;i<7;++i)assert(!std::get<2>(rows[i]));
      // Up / Down move the cursor; a fresh press wraps around.
-     a.tap(UP);assert(a.settings_nav.selected==5);a.tap(DOWN);assert(a.settings_nav.selected==0);
+     a.tap(UP);assert(a.settings_nav.selected==6);a.tap(DOWN);assert(a.settings_nav.selected==0);
      for(int i=0;i<3;++i){a.tap(DOWN);}
      a.settings_draw();assert(std::get<2>(rows[3]));
      // Holding Down repeats and stops at the last row.
-     a.frame(0);for(int i=0;i<200;++i)a.frame(DOWN);a.frame(0);assert(a.settings_nav.selected==5);}
+     a.frame(0);for(int i=0;i<200;++i)a.frame(DOWN);a.frame(0);assert(a.settings_nav.selected==6);}
+    // Show file extensions: A flips, Left / Right set Off / On; closing saves it once.
+    {files.clear();reset_fault();App a;a.boot();a.opened(reader::OpenResult::OPENED,"one.txt");
+     a.enter();a.row_to(SettingsItem::FILE_EXTENSIONS);int w=writes,r0=a.restarts;
+     a.tap(A);assert(!a.global_settings.values.show_extensions);
+     a.settings_draw();assert(std::get<1>(rows[5])=="Show file extensions: Off");
+     a.tap(RIGHT);assert(a.global_settings.values.show_extensions);a.tap(LEFT);a.tap(LEFT);
+     assert(!a.global_settings.values.show_extensions);
+     a.tap(B);assert(a.scene==Scene::READER&&writes==w+1&&a.restarts==r0);
+     App cold;cold.boot();assert(!cold.global_settings.values.show_extensions);}
     // Go to: Left / Right 1% (held: repeats), L / R 10%; A jumps now; B applies too.
     for(unsigned exit:{unsigned(B),unsigned(START),unsigned(SELECT),unsigned(A)}){
         files.clear();reset_fault();App a;a.boot();a.opened(reader::OpenResult::OPENED,"one.txt");
@@ -180,8 +190,8 @@ int main(){
     // Settings from Home: no Go to / Back to Files; values come from (and go to) the saved globals.
     {files.clear();reset_fault();GlobalPreferences p{};p.line_spacing=3;files[paths[0]]=record(p,1);
      App a;a.boot();a.open_name=nullptr;a.settings.line_spacing=1;a.open_settings(false);
-     assert(a.settings_count==4&&a.settings_items[0]==SettingsItem::LINE_SPACING&&a.settings.line_spacing==3);
-     a.settings_draw();assert(rows.size()==4&&std::get<1>(rows[0])=="Line spacing: 3");
+     assert(a.settings_count==5&&a.settings_items[0]==SettingsItem::LINE_SPACING&&a.settings.line_spacing==3);
+     a.settings_draw();assert(rows.size()==5&&std::get<1>(rows[0])=="Line spacing: 3");
      a.tap(RIGHT);int w=writes;a.row_to(SettingsItem::PAGE_TURN_KEYS);a.tap(RIGHT);assert(a.reader_hold.shoulder_page_turns);
      a.tap(SELECT);assert(a.scene==Scene::LIBRARY&&writes==w+1&&a.retargets==0);
      assert(a.global_settings.values.line_spacing==4&&a.global_settings.values.shoulder_page_turns);

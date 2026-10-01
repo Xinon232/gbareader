@@ -1,3 +1,31 @@
+
+# gbareader V3.2
+
+Based on V3.1.1 (`v3.1.1`). One new setting; reading, controls and `.sav` companions are unchanged.
+
+## New
+
+- `Show file extensions` row in Settings (Home and while reading, after `L/R page turns`). Default On. Off hides the extension in the Home book list: `Alice.txt` shows as `Alice`. Only the shown names change; the files on the card, opening books and the remembered last book are untouched.
+- `A` flips it, `Right` turns it On, `Left` Off. Saved with the other global settings in `SETTINGS0/1.DAT` when Settings closes, and restored at launch.
+
+## Compatibility
+
+- Settings files from earlier versions load as On. The flag uses a spare byte of the existing format (0 = shown), so the files stay the same size.
+- An older gbareader reads a settings file saved with the setting Off as damaged (`Settings recovered` / `Settings load failed`, defaults). Saved with it On, older versions read it as before.
+
+## Tests
+
+- Host tests cover the new row, its drawing and keys, the saved byte and the name shortening; all pass.
+- The ROM ran on mGBA with a modeled Supercard SD card: the toggle, the Home list without extensions, and the setting after a restart. Not physical hardware proof.
+
+Physical hardware has not been tested with this version.
+# gbareader V3.1.1
+
+Same app as V3.1 (`v3.1.0`); only the build changed. The app itself still shows V3.1.
+
+- Reproducible ROM: the build no longer stores its folder path in the ROM, so the same source gives a byte-identical `gbareader.gba` in any folder, repository or computer (devkitARM image `devkitpro/devkitarm:20260610`, butano `77dcbcb`). Compare your own build with `SHA256SUMS`.
+- The V3.1 ROMs built before this differ only in that stored path; reading, storage and controls are identical.
+
 # gbareader V3.1
 
 Based on V3.0 (`v3.0.0`). A visual redesign after gbamp3 v1.8, an import browser, and Settings on Select. Reading, storage (`.sav` companions, `SETTINGS0/1.DAT`) and the book page are unchanged.

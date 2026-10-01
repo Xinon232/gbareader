@@ -65,8 +65,20 @@ int settings_items(bool book_open, SettingsItem (&items)[SETTINGS_MAX_ROWS])
     items[n++] = SettingsItem::LINE_SPACING;
     items[n++] = SettingsItem::PARAGRAPH_GAP;
     items[n++] = SettingsItem::PAGE_TURN_KEYS;
+    items[n++] = SettingsItem::FILE_EXTENSIONS;
     items[n++] = SettingsItem::ABOUT;
     return n;
+}
+
+void library_display_name(const char* name, bool show_extension, char* out, int size)
+{
+    if(size <= 0) return;
+    int length = 0, dot = -1;
+    for(; name[length]; ++length) if(name[length] == '.' && length > 0) dot = length;
+    if(!show_extension && dot > 0) length = dot;
+    if(length > size - 1) length = size - 1;
+    for(int i = 0; i < length; ++i) out[i] = name[i];
+    out[length] = 0;
 }
 
 const char* const about_titles[ABOUT_PAGE_COUNT] = {
@@ -75,7 +87,7 @@ const char* const about_titles[ABOUT_PAGE_COUNT] = {
 };
 
 const char* const about_lines[ABOUT_PAGE_COUNT][ABOUT_LINES] = {
-    {"gbareader V3.1", "", "Made by Halim Jarrar", "(C) 2026", "", "halimj.itch.io",
+    {"gbareader V3.2", "", "Made by Halim Jarrar", "(C) 2026", "", "halimj.itch.io",
      "gba@halim-jarrar.de", ""},
     {"#Books", "Put books in /gbareader", "#File list", "Start: Import books", "#Reading",
      "Start: Save position", "Hold Up: L/R page turns on/off", ""},

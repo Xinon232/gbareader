@@ -53,7 +53,8 @@ uint32_t global_settings_size(const GlobalPreferences& p) {
 GlobalPreferences default_global_preferences() { return {}; }
 bool same_global_preferences(const GlobalPreferences& a, const GlobalPreferences& b) {
     return a.line_spacing == b.line_spacing && a.paragraph_gap == b.paragraph_gap &&
-            a.shoulder_page_turns == b.shoulder_page_turns && !strcmp(a.last_book, b.last_book);
+            a.shoulder_page_turns == b.shoulder_page_turns &&
+            a.show_extensions == b.show_extensions && !strcmp(a.last_book, b.last_book);
 }
 bool encode_global_settings(const GlobalPreferences& p, uint32_t generation, unsigned char* b) {
     if(!generation || !valid_preferences(p)) return false;
@@ -62,6 +63,7 @@ bool encode_global_settings(const GlobalPreferences& p, uint32_t generation, uns
     memcpy(b, MAGIC, 8);
     put32(b + 8, 2); put32(b + 12, generation);
     b[16] = p.line_spacing; b[17] = uint8_t(p.paragraph_gap); b[18] = p.shoulder_page_turns;
+    b[20] = !p.show_extensions;
     b[19] = uint8_t(length - GLOBAL_SETTINGS_BYTES);
     memcpy(b + 28, p.last_book, b[19]);
     put32(b + length - 4, crc32_bytes(b, length - 4));
@@ -73,12 +75,12 @@ bool decode_global_settings(const unsigned char* b, uint32_t length, GlobalPrefe
     if(version != 1 && version != 2) return false;
     const unsigned name_bytes = version == 2 ? b[19] : 0;
     if(length != GLOBAL_SETTINGS_BYTES + name_bytes || !get32(b + 12) ||
-       b[16] > MAX_LINE_SPACING || b[17] >= PARAGRAPH_GAP_COUNT || b[18] > 1 ||
+       b[16] > MAX_LINE_SPACING || b[17] >= PARAGRAPH_GAP_COUNT || b[18] > 1 || (version == 2 && b[20] > 1) ||
        get32(b + length - 4) != crc32_bytes(b, length - 4)) return false;
-    for(int i = version == 1 ? 19 : 20; i < 28; ++i) if(b[i]) return false;
+    for(int i = version == 1 ? 19 : 21; i < 28; ++i) if(b[i]) return false;
     for(unsigned i = 0; i < name_bytes; ++i)
         if(b[28 + i] < 32 || b[28 + i] == '/' || b[28 + i] == '\\') return false;
-    p = {b[16], ParagraphGap(b[17]), bool(b[18]), {}};
+    p = {b[16], ParagraphGap(b[17]), bool(b[18]), version == 1 || !b[20], {}};
     memcpy(p.last_book, b + 28, name_bytes);
     generation = get32(b + 12);
     return true;

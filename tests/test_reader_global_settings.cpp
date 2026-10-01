@@ -42,6 +42,13 @@ int main() {
     assert(!remember_global_book(named,"bad/path.txt"));
     assert(!strcmp(named.last_book,name.c_str()));
     record[19]--; assert(!decode_global_settings(record,n,out,gen));
+    // Show file extensions: On by default; Off is byte 20 = 1, so older files read as On.
+    {GlobalPreferences e{};assert(e.show_extensions);unsigned char x[GLOBAL_SETTINGS_MAX_BYTES]{};
+     assert(encode_global_settings(e,3,x)&&x[20]==0&&decode_global_settings(x,32,out,gen)&&out.show_extensions);
+     e.show_extensions=false;assert(!same_global_preferences(e,GlobalPreferences{}));
+     assert(encode_global_settings(e,3,x)&&x[20]==1&&decode_global_settings(x,32,out,gen)&&!out.show_extensions);
+     x[20]=2;seal(x);assert(!decode_global_settings(x,32,out,gen));
+     x[20]=1;x[8]=1;seal(x);assert(!decode_global_settings(x,32,out,gen));} // V1 has no flag byte.
     // Previous 32-byte v1 stays readable and never invents a remembered book.
     assert(encode_global_settings(p,7,b)); b[8]=1;seal(b);
     assert(decode_global_settings(b,32,out,gen)&&!out.last_book[0]);

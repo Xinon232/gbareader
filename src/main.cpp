@@ -1,4 +1,4 @@
-// gbareader V3.1 -- streaming Supercard SD TXT/EPUB reader.
+// gbareader V3.2 -- streaming Supercard SD TXT/EPUB reader.
 
 #include "bn_bg_palette_item.h"
 #include "bn_core.h"
@@ -219,7 +219,10 @@ void copy_shown_page(bn::palette_bitmap_bg_painter& painter)
 const char* library_label(int index)
 {
     const char* name = reader::library_name(index); // null only if /gbareader cannot be reread
-    return name ? name : "?";
+    if(!name) return "?";
+    static char shown[reader::LIBRARY_NAME_MAX];
+    reader::library_display_name(name, global_settings.values.show_extensions, shown, sizeof(shown));
+    return shown;
 }
 
 const char* import_label(int index)
@@ -255,6 +258,9 @@ const char* settings_label(reader::SettingsItem item, bool shoulder, int goto_pe
         out = "Paragraph gap: "; out += reader::paragraph_gap_name(settings.paragraph_gap); break;
     case SettingsItem::PAGE_TURN_KEYS:
         out = "L/R page turns: "; out += shoulder ? "On" : "Off"; break;
+    case SettingsItem::FILE_EXTENSIONS:
+        out = "Show file extensions: ";
+        out += global_settings.values.show_extensions ? "On" : "Off"; break;
     case SettingsItem::BACK_TO_FILES:
         out = confirm_leave ? "Continue without saving?" : "Back to Files"; break;
     default:
@@ -608,6 +614,13 @@ int main()
                 }
                 // A on Go to jumps now; B/Select/Start apply everything and return as before.
                 go_now = bn::keypad::a_pressed();
+            } else if(item == reader::SettingsItem::FILE_EXTENSIONS) {
+                bool& on = global_settings.values.show_extensions;
+                if(bn::keypad::a_pressed()) delta = on ? -1 : 1;
+                if(delta) {
+                    on = delta > 0;
+                    redraw_ui = true;
+                }
             } else if(item == reader::SettingsItem::PAGE_TURN_KEYS) {
                 if(bn::keypad::a_pressed()) delta = reader_hold.shoulder_page_turns ? -1 : 1;
                 if(delta) {

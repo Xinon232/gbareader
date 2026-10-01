@@ -13,6 +13,7 @@ struct GlobalPreferences {
     uint8_t line_spacing = 1;
     ParagraphGap paragraph_gap = ParagraphGap::FULL;
     bool shoulder_page_turns = false; // L/R turn pages; the last choice, restored at launch
+    bool show_extensions = true; // Home shows ".txt" / ".epub"; stored inverted (0 = shown)
     char last_book[GLOBAL_BOOK_NAME_MAX]{};
 };
 bool remember_global_book(GlobalPreferences&, const char* filename);

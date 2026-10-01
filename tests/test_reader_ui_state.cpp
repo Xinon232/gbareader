@@ -3,6 +3,7 @@
 
 #include <cassert>
 #include <cstdio>
+#include <cstring>
 
 using namespace reader;
 
@@ -73,13 +74,26 @@ static void test_marquee()
 static void test_settings_items()
 {
     SettingsItem items[SETTINGS_MAX_ROWS];
-    assert(settings_items(false, items) == 4);
+    assert(settings_items(false, items) == 5);
     assert(items[0] == SettingsItem::LINE_SPACING && items[1] == SettingsItem::PARAGRAPH_GAP &&
-           items[2] == SettingsItem::PAGE_TURN_KEYS && items[3] == SettingsItem::ABOUT);
-    assert(settings_items(true, items) == 6);
+           items[2] == SettingsItem::PAGE_TURN_KEYS && items[3] == SettingsItem::FILE_EXTENSIONS &&
+           items[4] == SettingsItem::ABOUT);
+    assert(settings_items(true, items) == 7);
     assert(items[0] == SettingsItem::BACK_TO_FILES && items[1] == SettingsItem::GOTO &&
            items[2] == SettingsItem::LINE_SPACING && items[3] == SettingsItem::PARAGRAPH_GAP &&
-           items[4] == SettingsItem::PAGE_TURN_KEYS && items[5] == SettingsItem::ABOUT);
+           items[4] == SettingsItem::PAGE_TURN_KEYS && items[5] == SettingsItem::FILE_EXTENSIONS &&
+           items[6] == SettingsItem::ABOUT);
+}
+
+static void test_library_display_name()
+{
+    char out[16];
+    library_display_name("Book.txt", true, out, sizeof(out)); assert(!strcmp(out, "Book.txt"));
+    library_display_name("Book.txt", false, out, sizeof(out)); assert(!strcmp(out, "Book"));
+    library_display_name("A.b.c.epub", false, out, sizeof(out)); assert(!strcmp(out, "A.b.c"));
+    library_display_name(".hidden", false, out, sizeof(out)); assert(!strcmp(out, ".hidden"));
+    library_display_name("noext", false, out, sizeof(out)); assert(!strcmp(out, "noext"));
+    library_display_name("A very long name.txt", true, out, sizeof(out)); assert(!strcmp(out, "A very long nam"));
 }
 
 int main()
@@ -88,6 +102,7 @@ int main()
     test_key_repeat();
     test_marquee();
     test_settings_items();
+    test_library_display_name();
 
     SaveMessageTimer timer{};
     assert(! save_message_visible(timer));

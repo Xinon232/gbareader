@@ -18,7 +18,7 @@ This repository contains the complete source code, free and open under the GPL v
 - **Remembers your page** for every book, plus your reading settings and the last book you opened.
 - **Handles big books and big libraries**: books are read from the card a piece at a time, and there is no limit on how many books you keep.
 - **Imports books for you**: browse the whole SD card and copy a book into your library with a button press.
-- **Lets you tune the page**: line spacing, space between paragraphs, page numbers and a "Go to" percentage to jump anywhere in a book.
+- **Lets you tune the page**: line spacing, space between paragraphs, page numbers, a "Go to" percentage to jump anywhere in a book, and file extensions shown or hidden in the book list.
 - **Shows many languages**: Latin, Greek, Cyrillic, Japanese, Chinese and Korean text, plus Arabic with properly joined letters written right to left.
 - **Never changes your books**: your files are only read. Your progress is kept in a small `.sav` file next to each book.
 
