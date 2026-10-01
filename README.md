@@ -10,7 +10,7 @@ gbareader turns a Game Boy Advance with a Supercard SD into a pocket e-reader. P
 
 That is the easiest way to get gbareader, and it supports further development.
 
-This repository contains the complete source code, free and open under the GPL v3. No ready-made ROM is published here; if you prefer, you can [build it yourself](#building-it-yourself).
+This repository contains the complete source code, free and open under the GPL v3.
 
 ## What it can do
 
