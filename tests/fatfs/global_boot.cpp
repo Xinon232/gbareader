@@ -58,7 +58,7 @@ int main(int argc,char** argv){
             assert(loaded==(((which=="partial"||which=="partial-exhausted")||which=="retry-read")?GlobalLoadResult::RECOVERED:GlobalLoadResult::ERROR));
         }
         if(which!="boot-defaults"&&which!="no-load-defaults") {
-            app.values.line_spacing=4;app.values.paragraph_gap=ParagraphGap::NONE;app.values.shoulder_startup=true;
+            app.values.line_spacing=4;app.values.paragraph_gap=ParagraphGap::NONE;app.values.shoulder_page_turns=true;
             const std::string name=std::string(245,'x')+u8"ééé.txt";
             assert(name.size()==255&&remember_global_book(app.values,name.c_str()));
         }

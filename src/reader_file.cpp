@@ -298,7 +298,9 @@ bool inspect_book_tail(const char*name,uint32_t physical,const unsigned char*tai
 
 bool storage_init(){name_count=0;
 #ifdef __DEVKITARM__
-REG_WAITCNT=0x40c0;set_supercard_mode(MAPPED_SDRAM,true,true);t_card_info info;if(sdcard_init(&info)||f_mount(&fatfs,"0:",1)!=FR_OK)return false;return scan_library();
+REG_WAITCNT=0x40c0;set_supercard_mode(MAPPED_SDRAM,true,true);t_card_info info;if(sdcard_init(&info)||f_mount(&fatfs,"0:",1)!=FR_OK)return false;
+// A missing /gbareader is an empty library: Import creates it.
+scan_library();return true;
 #else
 return false;
 #endif

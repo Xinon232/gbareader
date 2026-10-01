@@ -53,7 +53,7 @@ uint32_t global_settings_size(const GlobalPreferences& p) {
 GlobalPreferences default_global_preferences() { return {}; }
 bool same_global_preferences(const GlobalPreferences& a, const GlobalPreferences& b) {
     return a.line_spacing == b.line_spacing && a.paragraph_gap == b.paragraph_gap &&
-            a.shoulder_startup == b.shoulder_startup && !strcmp(a.last_book, b.last_book);
+            a.shoulder_page_turns == b.shoulder_page_turns && !strcmp(a.last_book, b.last_book);
 }
 bool encode_global_settings(const GlobalPreferences& p, uint32_t generation, unsigned char* b) {
     if(!generation || !valid_preferences(p)) return false;
@@ -61,7 +61,7 @@ bool encode_global_settings(const GlobalPreferences& p, uint32_t generation, uns
     memset(b, 0, length);
     memcpy(b, MAGIC, 8);
     put32(b + 8, 2); put32(b + 12, generation);
-    b[16] = p.line_spacing; b[17] = uint8_t(p.paragraph_gap); b[18] = p.shoulder_startup;
+    b[16] = p.line_spacing; b[17] = uint8_t(p.paragraph_gap); b[18] = p.shoulder_page_turns;
     b[19] = uint8_t(length - GLOBAL_SETTINGS_BYTES);
     memcpy(b + 28, p.last_book, b[19]);
     put32(b + length - 4, crc32_bytes(b, length - 4));

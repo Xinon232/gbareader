@@ -3,8 +3,8 @@
 
 Compiles tools/gbamp3_small_font/small_font.c (verbatim gbamp3 v0.9.8 glyphs) with
 the host C compiler and writes:
-  graphics/ui_small_font.bmp / .json      8x16 sprite cells for '!'..'~'
-  graphics/ui_small_font_box.bmp / .json  the same glyphs on a white box, for overlays
+  graphics/ui_small_font_box.bmp / .json  8x16 sprite cells for '!'..'~' on a white box,
+                                          for the overlays over book text
   include/ui_small_font.h                 per-character widths (6 px advance, as gbamp3)
 
 Each cell: glyph in columns 1-5 with its cap height on rows 5-11 (descenders to
@@ -68,7 +68,7 @@ def write_bmp(path, pixels):
 def main():
     rows = glyph_rows()
     assert not any(rows[ord("~")]), "'~' must stay blank: it is the box font's space"
-    for name, box in (("ui_small_font", False), ("ui_small_font_box", True)):
+    for name, box in (("ui_small_font_box", True),):
         pixels = []
         for c in range(FIRST, LAST + 1):
             pixels.extend(cell(rows[c], box))

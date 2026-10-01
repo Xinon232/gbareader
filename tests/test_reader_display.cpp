@@ -1,6 +1,6 @@
 #include "reader_core.h"
-#include "reader_credits.h"
-#include "reader_controls.h"
+#include "reader_menu.h"
+#include "reader_screen.h"
 #include <array>
 #include <cassert>
 #include <cstdio>
@@ -105,60 +105,28 @@ int main(int argc, char** argv)
     assert(!std::strcmp(no_break.lines[0].text, prefix.c_str()));
     assert(std::strstr(no_break.lines[1].text, "ab-cdefghijklmnop"));
 
-    Pixels actual{}, expected{};
-    reader::draw_credits(reinterpret_cast<uint8_t*>(actual.data()));
-    const char* lines[] = {"Made by Halim Jarrar", "(C) 2026", "halim-jarrar.de", "monday@halim-jarrar.de"};
-    for(int i = 0; i < 4; ++i) {
-        const unsigned w = font_width(lines[i]);
-        assert(w > 0 && w <= 224);
-        draw_text_idx8_bus16_range(lines[i], reinterpret_cast<uint8_t*>(expected.data()) +
-                                  (40 + i * 22) * 240 + (240 - w) / 2, 0, w, 240, 1);
-        std::printf("credits line %d: %u px\n", i, w);
-    }
-    assert(actual == expected); // Exact full framebuffer, real bus-safe compositor and fonts.
-    assert(actual != Pixels{});
-    for(int i = 0; i < 4; ++i) assert(!std::strcmp(reader::credits_lines[0][i], lines[i]));
-    assert(!reader::credits_lines[0][4][0] && !reader::credits_lines[0][5][0]);
-    assert(!std::strcmp(reader::credits_titles[6], "Credits 7/7: gbareader V3.0"));
+    // About: every page fits its rows with the real font; ASCII only (the 5x7
+    // labels have no other glyphs); the notices the licenses ask for are present.
     std::string notices;
-    for(int p = 1; p < reader::CREDITS_PAGE_COUNT; ++p) {
-        actual = {}; expected = {};
-        reader::draw_credits(reinterpret_cast<uint8_t*>(actual.data()), p);
-        for(int i = 0; i < reader::CREDITS_LINES; ++i) {
-            const char* text = reader::credits_lines[p][i];
-            const unsigned w = font_width(text); assert(w <= 224);
-            for(const char* ch=text; *ch; ++ch) assert(*ch >= 32 && *ch <= 126);
-            notices += text; notices += '\n';
-            draw_text_idx8_bus16_range(text, reinterpret_cast<uint8_t*>(expected.data()) +
-                (30 + i * 16) * 240 + (240 - w) / 2, 0, w, 240, 1);
-        }
-        assert(actual == expected && actual != Pixels{});
-    }
-    for(const char* required : {"Ghoulam Regular", "Imad AlFil / mloukhiyye", "CC BY 4.0",
-            "SuperFW", "David Guillen Fandos", "GPL v3 or later", "UNSCII by Viznut",
-            "unscii-16-full: GPL", "Fixedsys Excelsior", "public domain", "GNU Unifont / Hangul",
-            "Roman Czyborra, Paul Hardy", "GPL v2+ with font exception", "Butano", "Gustavo Valiente",
-            "zlib", "devkitARM / devkitPro", "FatFs (C) 2022 ChaN", "miniz - MIT", "Rich Geldreich",
-            "RAD Game Tools / Valve", "gba-vocab-trainer-CC", "UI font: gbamp3 5x7 font"}) assert(notices.find(required) != std::string::npos);
-    assert(reader::CONTROLS_PAGE_COUNT == 11);
-    assert(!std::strcmp(reader::controls_lines[9][0], "Settings apply: auto-save."));
-    assert(!std::strcmp(reader::controls_lines[10][0], "Home selects last opened book."));
-    assert(!std::strcmp(reader::controls_lines[8][0], "Hold Up/Down alone: 48 frames."));
-    assert(!std::strcmp(reader::controls_lines[6][0], "Arabic starts OFF per book."));
-    assert(!std::strcmp(reader::controls_lines[6][2], "ON auto-saves in its SAV."));
-    assert(!std::strcmp(reader::controls_lines[7][0], "Book bytes stay unchanged."));
-    assert(std::strstr(reader::controls_titles[5], "Arabic"));
-    for(int p = 0; p < reader::CONTROLS_PAGE_COUNT; ++p) {
-        actual = {}; expected = {};
-        reader::draw_controls(reinterpret_cast<uint8_t*>(actual.data()), p);
-        for(int i = 0; i < reader::CONTROLS_LINES; ++i) {
-            const char* text = reader::controls_lines[p][i];
-            assert(font_width(text) <= 224);
+    for(int p = 0; p < reader::ABOUT_PAGE_COUNT; ++p) {
+        assert(reader::screen::small_width(reader::about_titles[p]) <= 240 - 2 * 30);
+        for(int i = 0; i < reader::ABOUT_LINES; ++i) {
+            const char* text = reader::about_lines[p][i];
             for(const char* c = text; *c; ++c) assert(*c >= 32 && *c <= 126);
-            draw_text_idx8_bus16_range(text, reinterpret_cast<uint8_t*>(expected.data()) +
-                                      (30 + i * 16) * 240 + 8, 0, 224, 240, 1);
+            if(text[0] == '#') assert(reader::screen::small_width(text + 1) <= 228);
+            else assert(font_width(text) <= 228);
+            notices += text; notices += '\n';
         }
-        assert(actual == expected && actual != Pixels{});
     }
-    std::puts("PASS: real renderer punctuation pixels, width/wrap, offsets, credits/controls framebuffer");
+    assert(!std::strcmp(reader::about_titles[0], "About") && !std::strcmp(reader::about_titles[1], "Controls"));
+    for(const char* required : {"gbareader V3.1", "Made by Halim Jarrar", "gba@halim-jarrar.de",
+            "Put books in /gbareader", "Start: Import books", "Start: Save position", "Hold Up: L/R page turns",
+            "GNU GPL 3.0 or later", "github.com/Xinon232/gbareader",
+            "Ghoulam Regular", "Imad AlFil (mloukhiyye)", "CC BY 4.0", "Changed:", "mloukhiyye.itch.io",
+            "SuperFW by David Guillen Fandos", "UNSCII by Viznut: GPL", "GNU Unifont: GPL 2.0 or later",
+            "font exception", "Fixedsys Excelsior: public domain", "FatFs by ChaN",
+            "miniz (C) Rich Geldreich", "Valve. License: MIT", "Butano by Gustavo Valiente", "zlib"})
+        assert(notices.find(required) != std::string::npos);
+    assert(notices.find("monday@") == std::string::npos);
+    std::puts("PASS: real renderer punctuation pixels, width/wrap, offsets, About pages fit and carry the required notices");
 }

@@ -1,35 +1,37 @@
-# gbareader V3.0
+# gbareader V3.1
 
 ## Full controls
 
-Read TXT and EPUB books, save your reading position, and resume later. Place UTF-8 `.txt` and supported `.epub` files directly in `/gbareader` on the SD-card root, then restart the app. It lists every supported file (no limit), not subfolders, with five books visible at once. A missing or empty folder shows instructions; Controls and Credits remain available. This reader has no text editing, typing or user-facing export controls.
+Read TXT and EPUB books, save your reading position, and resume later. Place UTF-8 `.txt` and supported `.epub` files directly in `/gbareader` on the SD-card root, then restart the app, or import them with `Start`. It lists every supported file (no limit), not subfolders, with eight books visible at once. A missing or empty folder shows `No books found`; `Start` imports books from anywhere on the card. This reader has no text editing, typing or user-facing export controls.
 
-### Library
+### Home (file list)
 
-- `Up` / `Down`: select a `.txt` or `.epub` book.
-- `A`: open the selected book. Each successful open remembers its full filename, including the extension. On next launch Home selects the last successfully opened book and scrolls it into view, without opening it. Missing, renamed or unremembered books fall back to the first entry; cursor movement and failed opens are not remembered.
-- `Select`: show Controls. `Left` / `Right` changes its eleven help pages; `B` returns Home.
-- `Start`: show Credits, beginning with the personal author page. `Left` / `Right` changes its seven pages; `B` or `Start` returns Home. Font/framework/license attribution is on subsequent pages.
+- `Up` / `Down`: move (a fresh press on the first/last book wraps; holding repeats and stops at the ends). `Left` / `Right`: one page of eight books.
+- `A`: open the selected book. Each successful open remembers its full filename; on next launch Home selects it again, without opening it. Missing or renamed books fall back to the first entry.
+- `Select`: Settings. `Start`: import browser.
+
+### Import
+
+- Lists the folders (with a folder icon, first) and TXT/EPUB books of the current folder, starting at the SD root. Hidden/system entries and `/gbareader` itself are not shown.
+- `A` on a folder opens it; `B` goes up one folder (from the root: back Home).
+- `A` on a book asks `Import into /gbareader?` with `No` selected. `Yes` copies the book (progress in percent) and shows Home with the new book selected and `Imported`. `Already in /gbareader` means a file with that name exists there; it is left unchanged. A failed copy leaves no partial file.
 
 ### Reader
 
-- `Right` or `A`: next page.
-- `Left` or `B`: previous page.
-- Hold `Down` alone: open reader settings.
-- Hold `Up` alone: toggle shoulder-button page turns. `L` goes back and `R` forward when enabled. A UI-font `L+R: On` or `L+R: Off` notice appears for about one second. The saved `L/R on startup` preference initializes it once at launch (default Off). Hold Up is never saved and survives book switches; changing the startup preference affects only the next launch.
-- `Start`: save the current byte position, Arabic mode and up to 64 previous page offsets to the book's `.sav`; also independently retry pending global settings. After `save...`, the result is `Saved`, `Position save failed`, `Settings save failed` or `Both saves failed`. No cross-file atomic save is promised.
-- `Select`: close the book and return Home without saving later position changes.
-
-Both holds require 48 consecutive held updates after the initial press (about 0.8 seconds), exactly matching gbawriter R-only Caps. Short presses do nothing. Each hold acts once; release before trying again. Any other key or leaving reading cancels that hold. Library/settings Up/Down stay immediate.
-
-History is reused only when its renderer marker and effective spacing/gap/Arabic match. Otherwise the exact saved byte anchor survives while history and page information rebuild. Back rebuilds incrementally from a nearby line start (about 8 KiB back, not the book start), prefetching older blocks. Early Back shows `Loading back...`; partial rebuilds restart safely at their anchor, not an incomplete scan.
+- `Right` or `A`: next page. `Left` or `B`: previous page.
+- Hold `Up` alone (about 0.8 s): toggle shoulder page turns (`L` back, `R` forward). `L+R: On` / `L+R: Off` appears for about a second; the choice is saved at once and restored at launch.
+- `Start`: save the current position, Arabic mode and Back history to the book's `.sav`, and retry pending global settings. The result is `Saved`, `Position save failed`, `Settings save failed` or `Both saves failed`.
+- `Select`: Settings. Holding `Down` does nothing.
 
 ### Settings
 
-- `Up` / `Down`: select line spacing (0 through 4 pixels), paragraph gap (None, Small, Half or Full line), `L/R on startup` (Off/On), or Go to. Grey Lines per page and page/percentage readouts are information only; the blue cursor skips them. While the page count runs in the background (also while Settings is open) it shows `Page ...`, then an estimate such as `Page about 142`, until the exact number is known. After Go to, pages already counted are kept.
-- `Left` / `Right`: change the selected value. On Go to, `L` / `R` change it by 10%.
-- Go to: press `A` to jump to the chosen percentage straight away (closing settings with `B` or `Start` also jumps if the value changed). The jump starts at the beginning of that paragraph.
-- `B` or `Start`: apply and return. All three exit routes (including A on Go to) save changed global preferences once; unchanged or reverted values do not write. Spacing/gap apply to every book, defaulting to 1/Full when no config exists, never to the first book's old values. Layout changes preserve the byte anchor and rebuild incompatible history, not the EPUB text cache. Startup-only edits do not change layout or the current shoulder mode. SuperFW remains native 16px and Arabic Ghoulam native 11px.
+- Rows while reading: Go to, Line spacing, Paragraph gap, L/R page turns, Back to Files, About. From Home: Line spacing, Paragraph gap, L/R page turns, About.
+- `Up` / `Down`: move. `Left` / `Right` change a value; `A` steps it forward and wraps. Grey at the right: the current page (`Page ...`, then `Page about 142` until counted) and lines per page.
+- Go to: `Left` / `Right` 1% (hold to repeat), `L` / `R` 10%; `A` jumps now. The jump starts at the beginning of that paragraph.
+- `Back to Files`: close the book (without saving a newer position) and return Home. `About`: seven pages, `Left` / `Right`, `B` back.
+- `B`, `Select` or `Start`: apply and return. Changed values are saved once; spacing/gap apply to every book.
+
+History is reused only when its renderer marker and effective spacing/gap/Arabic match. Otherwise the exact saved byte anchor survives while history and page information rebuild. Back rebuilds incrementally from a nearby line start (about 8 KiB back, not the book start), prefetching older blocks. Early Back shows `Loading back...`; partial rebuilds restart safely at their anchor, not an incomplete scan.
 
 ### Arabic display
 
@@ -70,7 +72,7 @@ Requires compatible Supercard SD hardware. Host filesystem tests and emulator UI
 Made by Halim Jarrar
 (C) 2026
 halim-jarrar.de
-monday@halim-jarrar.de
+gba@halim-jarrar.de
 
 Ghoulam Regular © 2025 Imad AlFil / mloukhiyye, CC BY 4.0. Converted actual contextual GSUB forms to native 11px monochrome ROM glyphs; this modified representation is not author endorsement. Source: https://mloukhiyye.itch.io/ghoulam-arabic-pixel-art-font-version-1 — License: https://creativecommons.org/licenses/by/4.0/.
 
@@ -82,7 +84,7 @@ GNU Unifont / Hangul: Roman Czyborra, Paul Hardy and Unifont contributors. GPL v
 
 UI font: the 5x7 font from gbamp3 v0.9.8 by Halim Jarrar, part of this project family (GPL v3 or later). https://github.com/Xinon232/gbamp3.
 
-Butano engine and cursor font: Gustavo Valiente, zlib license. Built with devkitARM / devkitPro. FatFs © 2022 ChaN, permissive redistribution terms in src/ff.c. Framework dependency notices remain in the Butano source distribution.
+Butano engine: Gustavo Valiente, zlib license. Built with devkitARM / devkitPro. FatFs © 2022 ChaN, permissive redistribution terms in src/ff.c. Framework dependency notices remain in the Butano source distribution.
 
 miniz: MIT license; © 2010–2014 Rich Geldreich and Tenacious Software LLC; © 2013–2014 RAD Game Tools and Valve Software. Complete notice in third_party/miniz/LICENSE.
 

@@ -42,7 +42,7 @@ static void recovery_boundaries(const char* scenario) {
             reset_fault();
         }
         if(which!="no-load-defaults"&&which!="boot-defaults") {
-            app.values.line_spacing=4;app.values.paragraph_gap=ParagraphGap::NONE;app.values.shoulder_startup=true;
+            app.values.line_spacing=4;app.values.paragraph_gap=ParagraphGap::NONE;app.values.shoulder_page_turns=true;
             const std::string name=std::string(245,'x')+u8"ééé.txt";
             assert(name.size()==255&&remember_global_book(app.values,name.c_str()));
         }
@@ -115,12 +115,12 @@ int main(int argc,char** argv){
     recovery_fault_ordinals();
     normal_path_stays_bounded();
     {GlobalSettingsStore s;assert(s.load()==GlobalLoadResult::MISSING);assert(!s.dirty());assert(s.save()&&writes==0);
-     s.values.line_spacing=4;s.values.shoulder_startup=true;assert(remember_global_book(s.values,u8"Thé book.epub"));
+     s.values.line_spacing=4;s.values.shoulder_page_turns=true;assert(remember_global_book(s.values,u8"Thé book.epub"));
      assert(s.dirty()&&s.save()&&!s.dirty()&&s.generation()==1&&s.active_slot()==0&&writes==1);
      s.values.line_spacing=1;s.values.line_spacing=4;assert(s.save()&&writes==1);
      s.values.paragraph_gap=ParagraphGap::NONE;assert(s.save()&&writes==2&&s.active_slot()==1);
     }
-    {GlobalSettingsStore s;assert(s.load()==GlobalLoadResult::LOADED);assert(s.generation()==2&&s.values.line_spacing==4&&s.values.shoulder_startup);assert(!strcmp(s.values.last_book,u8"Thé book.epub"));}
+    {GlobalSettingsStore s;assert(s.load()==GlobalLoadResult::LOADED);assert(s.generation()==2&&s.values.line_spacing==4&&s.values.shoulder_page_turns);assert(!strcmp(s.values.last_book,u8"Thé book.epub"));}
     files[paths[1]].back()^=1;
     {GlobalSettingsStore s;assert(s.load()==GlobalLoadResult::RECOVERED);assert(s.generation()==1&&s.values.paragraph_gap==ParagraphGap::FULL);s.values.line_spacing=0;assert(s.save()&&s.active_slot()==1);}
     auto p=default_global_preferences();files[paths[0]]=record(p,17);p.line_spacing=3;files[paths[1]]=record(p,17);

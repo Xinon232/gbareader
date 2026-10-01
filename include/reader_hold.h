@@ -7,7 +7,7 @@ namespace reader {
 // CAPS_HOLD_DELAY=2*NAV_REPEAT_DELAY. Its initial press is frame zero.
 constexpr unsigned READER_HOLD_FRAMES = 48;
 struct ReaderHold {
-    // Pack the new controls and notice into the old session-flag stack slot.
+    // Hold Up alone toggles L/R page turns; Down has no hold action.
     unsigned previous : 2;
     unsigned pending : 2;
     unsigned frames : 6;
@@ -20,7 +20,7 @@ struct ReaderHold {
         previous = held & 3; // Only Up/Down edges can arm this gate.
         if(!reading || held != pending) { pending = 0; frames = 0; }
         if(!reading) return 0;
-        if((held == 1 || held == 2) && (pressed & held)) {
+        if(held == 1 && (pressed & held)) {
             pending = held;
             frames = 0;
         } else if(pending && ++frames >= READER_HOLD_FRAMES) {

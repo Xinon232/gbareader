@@ -11,14 +11,14 @@ if [[ -n "${EXTRA_CXXFLAGS:-}" ]]; then
     CXXFLAGS+=("${EXTRA_CXXFLAGS_ARRAY[@]}")
 fi
 
-g++ "${CXXFLAGS[@]}" "$ROOT/tests/test_reader_global_settings.cpp"     "$ROOT/src/reader_global_settings.cpp" "$ROOT/src/reader_ui_state.cpp" -o "$OUT/test_reader_global_settings"
+g++ "${CXXFLAGS[@]}" "$ROOT/tests/test_reader_global_settings.cpp"     "$ROOT/src/reader_global_settings.cpp" "$ROOT/src/reader_menu.cpp" -o "$OUT/test_reader_global_settings"
 "$OUT/test_reader_global_settings"
 g++ "${CXXFLAGS[@]}" -D__DEVKITARM__ "$ROOT/tests/test_reader_global_storage.cpp"     "$ROOT/src/reader_global_settings.cpp" -o "$OUT/test_reader_global_storage"
 "$OUT/test_reader_global_storage"
 python3 "$ROOT/tests/test_global_wiring.py"
 python3 "$ROOT/tests/extract_reader_input.py" "$OUT/reader_input.inc"
 python3 "$ROOT/tests/extract_global_app.py" "$OUT"
-g++ "${CXXFLAGS[@]}" -D__DEVKITARM__ -I"$OUT" "$ROOT/tests/test_reader_global_app.cpp"     "$ROOT/src/reader_global_settings.cpp" "$ROOT/src/reader_core.cpp" "$ROOT/src/reader_ui_state.cpp"     "$ROOT/src/reader_txt_save.cpp" -o "$OUT/test_reader_global_app"
+g++ "${CXXFLAGS[@]}" -D__DEVKITARM__ -I"$OUT" "$ROOT/tests/test_reader_global_app.cpp"     "$ROOT/src/reader_global_settings.cpp" "$ROOT/src/reader_core.cpp" "$ROOT/src/reader_ui_state.cpp"     "$ROOT/src/reader_menu.cpp" "$ROOT/src/reader_txt_save.cpp" -o "$OUT/test_reader_global_app"
 "$OUT/test_reader_global_app"
 g++ "${CXXFLAGS[@]}" -I"$OUT" "$ROOT/tests/test_reader_input_adapter.cpp" \
     "$ROOT/src/reader_ui_state.cpp" "$ROOT/src/reader_global_settings.cpp" -o "$OUT/test_reader_input_adapter"
@@ -33,6 +33,11 @@ for test in test_reader_mode test_reader_open; do
     "$OUT/$test"
 done
 
+g++ "${CXXFLAGS[@]}" "$ROOT/tests/test_reader_browse.cpp" "$ROOT/src/reader_browse.cpp" \
+    "$ROOT/src/reader_file.cpp" "$ROOT/src/reader_txt_save.cpp" "$ROOT/src/reader_core.cpp" \
+    "$ROOT/src/epub_document.cpp" "$ROOT/src/miniz_tinfl.c" -o "$OUT/test_reader_browse"
+"$OUT/test_reader_browse"
+
 g++ "${CXXFLAGS[@]}" "$ROOT/tests/test_reader_crc32.cpp" -o "$OUT/test_reader_crc32"
 "$OUT/test_reader_crc32"
 
@@ -42,7 +47,7 @@ g++ "${CXXFLAGS[@]}" \
 "$OUT/test_reader_core"
 
 g++ "${CXXFLAGS[@]}" \
-    "$ROOT/tests/test_reader_ui_state.cpp" "$ROOT/src/reader_ui_state.cpp" \
+    "$ROOT/tests/test_reader_ui_state.cpp" "$ROOT/src/reader_ui_state.cpp" "$ROOT/src/reader_menu.cpp" \
     -o "$OUT/test_reader_ui_state"
 "$OUT/test_reader_ui_state"
 
@@ -139,15 +144,14 @@ gcc -std=c11 "${CXXFLAGS[@]:1}" -Wno-old-style-declaration -Wno-discarded-qualif
     -c "$ROOT/src/superfw_font.c" -o "$OUT/font.o"
 g++ "${CXXFLAGS[@]}" -I"$ROOT/references/superfw/src/fonts" \
     "$ROOT/tests/test_reader_display.cpp" "$ROOT/src/reader_core.cpp" \
-    "$ROOT/src/reader_credits.cpp" "$ROOT/src/reader_controls.cpp" "$OUT/font.o" -o "$OUT/test_reader_display"
+    "$ROOT/src/reader_menu.cpp" "$ROOT/src/reader_screen.cpp" "$OUT/font.o" -o "$OUT/test_reader_display"
 "$OUT/test_reader_display" "$ROOT/references/superfw/res/fonts.pack" \
     "$ROOT/references/superfw/res/reader-symbols.pack"
 
-python3 "$ROOT/tests/extract_library_branch.py" "$OUT/library_branch.inc"
-g++ "${CXXFLAGS[@]}" -I"$OUT" -I"$ROOT/references/superfw/src/fonts" \
-    "$ROOT/tests/test_library_framebuffer.cpp" "$ROOT/src/reader_ui_state.cpp" \
-    "$OUT/font.o" -o "$OUT/test_library_framebuffer"
-"$OUT/test_library_framebuffer" "$ROOT/references/superfw/res/fonts.pack" \
+g++ "${CXXFLAGS[@]}" -I"$ROOT/references/superfw/src/fonts" \
+    "$ROOT/tests/test_screen_framebuffer.cpp" "$ROOT/src/reader_screen.cpp" \
+    "$OUT/font.o" -o "$OUT/test_screen_framebuffer"
+"$OUT/test_screen_framebuffer" "$ROOT/references/superfw/res/fonts.pack" \
     "$ROOT/references/superfw/res/reader-symbols.pack"
 
 # Shared shaper plus production reader Arabic layout, pixels and EPUB cache path.
@@ -168,6 +172,5 @@ g++ "${CXXFLAGS[@]}" -I"$ROOT/references/superfw/src/fonts" \
     "$ROOT/references/superfw/res/reader-symbols.pack" "$OUT/fixtures/arabic.txt" \
     "$OUT/fixtures/arabic.epub" "$OUT/fixtures/arabic-cached.epub"
 
-python3 "$ROOT/tests/test_credits_wiring.py"
 python3 "$ROOT/tests/test_source_contracts.py"
 bash "$ROOT/tests/run_sidecar_tests.sh"

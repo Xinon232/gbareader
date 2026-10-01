@@ -12,7 +12,7 @@ constexpr uint32_t GLOBAL_SETTINGS_MAX_BYTES = GLOBAL_SETTINGS_BYTES + GLOBAL_BO
 struct GlobalPreferences {
     uint8_t line_spacing = 1;
     ParagraphGap paragraph_gap = ParagraphGap::FULL;
-    bool shoulder_startup = false;
+    bool shoulder_page_turns = false; // L/R turn pages; the last choice, restored at launch
     char last_book[GLOBAL_BOOK_NAME_MAX]{};
 };
 bool remember_global_book(GlobalPreferences&, const char* filename);

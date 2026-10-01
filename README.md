@@ -1,10 +1,21 @@
-# gbareader V3.0
+# gbareader V3.1
 
 Read TXT and EPUB books on your Game Boy Advance. Save your place and return to it later. Put books directly in `/gbareader` on a compatible Supercard SD card; they appear on Home.
 
-## V3.0: global settings and last-book selection
+## V3.1: gbamp3 look, Import, Settings from Select
 
-Line spacing, paragraph gap and `L/R on startup` are now shared across books and saved when Settings closes. Home starts with the last successfully opened book selected (never auto-opened), or the first book if that exact filename is missing. Two small checked files, `/gbareader/SETTINGS0.DAT` and `SETTINGS1.DAT`, hold these globals independently of each book's position/Arabic/cache. Hold Up remains a temporary session toggle. Home still shows only `gbareader`; V3.0 remains on the last Credits page.
+Every screen except the book page now looks like gbamp3 v1.8: white background, a small centred header, eight 17-pixel rows and a light-blue bar on the selected row. Long names scroll on the selected row. No instructions stay on screen; the most important controls are on About > Controls.
+
+- Home is the book list at once, with the cursor on the last opened book. Up/Down move (a fresh press wraps, holding repeats), Left/Right move a page, A opens.
+- `Select` opens Settings, on Home and while reading. While reading it starts with Go to and also has `Back to Files`, which closes the book (as Select did before). Settings is the only way back to the file list.
+- `Start` on Home opens the import browser (`Import to /gbareader`): folders from the SD root and the TXT/EPUB books in them. Choosing a book asks `Import into /gbareader?` (No first); Yes copies it into `/gbareader` (created if missing) and returns to the refreshed list with the new book selected. An existing file of the same name is never overwritten.
+- `L/R page turns` is a Settings row and is remembered: the last choice, from Settings or from holding Up while reading, is saved at once and restored at launch. The old `L/R on startup` option is gone (its saved value becomes the starting choice).
+- Holding Down while reading no longer does anything. Reading itself (page turns, Start saves, overlays, layout) is unchanged.
+- About (Settings > About, Left/Right): About, Controls, License, Text and fonts, Arabic font, SD card and files, EPUB and engine. Contact: gba@halim-jarrar.de.
+
+## Preserved V3.0: global settings and last-book selection
+
+Line spacing, paragraph gap and `L/R on startup` are now shared across books and saved when Settings closes. Home starts with the last successfully opened book selected (never auto-opened), or the first book if that exact filename is missing. Two small checked files, `/gbareader/SETTINGS0.DAT` and `SETTINGS1.DAT`, hold these globals independently of each book's position/Arabic/cache. (V3.1 replaces `L/R on startup` with the remembered `L/R page turns`.)
 
 ## V1.9: no limit on the number of books
 
@@ -34,54 +45,56 @@ A companion holds the byte bookmark, sticky Arabic ON/OFF, compatible 64-entry B
 
 The V1.4 storage design preserved page layout, fonts, shaping, input and ordinary page-turn behavior. It preserves the existing lazy cache policy: ZIP/package/spine guards, source fingerprint, header and checksum table are checked on opening; normalized blocks are checked as needed. Original chapter inflation/CRC is deferred on a valid cache hit. A failed block is not displayed: validated originals are used, or reading fails safely. New cache creation includes sequential saved-payload readback. No physical SD speed claim is made.
 
-V3.0 publication is separate from updating `main`; unrelated historical releases remain unchanged. Technical details: [SAV format, limits and recovery](docs/sidecar-format.md).
+V3.1 publication is separate from updating `main`; unrelated historical releases remain unchanged. Technical details: [SAV format, limits and recovery](docs/sidecar-format.md).
 
 ## Features and bounds
 
-- Case-insensitive UTF-8 `.txt` and a bounded text-only subset of EPUB 2/3; any number of files directly in `/gbareader` (names are read from the folder 64 at a time), five visible at once. No subfolder browser, root fallback or demo book.
+- Case-insensitive UTF-8 `.txt` and a bounded text-only subset of EPUB 2/3; any number of files directly in `/gbareader` (names are read from the folder 64 at a time), eight visible at once. Subfolders of `/gbareader` are not read; the import browser copies books from anywhere on the card. No demo book.
 - Filenames remain intact and are clipped only on screen. Discovery accepts up to 255 UTF-8 bytes; saving needs room for `.sav`, so the full book filename must be at most 251 UTF-8 bytes. Longer names remain readable but cannot be saved until renamed on a computer.
 - Streaming FatFS reads through an 8 KiB window; no whole-book RAM allocation.
 - Stored/raw-DEFLATE ZIP entries, container/OPF manifest and declared spine order; URI percent-decoding and XML entities in references; preferred package selection for multiple rootfiles.
 - Visible XHTML text including CDATA, block/table breaks and common XML/HTML entities. Images and image-only spine pages are skipped.
 - Limits remain 256 readable spine documents, 255-byte internal paths, 64 KiB uncompressed metadata, 32 MiB uncompressed XHTML per spine document, 16 MiB compressed required entry and 128 MiB source archive. A 32 KiB inflater dictionary and 16 KiB text window bound chapter processing. Applicable errors are reported, never silently truncated.
 - ZIP64, multi-disk archives, encrypted required entries and unsupported required compression are rejected. UTF-16 XML/XHTML, DRM, CSS presentation, scripts, embedded fonts, audio, video and SVG presentation are outside scope.
-- Native 16px SuperFW body font, the gbamp3 5x7 UI font (with the blue Butano `>` cursor), supported Latin/Greek/Cyrillic/Japanese/CJK/Hangul and supplemental publishing symbols. Smart quotes and selected hyphens use the existing display-only ASCII substitutes.
+- Native 16px SuperFW body font, the gbamp3 5x7 UI font, supported Latin/Greek/Cyrillic/Japanese/CJK/Hangul and supplemental publishing symbols. Smart quotes and selected hyphens use the existing display-only ASCII substitutes.
 - Word wrapping, CRLF/LF, UTF-8 BOM and safe malformed-input replacement. Runs of three or more spaces collapse on screen; repeated newlines collapse to one line break. None of this edits the source.
 - Line spacing from 0 to 4 and paragraph gap None/Small/Half/Full, with text centered vertically; page number, percentage and Go to percentage in settings; byte anchors rather than saved page numbers; incremental Back-history rebuilding when layout markers or effective spacing/gap/Arabic differ.
 - Native Ghoulam Arabic joining/lam-alef and limited per-line RTL. Harakat are hidden only on screen. Latin and digit runs remain left-to-right. This is not full Unicode bidi or full Persian/Urdu support.
 
 ## Controls
 
-Read TXT and EPUB books, save your reading position, and resume later. Place UTF-8 `.txt` and supported `.epub` files directly in `/gbareader` on the SD-card root, then restart the app. It lists every supported file (no limit), not subfolders, with five books visible at once. A missing or empty folder shows instructions; Controls and Credits remain available. This reader has no text editing, typing or user-facing export controls.
+Read TXT and EPUB books, save your reading position, and resume later. Place UTF-8 `.txt` and supported `.epub` files directly in `/gbareader` on the SD-card root, then restart the app, or import them with `Start`. It lists every supported file (no limit), not subfolders, with eight books visible at once. A missing or empty folder shows `No books found`; `Start` imports books from anywhere on the card. This reader has no text editing, typing or user-facing export controls.
 
 See [the full controls PDF](docs/gbareader-full-controls.pdf) and [downloadable instructions Markdown](docs/gbareader-full-controls.md).
 
-### Library
+### Home (file list)
 
-- `Up` / `Down`: select a `.txt` or `.epub` book.
-- `A`: open the selected book. Each successful open remembers its full filename, including the extension. On next launch Home selects the last successfully opened book and scrolls it into view, without opening it. Missing, renamed or unremembered books fall back to the first entry; cursor movement and failed opens are not remembered.
-- `Select`: show Controls. `Left` / `Right` changes its eleven help pages; `B` returns Home.
-- `Start`: show Credits, beginning with the personal author page. `Left` / `Right` changes its seven pages; `B` or `Start` returns Home. Font/framework/license attribution is on subsequent pages.
+- `Up` / `Down`: move (a fresh press on the first/last book wraps; holding repeats and stops at the ends). `Left` / `Right`: one page of eight books.
+- `A`: open the selected book. Each successful open remembers its full filename; on next launch Home selects it again, without opening it. Missing or renamed books fall back to the first entry.
+- `Select`: Settings. `Start`: import browser.
+
+### Import
+
+- Lists the folders (with a folder icon, first) and TXT/EPUB books of the current folder, starting at the SD root. Hidden/system entries and `/gbareader` itself are not shown.
+- `A` on a folder opens it; `B` goes up one folder (from the root: back Home).
+- `A` on a book asks `Import into /gbareader?` with `No` selected. `Yes` copies the book (progress in percent) and shows Home with the new book selected and `Imported`. `Already in /gbareader` means a file with that name exists there; it is left unchanged. A failed copy leaves no partial file.
 
 ### Reader
 
-- `Right` or `A`: next page.
-- `Left` or `B`: previous page.
-- Hold `Down` alone: open reader settings.
-- Hold `Up` alone: toggle shoulder-button page turns. `L` goes back and `R` forward when enabled. A UI-font `L+R: On` or `L+R: Off` notice appears for about one second. The saved `L/R on startup` preference initializes it once at launch (default Off). Hold Up is never saved and survives book switches; changing the startup preference affects only the next launch.
-- `Start`: save the current byte position, Arabic mode and up to 64 previous page offsets to the book's `.sav`; also independently retry pending global settings. After `save...`, the result is `Saved`, `Position save failed`, `Settings save failed` or `Both saves failed`. No cross-file atomic save is promised.
-- `Select`: close the book and return Home without saving later position changes.
-
-Both holds require 48 consecutive held updates after the initial press (about 0.8 seconds), exactly matching gbawriter R-only Caps. Short presses do nothing. Each hold acts once; release before trying again. Any other key or leaving reading cancels that hold. Library/settings Up/Down stay immediate.
-
-History is reused only when its renderer marker and effective spacing/gap/Arabic match. Otherwise the exact saved byte anchor survives while history and page information rebuild. Back rebuilds incrementally from a nearby line start (about 8 KiB back, not the book start), prefetching older blocks. Early Back shows `Loading back...`; partial rebuilds restart safely at their anchor, not an incomplete scan.
+- `Right` or `A`: next page. `Left` or `B`: previous page.
+- Hold `Up` alone (about 0.8 s): toggle shoulder page turns (`L` back, `R` forward). `L+R: On` / `L+R: Off` appears for about a second; the choice is saved at once and restored at launch.
+- `Start`: save the current position, Arabic mode and Back history to the book's `.sav`, and retry pending global settings. The result is `Saved`, `Position save failed`, `Settings save failed` or `Both saves failed`.
+- `Select`: Settings. Holding `Down` does nothing.
 
 ### Settings
 
-- `Up` / `Down`: select line spacing (0 through 4 pixels), paragraph gap (None, Small, Half or Full line), `L/R on startup` (Off/On), or Go to. Grey Lines per page and page/percentage readouts are information only; the blue cursor skips them. While the page count runs in the background (also while Settings is open) it shows `Page ...`, then an estimate such as `Page about 142`, until the exact number is known. After Go to, pages already counted are kept.
-- `Left` / `Right`: change the selected value. On Go to, `L` / `R` change it by 10%.
-- Go to: press `A` to jump to the chosen percentage straight away (closing settings with `B` or `Start` also jumps if the value changed). The jump starts at the beginning of that paragraph.
-- `B` or `Start`: apply and return. All three exit routes (including A on Go to) save changed global preferences once; unchanged or reverted values do not write. Spacing/gap apply to every book, defaulting to 1/Full when no config exists, never to the first book's old values. Layout changes preserve the byte anchor and rebuild incompatible history, not the EPUB text cache. Startup-only edits do not change layout or the current shoulder mode. SuperFW remains native 16px and Arabic Ghoulam native 11px.
+- Rows while reading: Go to, Line spacing, Paragraph gap, L/R page turns, Back to Files, About. From Home: Line spacing, Paragraph gap, L/R page turns, About.
+- `Up` / `Down`: move. `Left` / `Right` change a value; `A` steps it forward and wraps. Grey at the right: the current page (`Page ...`, then `Page about 142` until counted) and lines per page.
+- Go to: `Left` / `Right` 1% (hold to repeat), `L` / `R` 10%; `A` jumps now. The jump starts at the beginning of that paragraph.
+- `Back to Files`: close the book (without saving a newer position) and return Home. `About`: seven pages, `Left` / `Right`, `B` back.
+- `B`, `Select` or `Start`: apply and return. Changed values are saved once; spacing/gap apply to every book.
+
+History is reused only when its renderer marker and effective spacing/gap/Arabic match. Otherwise the exact saved byte anchor survives while history and page information rebuild. Back rebuilds incrementally from a nearby line start (about 8 KiB back, not the book start), prefetching older blocks. Early Back shows `Loading back...`; partial rebuilds restart safely at their anchor, not an incomplete scan.
 
 ### Arabic display
 
@@ -146,18 +159,20 @@ The inherited `make test` frontend smoke wrapper is not sufficient boot evidence
 - `epub_document`: ZIP/container/OPF parsing, chapter normalization, legacy/companion cache validation and checked lazy block fallback. The archive and external cache remain distinct byte sources.
 - `reader_txt_save`: existing versioned state codec, reused without dropping byte/history/Arabic semantics.
 - `reader_global_settings`: bounded explicit versioned global records, full remembered filename, checked alternating save/readback and dirty retry.
-- `main`: Butano UI, global startup/open/apply saving, independent manual bookmark save and session-only hold mode.
+- `reader_screen` / `reader_menu`: gbamp3-style bitmap screens (header, rows, light-blue bar, 5x7 labels), list/repeat/marquee rules, Settings rows and About pages.
+- `reader_browse`: import browser listing (folders first, windowed names) and the checked copy into `/gbareader`.
+- `main`: scenes, global startup/open/apply saving, independent manual bookmark save and the saved L/R mode.
 
-Body text uses the existing double-buffered bitmap renderer rather than one OAM sprite per glyph. The menu remains sprite-based.
+Body text and every menu use the double-buffered 8-bit bitmap; only the overlays over book text (`save...`, `L+R: On`) are sprites.
 
 ## Provenance and licensing
 
-Made by Halim Jarrar · © 2026 · halim-jarrar.de · monday@halim-jarrar.de
+Made by Halim Jarrar · © 2026 · halim-jarrar.de · gba@halim-jarrar.de
 
 Ghoulam Regular © 2025 Imad AlFil / mloukhiyye, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). [Font source](https://mloukhiyye.itch.io/ghoulam-arabic-pixel-art-font-version-1). Actual GSUB glyphs were converted to native 11px monochrome ROM rows; this modified representation is not author endorsement. See [Arabic policy and provenance](docs/arabic.md).
 
-The project derives from [`gba-vocab-trainer-CC` v0.2.5](https://github.com/Xinon232/gba-vocab-trainer-CC/releases/tag/v0.2.5). Its Supercard/FatFS integration is retained; its Butano UI font now only draws the `>` cursor, and UI text uses the 5x7 font from [gbamp3](https://github.com/Xinon232/gbamp3) v0.9.8 (generated by `tools/make_ui_small_font.py`). SuperFW font-rendering sources and font packs retain upstream notices under `references/superfw/`. The inherited UNSCII full-derived pack includes GNU Unifont and public-domain Fixedsys Excelsior glyphs; it is not wholly public domain.
+The project derives from [`gba-vocab-trainer-CC` v0.2.5](https://github.com/Xinon232/gba-vocab-trainer-CC/releases/tag/v0.2.5). Its Supercard/FatFS integration is retained; UI headers and labels use the 5x7 font from [gbamp3](https://github.com/Xinon232/gbamp3) v0.9.8 (generated by `tools/make_ui_small_font.py`). SuperFW font-rendering sources and font packs retain upstream notices under `references/superfw/`. The inherited UNSCII full-derived pack includes GNU Unifont and public-domain Fixedsys Excelsior glyphs; it is not wholly public domain.
 
 The tinfl-only miniz files are vendored from `77d0dce8627735138c51770d1799a1ef48f2117d`, without allocation, compression, zlib, stdio, time or miniz archive APIs. Provenance and MIT license: `third_party/miniz/`.
 
-The inherited project and SuperFW components are GPL v3 or later; see [LICENSE](LICENSE). Butano is zlib-licensed; FatFs retains ChaN's permissive notice. Complete current credits also appear in the full-controls PDF and the app's seven Credits pages.
+The inherited project and SuperFW components are GPL v3 or later; see [LICENSE](LICENSE). Butano is zlib-licensed; FatFs retains ChaN's permissive notice. Credits also appear in the full-controls PDF and on the app's About pages (Settings > About).

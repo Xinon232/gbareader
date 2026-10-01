@@ -6,12 +6,12 @@
 #include <initializer_list>
 #include <string>
 #include <vector>
-#include "reader_ui_state.h"
+#include "reader_menu.h"
 using namespace reader;
 static void seal(unsigned char* b) { auto c=crc32_bytes(b,28); for(int i=0;i<4;++i)b[28+i]=c>>(8*i); }
 int main() {
     auto p=default_global_preferences();
-    assert(p.line_spacing==1 && p.paragraph_gap==ParagraphGap::FULL && !p.shoulder_startup);
+    assert(p.line_spacing==1 && p.paragraph_gap==ParagraphGap::FULL && !p.shoulder_page_turns);
     unsigned char b[33]{}; GlobalPreferences out{}; uint32_t gen=0;
     for(int s=0;s<=4;++s)for(int g=0;g<4;++g)for(bool on:{false,true}) {
         p={uint8_t(s),ParagraphGap(g),on};
@@ -56,7 +56,7 @@ int main() {
     assert(remembered_library_selection("Same.epub",0,lookup)==0);
     assert(remembered_library_selection("Same.epub",3,[](int)->const char*{return nullptr;})==0);
     names.resize(130,"other.txt");names[129]=name;assert(remembered_library_selection(name.c_str(),130,lookup)==129);
-    assert(library_first_row(129,130)<=129&&library_first_row(129,130)+LIBRARY_VISIBLE_ROWS>129);
+    {ListNav nav{129,0};list_show(nav,130,8);assert(nav.top<=129&&nav.top+8>129);}
     assert(!strcmp(save_status_message(true,true),"Saved"));
     assert(!strcmp(save_status_message(false,true),"Position save failed"));
     assert(!strcmp(save_status_message(true,false),"Settings save failed"));

@@ -15,14 +15,14 @@ epub_header = (root / "include/epub_document.h").read_text(encoding="utf-8")
 makefile = (root / "Makefile").read_text(encoding="utf-8")
 workflow = (root / ".github/workflows/build-rom.yml").read_text(encoding="utf-8")
 
-assert "draw_text_idx8_bus16_range" in main
-assert "bn::sprite_font ui_font(" in main
-assert "bn::sprite_items::ui_variable_8x16_font" in main
+assert "draw_text_idx8_bus16_range" in (root / "src/reader_screen.cpp").read_text()
+# Menus are bitmap screens (reader_screen); only book overlays use sprites.
+assert "bn::sprite_font overlay_font(" in main
+assert "ui_variable_8x16_font" not in main
 assert "constexpr int FONT_HEIGHT = 16;" in header
 assert "shape_reader_line" in core
 assert "reader::draw_body_line(" in main
-assert "UI_SPRITE_CAPACITY" in main
-assert "LIBRARY_WORST_CASE_SPRITES < 128" in main
+assert "UI_SPRITE_CAPACITY = 24" in main
 assert "char* strcpy(char* destination, const char* source)" in string_shims
 assert "#define FF_FS_READONLY\t0" in ffconf
 assert "#define FF_MAX_LFN\t\t255" in ffconf
@@ -75,8 +75,8 @@ assert "step_history_rebuild" in core
 assert "reader::step_history_rebuild" in main
 assert 'show_overlay(save_ui, save_sprites, "Loading back...")' in main
 
-assert 'int(sizeof("gbareader") - 1)' in main
-assert '"gbareader V1.9"' not in main
+assert 'draw_list(pixels, "gbareader", home' in main
+assert '"gbareader V' not in main  # the version is shown on About only
 assert "release/v0.8.0" in workflow
 assert "pull_request:" in workflow and "      - main" in workflow
 assert "contents: read" in workflow
@@ -103,10 +103,11 @@ assert "central_char" not in parse_zip, "local comparison must not reread centra
 assert "std::memcmp(central_name,local_name,nl)" in parse_zip
 assert "read_bytes(*_archive,lo+30,local_name,nl)" in parse_zip
 # Settings have no live preview: pause reconstruction and defer layout until exit.
-settings_entry = main[main.index("} else if(reader_action == 2)"):main.index("} else if(bn::keypad::start_pressed())")]
+settings_entry = main[main.index("} else if(bn::keypad::select_pressed()) {\n                pending_back = false;"):main.index("const bool idle_frame")]
 assert "history_rebuild = {}" not in settings_entry, "settings entry must preserve reconstruction"
-assert "settings_before = settings" in settings_entry
-settings_ui = main[main.index("if(bn::keypad::up_pressed() && settings_row"):main.index("if(scene == Scene::READER && reader::tick_save_message")]
+assert "open_settings(true)" in settings_entry
+assert "settings_before = settings;" in main[main.index("auto open_settings"):main.index("auto enter_import")]
+settings_ui = main[main.index("} else if(scene == Scene::SETTINGS)"):main.index("} else if(scene == Scene::ABOUT)")]
 assert "reader::layout_page" not in settings_ui, "no intermediate settings layout"
 assert "const bool relayout = !reader::same_settings(settings_before, settings);" in settings_ui
 assert "if(jump || relayout)" in settings_ui
@@ -117,10 +118,10 @@ assert "if(relayout) restart_page_count();" in settings_ui
 assert "else retarget_page_count();" in settings_ui
 # Back history is rebuilt from a nearby line start, not the book start.
 assert "HISTORY_REBUILD_WINDOW" in core
-# UI text uses gbamp3's 5x7 font; the blue Butano font stays for the cursor.
-assert "bn::sprite_items::ui_small_font" in main
-assert 'add_text(cursor_ui, 8 - 120, y - 72, ">", sprites);' in main
-assert "settings_row == GOTO_ROW && bn::keypad::a_pressed()" in settings_ui
+# Headers and labels use gbamp3's 5x7 font, drawn into the bitmap; the selection is a light-blue bar.
+assert "bn::color(21, 26, 31)" in main and "BLUE = 4" in (root / "include/reader_screen.h").read_text()
+assert '#include "ui_small_glyphs.h"' in (root / "src/reader_screen.cpp").read_text()
+assert "go_now = bn::keypad::a_pressed();" in settings_ui
 # Cached text is hashed once; the ZIP-member CRC combines finalized header/text CRCs.
 cache_load = epub_source[epub_source.index("bool EpubDocument::load_owned_cache()"):epub_source.index("bool EpubDocument::parse_zip()")]
 assert "whole_crc = crc32_update(whole_crc, block, take)" not in cache_load, "cache text must not be hashed twice"

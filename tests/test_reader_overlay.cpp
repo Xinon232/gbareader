@@ -29,10 +29,11 @@ int main(){
 bn::sprite_text_generator save_ui;
 bn::vector<bn::sprite_ptr,SAVE_OVERLAY_SPRITE_CAPACITY> sprites;
 reader::ReaderHold reader_hold;
+for(bool mode_saved : {true,false})
 for(bool shoulder_page_turns : {true,false}){
 reader_hold.shoulder_page_turns=shoulder_page_turns;
 #include "mode_call.inc"
-assert(save_ui.text==(shoulder_page_turns?"L+R: On":"L+R: Off"));
+assert(save_ui.text==(!mode_saved?"Settings save failed":shoulder_page_turns?"L+R: On":"L+R: Off"));
 assert(save_ui.x==112 && save_ui.y==-64);
 assert(save_ui.alignment==0 && save_ui.z==0 && !save_ui.per_char);
 for(auto& sprite:sprites)assert(sprite.above);

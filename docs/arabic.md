@@ -1,6 +1,6 @@
 # Arabic display — gbareader V1.4
 
-Made by Halim Jarrar · (C) 2026 · halim-jarrar.de · monday@halim-jarrar.de
+Made by Halim Jarrar · (C) 2026 · halim-jarrar.de · gba@halim-jarrar.de
 
 ## Font provenance
 
@@ -44,8 +44,8 @@ cmp include/ghoulam_data.h /tmp/ghoulam.h
 
 The host suites exercise real-font TXT, original DEFLATE EPUB and reopened normalized EPUB cache, multiline long Arabic, marks, mixed Latin/digits/full-width glyphs, all-page forward/back, resume, old/current layout markers, source preservation and bus-safe native pixel bounds. Developer-only TTF/samples/generated fixtures are excluded from ROM DATA and release staging. Emulator language appearance and real Supercard operation remain separate acceptance checks; host pixels are not an emulator claim.
 
-## In-ROM Credits audit
+## In-ROM About audit
 
-Seven Credits pages are drawn from `src/reader_credits.cpp`. Page 1 contains only the exact personal four-line block; pages 2–7 name Ghoulam (Imad AlFil / mloukhiyye, CC BY 4.0), SuperFW (David Guillen Fandos, GPL v3+), UNSCII (Viznut; full variant GPL, including Fixedsys public-domain glyphs), GNU Unifont/Hangul (Roman Czyborra, Paul Hardy and contributors, GPL v2+ with font exception), Butano (Gustavo Valiente, zlib), devkitARM/devkitPro, FatFs (ChaN, permissive), miniz (MIT; Geldreich/Tenacious/RAD/Valve) and base-project provenance. Left/Right changes Credits pages; B/Start closes. The first page retains inherited personal-text positions/pixels. Tests cover all later-page text/pixel bounds and required notices, plus paging limits, entry release gating and closure.
+V3.1 replaces the seven Credits pages with About pages in `src/reader_menu.cpp` (Settings > About). Page 1 holds the personal block, page 2 the essential controls; pages 3–7 name Ghoulam (Imad AlFil / mloukhiyye, CC BY 4.0), SuperFW (David Guillen Fandos, GPL v3+), UNSCII (Viznut; full variant GPL, including Fixedsys public-domain glyphs), GNU Unifont/Hangul (Roman Czyborra, Paul Hardy and contributors, GPL v2+ with font exception), Butano (Gustavo Valiente, zlib), devkitARM/devkitPro, FatFs (ChaN, permissive), miniz (MIT; Geldreich/Tenacious/RAD/Valve). Left/Right changes pages; B returns to Settings. Tests check that every line fits its row and that the required notices are present. Unifont authors, the Hangul notice and the base project are in this document and the README, not in the ROM.
 
 Audit sources: the read-only gbavocab Credits table; bundled SuperFW font README, renderer and Hangul notices; `include/common_variable_8x16_sprite_font.h`; `src/ff.c`; `third_party/miniz/LICENSE`; and the upstream Ghoulam, UNSCII and GNU Unifont pages. **Inherited provenance limitation:** the exact UNSCII/Unifont snapshot versions are not recorded in this baseline. The conservative GPL attribution is retained; the newer alternative OFL license is not claimed. Framework dependency notices remain in the Butano source distribution. See the full controls PDF for source/license links.

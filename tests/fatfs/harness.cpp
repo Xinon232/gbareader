@@ -44,7 +44,7 @@ int main(int argc,char**argv){
    if(!probe) {
     const int v=atoi(argv[4]);
     if(std::strcmp(argv[3],"global-remember")) {
-     globals.values.line_spacing=v%5;globals.values.paragraph_gap=ParagraphGap(v%4);globals.values.shoulder_startup=v%2;
+     globals.values.line_spacing=v%5;globals.values.paragraph_gap=ParagraphGap(v%4);globals.values.shoulder_page_turns=v%2;
     }
     if(std::strcmp(argv[3],"global-prefs"))assert(remember_global_book(globals.values,argv[2]));
    }
@@ -54,7 +54,7 @@ int main(int argc,char**argv){
    const int selected=remembered_library_selection(globals.values.last_book,library_count(),library_name);
    printf("{\"load\":%d,\"saved\":%s,\"dirty\":%s,\"generation\":%u,\"active\":%d,\"spacing\":%d,\"gap\":%d,\"startup\":%s,\"name_match\":%s,\"selected\":%d,\"hits\":%d}\n",
     int(loaded),saved?"true":"false",globals.dirty()?"true":"false",globals.generation(),globals.active_slot(),
-    globals.values.line_spacing,int(globals.values.paragraph_gap),globals.values.shoulder_startup?"true":"false",
+    globals.values.line_spacing,int(globals.values.paragraph_gap),globals.values.shoulder_page_turns?"true":"false",
     !strcmp(globals.values.last_book,argv[2])?"true":"false",selected,hits);
   }
   f_mount(nullptr,"0:",0);fsync(fd);::close(fd);return 0;
