@@ -34,6 +34,10 @@ bool inspect_book_tail(const char* name, uint32_t physical_size,
                        BookStorageLayout& layout);
 
 bool storage_init();
+// What storage_init found: a Supercard (its SDRAM takes writes) and a
+// readable SD card (started and FAT mounted).
+struct StorageStatus { bool flashcart; bool sd_card; };
+StorageStatus storage_status();
 bool scan_library();
 bool library_path(int index, char (&path)[LIBRARY_PATH_MAX]);
 int library_count();

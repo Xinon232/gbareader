@@ -1,5 +1,6 @@
 /* MIT, Halim Jarrar 2026. Copied from gbamp3 tests/scsd_model.h. TEST ONLY Supercard SD/SDHC register model.
- * gbareader: the mode register may also carry the write-access bit (mode 7).
+ * gbareader: the mode register may also carry the write-access bit (mode 7),
+ * CMD3 reports the ident state, and a small SDRAM window answers writes.
  * Actual ROM executes driver, FatFS, decoder and IRQ. No seeded guest buffers.
  * Serial CMD, 4-bit data latch including LDM bus reads. Explicit synthetic
  * costs: 5 cycles/halfword CMD/poll, 8 cycles/word data; not hardware proof.
@@ -104,7 +105,12 @@ static uint32_t sd_load_multiple(struct ARMCore*c,uint32_t a,int mask,enum LSMDi
  if(a==0x09100000&&sdimage){if(direction!=LSM_IA)exit(42);uint32_t at=a;for(int i=0;i<16;i++)if(mask&(1<<i)){c->gprs[i]=sd_load32(c,at,cycles);at+=4;}return at;}
  return original_memory.loadMultiple(c,a,mask,direction,cycles);
 }
+/* gbareader: a little writable Supercard SDRAM beyond the ROM image (the
+ * "Flashcart compatible" probe at 0x08F00000); present with a card image. */
+static uint16_t sdram_probe[128];
+static int sdram_at(uint32_t a){return sdimage&&a>=0x08F00000&&a<0x08F00100?(int)((a-0x08F00000)>>1):-1;}
 static uint32_t sd_load16(struct ARMCore*c,uint32_t a,int*cycles){
+ if(sdram_at(a)>=0)return sdram_probe[sdram_at(a)];
  if(a==0x09000000&&sdimage){if(cycles)*cycles+=5;return write_active&&write_response<4?((write_status>>(3-write_response++))&1)*256:256;}
  if(a==0x09800000){if(cycles)*cycles+=5;if(!sdimage)return 0;if(resp_bit<resp_count){unsigned i=resp_bit++;return (response[i/8]>>(7-i%8))&1;}return 1;}
  if(a==0x09100000&&sdimage){
@@ -116,6 +122,7 @@ static uint32_t sd_load16(struct ARMCore*c,uint32_t a,int*cycles){
  return original_memory.load16(c,a,cycles);
 }
 static void sd_store16(struct ARMCore*c,uint32_t a,int16_t val,int*cycles){
+ if(sdram_at(a)>=0){sdram_probe[sdram_at(a)]=(uint16_t)val;return;}
  if(a==0x09000000&&sdimage&&write_active){if(cycles)*cycles+=5;if(!val){if(write_count)exit(47);write_count=1;}return;}
  if(a==0x09fffffe){if(cycles)*cycles+=5;unsigned v=(uint16_t)val;if(mode_step<2){if(v!=0xa55a)exit(34);mode_step++;}else{if((v&3)!=3)exit(35);sd_mode=v;if(++mode_step==4)mode_step=0;}return;}
  if(a==0x09440000){if(cycles)*cycles+=5;return;}

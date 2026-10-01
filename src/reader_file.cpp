@@ -296,9 +296,28 @@ bool inspect_book_tail(const char*name,uint32_t physical,const unsigned char*tai
  l.book_size=archive_size;l.cache_start=cache_start;l.cache_size=text_size;l.cache_crc32=get32(trailer+24);return true;
 }
 
-bool storage_init(){name_count=0;
+namespace { StorageStatus found_storage{}; }
+StorageStatus storage_status(){return found_storage;}
 #ifdef __DEVKITARM__
-REG_WAITCNT=0x40c0;set_supercard_mode(MAPPED_SDRAM,true,true);t_card_info info;if(sdcard_init(&info)||f_mount(&fatfs,"0:",1)!=FR_OK)return false;
+namespace {
+// The Supercard runs the ROM from 32 MiB of writable SDRAM at 0x08000000;
+// cartridge ROM and other carts ignore writes there. Tested far past the
+// ROM image, and the original value is put back.
+bool supercard_sdram_present(){
+    volatile uint16_t* probe=reinterpret_cast<volatile uint16_t*>(0x08F00000);
+    const uint16_t original=*probe;
+    *probe=0xA55A;const bool first=*probe==0xA55A;
+    *probe=0x5AA5;const bool second=*probe==0x5AA5;
+    *probe=original;
+    return first&&second;
+}
+}
+#endif
+bool storage_init(){name_count=0;found_storage={};
+#ifdef __DEVKITARM__
+REG_WAITCNT=0x40c0;set_supercard_mode(MAPPED_SDRAM,true,true);found_storage.flashcart=supercard_sdram_present();
+t_card_info info;if(sdcard_init(&info)||f_mount(&fatfs,"0:",1)!=FR_OK)return false;
+found_storage.sd_card=true;
 // A missing /gbareader is an empty library: Import creates it.
 scan_library();return true;
 #else

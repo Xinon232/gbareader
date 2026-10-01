@@ -14,8 +14,15 @@
 #   - butano at /home/hlm/butano/butano
 #---------------------------------------------------------------------------------------------------------------------
 
+# make DEMO=1: demo_gbareader.gba (start screen, no position saving, no Go to).
+DEMO        ?=  0
+ifeq ($(DEMO),1)
+TARGET      :=  demo_gbareader
+BUILD       :=  build_demo
+else
 TARGET      :=  gbareader
 BUILD       :=  build
+endif
 LIBBUTANO   ?=  /path/to/butano/butano
 PYTHON      :=  python3
 SOURCES     :=  src
@@ -34,7 +41,7 @@ ROMCODE     :=  AGBR
 # Optional Supercard second-ROM-mirror transfers. Default 0 preserves the
 # release-safe path; use `make SC_FAST_ROM_MIRROR=1 ...` only for hardware tests.
 SC_FAST_ROM_MIRROR ?= 0
-USERFLAGS   :=  -DSC_FAST_ROM_MIRROR=$(SC_FAST_ROM_MIRROR)
+USERFLAGS   :=  -DSC_FAST_ROM_MIRROR=$(SC_FAST_ROM_MIRROR) -DGBAREADER_DEMO=$(DEMO)
 USERCXXFLAGS :=
 USERASFLAGS :=
 USERLDFLAGS :=
