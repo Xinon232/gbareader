@@ -242,7 +242,7 @@ void draw_list(uint8_t* pixels, const char* title, const reader::ListNav& nav, i
 bool no_folder(int) { return false; }
 
 const char* settings_label(reader::SettingsItem item, bool shoulder, int goto_percent,
-                           bn::string<48>& out)
+                           bool confirm_leave, bn::string<48>& out)
 {
     using reader::SettingsItem;
     out.clear();
@@ -256,7 +256,7 @@ const char* settings_label(reader::SettingsItem item, bool shoulder, int goto_pe
     case SettingsItem::PAGE_TURN_KEYS:
         out = "L/R page turns: "; out += shoulder ? "On" : "Off"; break;
     case SettingsItem::BACK_TO_FILES:
-        out = "Back to Files"; break;
+        out = confirm_leave ? "Continue without saving?" : "Back to Files"; break;
     default:
         out = "About"; break;
     }
@@ -317,6 +317,9 @@ int main()
     int goto_before = 0;
     int count_refresh_frames = 0;
     int about_page = 0;
+    // Back to Files asks first when the page shown is not the saved one.
+    uint32_t saved_offset = 0;
+    bool confirm_leave = false;
     // The last L/R choice is restored at launch and saved whenever it changes.
     reader::ReaderHold reader_hold{};
     reader_hold.shoulder_page_turns = global_settings.values.shoulder_page_turns;
@@ -350,6 +353,7 @@ int main()
     auto open_settings = [&](bool book_open) {
         settings_count = reader::settings_items(book_open, settings_items);
         settings_nav = {};
+        confirm_leave = false;
         if(!book_open) {
             settings.line_spacing = global_settings.values.line_spacing;
             settings.paragraph_gap = global_settings.values.paragraph_gap;
@@ -432,6 +436,7 @@ int main()
                 if(opened != reader::OpenResult::FAILED) {
                     pending_back = false;
                     restart_page_count();
+                    saved_offset = page.start_offset;
                     reader::remember_global_book(global_settings.values, open_name);
                     const bool globals_saved = global_settings.save();
                     if(opened == reader::OpenResult::SAVE_FAILED || !globals_saved) {
@@ -500,6 +505,7 @@ int main()
                 bn::core::update();
                 const bool saved = file.save_footer(
                         footer, active_source == &epub ? active_source : nullptr);
+                if(saved) saved_offset = page.start_offset;
                 const bool globals_saved = global_settings.save();
                 show_overlay(save_ui, save_sprites, reader::save_status_message(saved, globals_saved));
                 reader::start_save_message(save_message_timer);
@@ -576,11 +582,17 @@ int main()
                     redraw_ui = true;
                 }
             }
-            if(list_keys.update(settings_nav, settings_count, false)) redraw_ui = true;
+            if(list_keys.update(settings_nav, settings_count, false)) { confirm_leave = false; redraw_ui = true; }
             const reader::SettingsItem item = settings_items[settings_nav.selected];
             int delta = bn::keypad::left_pressed() ? -1 : bn::keypad::right_pressed() ? 1 : 0;
             bool close = bn::keypad::b_pressed() || bn::keypad::select_pressed() ||
                          bn::keypad::start_pressed();
+            if(confirm_leave && bn::keypad::b_pressed()) {
+                // B takes the question back; Settings stays open.
+                confirm_leave = false;
+                close = false;
+                redraw_ui = true;
+            }
             bool go_now = false, back_to_files = false;
             if(item == reader::SettingsItem::GOTO) {
                 const int l = goto_left.update(bn::keypad::left_held(), bn::keypad::left_pressed());
@@ -617,7 +629,10 @@ int main()
                     redraw_ui = true;
                 }
             } else if(item == reader::SettingsItem::BACK_TO_FILES) {
-                back_to_files = bn::keypad::a_pressed();
+                if(bn::keypad::a_pressed()) {
+                    if(confirm_leave || page.start_offset == saved_offset) back_to_files = true;
+                    else { confirm_leave = true; redraw_ui = true; }
+                }
             } else if(bn::keypad::a_pressed()) {
                 about_page = 0;
                 scene = Scene::ABOUT;
@@ -801,7 +816,7 @@ int main()
                         info = bn::to_string<4>(reader::lines_per_page(settings)); info += " lines";
                     }
                     screen::row(pixels, slot, settings_label(item, reader_hold.shoulder_page_turns,
-                                                             goto_percent, label),
+                                                             goto_percent, confirm_leave, label),
                                 slot == settings_nav.selected, false, info.empty() ? nullptr : info.data());
                 }
             }

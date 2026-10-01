@@ -60,11 +60,11 @@ bool Marquee::step(int text_width, int available, unsigned frame)
 int settings_items(bool book_open, SettingsItem (&items)[SETTINGS_MAX_ROWS])
 {
     int n = 0;
+    if(book_open) items[n++] = SettingsItem::BACK_TO_FILES;
     if(book_open) items[n++] = SettingsItem::GOTO;
     items[n++] = SettingsItem::LINE_SPACING;
     items[n++] = SettingsItem::PARAGRAPH_GAP;
     items[n++] = SettingsItem::PAGE_TURN_KEYS;
-    if(book_open) items[n++] = SettingsItem::BACK_TO_FILES;
     items[n++] = SettingsItem::ABOUT;
     return n;
 }
@@ -75,7 +75,7 @@ const char* const about_titles[ABOUT_PAGE_COUNT] = {
 };
 
 const char* const about_lines[ABOUT_PAGE_COUNT][ABOUT_LINES] = {
-    {"gbareader V3.1", "", "Made by Halim Jarrar", "(C) 2026", "", "halim-jarrar.de",
+    {"gbareader V3.1", "", "Made by Halim Jarrar", "(C) 2026", "", "halimj.itch.io",
      "gba@halim-jarrar.de", ""},
     {"#Books", "Put books in /gbareader", "#File list", "Start: Import books", "#Reading",
      "Start: Save position", "Hold Up: L/R page turns on/off", ""},

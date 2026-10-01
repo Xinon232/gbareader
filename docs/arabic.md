@@ -1,6 +1,6 @@
 # Arabic display — gbareader V1.4
 
-Made by Halim Jarrar · (C) 2026 · halim-jarrar.de · gba@halim-jarrar.de
+Made by Halim Jarrar · (C) 2026 · halimj.itch.io · gba@halim-jarrar.de
 
 ## Font provenance
 

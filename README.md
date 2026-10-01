@@ -7,11 +7,11 @@ Read TXT and EPUB books on your Game Boy Advance. Save your place and return to 
 Every screen except the book page now looks like gbamp3 v1.8: white background, a small centred header, eight 17-pixel rows and a light-blue bar on the selected row. Long names scroll on the selected row. No instructions stay on screen; the most important controls are on About > Controls.
 
 - Home is the book list at once, with the cursor on the last opened book. Up/Down move (a fresh press wraps, holding repeats), Left/Right move a page, A opens.
-- `Select` opens Settings, on Home and while reading. While reading it starts with Go to and also has `Back to Files`, which closes the book (as Select did before). Settings is the only way back to the file list.
+- `Select` opens Settings, on Home and while reading. While reading its first row is `Back to Files`, which closes the book (as Select did before). If the page shown is not the saved one, that row first turns into `Continue without saving?`: `A` leaves, `B` (or moving the cursor) brings back `Back to Files`. Settings is the only way back to the file list.
 - `Start` on Home opens the import browser (`Import to /gbareader`): folders from the SD root and the TXT/EPUB books in them. Choosing a book asks `Import into /gbareader?` (No first); Yes copies it into `/gbareader` (created if missing) and returns to the refreshed list with the new book selected. An existing file of the same name is never overwritten.
 - `L/R page turns` is a Settings row and is remembered: the last choice, from Settings or from holding Up while reading, is saved at once and restored at launch. The old `L/R on startup` option is gone (its saved value becomes the starting choice).
 - Holding Down while reading no longer does anything. Reading itself (page turns, Start saves, overlays, layout) is unchanged.
-- About (Settings > About, Left/Right): About, Controls, License, Text and fonts, Arabic font, SD card and files, EPUB and engine. Contact: gba@halim-jarrar.de.
+- About (Settings > About, Left/Right): About, Controls, License, Text and fonts, Arabic font, SD card and files, EPUB and engine. Contact: halimj.itch.io, gba@halim-jarrar.de.
 
 ## Preserved V3.0: global settings and last-book selection
 
@@ -88,10 +88,10 @@ See [the full controls PDF](docs/gbareader-full-controls.pdf) and [downloadable 
 
 ### Settings
 
-- Rows while reading: Go to, Line spacing, Paragraph gap, L/R page turns, Back to Files, About. From Home: Line spacing, Paragraph gap, L/R page turns, About.
+- Rows while reading: Back to Files, Go to, Line spacing, Paragraph gap, L/R page turns, About. From Home: Line spacing, Paragraph gap, L/R page turns, About.
 - `Up` / `Down`: move. `Left` / `Right` change a value; `A` steps it forward and wraps. Grey at the right: the current page (`Page ...`, then `Page about 142` until counted) and lines per page.
 - Go to: `Left` / `Right` 1% (hold to repeat), `L` / `R` 10%; `A` jumps now. The jump starts at the beginning of that paragraph.
-- `Back to Files`: close the book (without saving a newer position) and return Home. `About`: seven pages, `Left` / `Right`, `B` back.
+- `Back to Files`: close the book and return Home. When the page shown is not the last saved one (Start), the row asks `Continue without saving?` first: `A` leaves without saving, `B` or `Up`/`Down` keeps the book open. `About`: seven pages, `Left` / `Right`, `B` back.
 - `B`, `Select` or `Start`: apply and return. Changed values are saved once; spacing/gap apply to every book.
 
 History is reused only when its renderer marker and effective spacing/gap/Arabic match. Otherwise the exact saved byte anchor survives while history and page information rebuild. Back rebuilds incrementally from a nearby line start (about 8 KiB back, not the book start), prefetching older blocks. Early Back shows `Loading back...`; partial rebuilds restart safely at their anchor, not an incomplete scan.
@@ -167,7 +167,7 @@ Body text and every menu use the double-buffered 8-bit bitmap; only the overlays
 
 ## Provenance and licensing
 
-Made by Halim Jarrar · © 2026 · halim-jarrar.de · gba@halim-jarrar.de
+Made by Halim Jarrar · © 2026 · halimj.itch.io · gba@halim-jarrar.de
 
 Ghoulam Regular © 2025 Imad AlFil / mloukhiyye, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). [Font source](https://mloukhiyye.itch.io/ghoulam-arabic-pixel-art-font-version-1). Actual GSUB glyphs were converted to native 11px monochrome ROM rows; this modified representation is not author endorsement. See [Arabic policy and provenance](docs/arabic.md).
 

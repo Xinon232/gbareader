@@ -119,7 +119,7 @@ int main(int argc, char** argv)
         }
     }
     assert(!std::strcmp(reader::about_titles[0], "About") && !std::strcmp(reader::about_titles[1], "Controls"));
-    for(const char* required : {"gbareader V3.1", "Made by Halim Jarrar", "gba@halim-jarrar.de",
+    for(const char* required : {"gbareader V3.1", "Made by Halim Jarrar", "halimj.itch.io", "gba@halim-jarrar.de",
             "Put books in /gbareader", "Start: Import books", "Start: Save position", "Hold Up: L/R page turns",
             "GNU GPL 3.0 or later", "github.com/Xinon232/gbareader",
             "Ghoulam Regular", "Imad AlFil (mloukhiyye)", "CC BY 4.0", "Changed:", "mloukhiyye.itch.io",

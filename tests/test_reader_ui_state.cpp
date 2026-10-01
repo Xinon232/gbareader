@@ -77,9 +77,9 @@ static void test_settings_items()
     assert(items[0] == SettingsItem::LINE_SPACING && items[1] == SettingsItem::PARAGRAPH_GAP &&
            items[2] == SettingsItem::PAGE_TURN_KEYS && items[3] == SettingsItem::ABOUT);
     assert(settings_items(true, items) == 6);
-    assert(items[0] == SettingsItem::GOTO && items[1] == SettingsItem::LINE_SPACING &&
-           items[2] == SettingsItem::PARAGRAPH_GAP && items[3] == SettingsItem::PAGE_TURN_KEYS &&
-           items[4] == SettingsItem::BACK_TO_FILES && items[5] == SettingsItem::ABOUT);
+    assert(items[0] == SettingsItem::BACK_TO_FILES && items[1] == SettingsItem::GOTO &&
+           items[2] == SettingsItem::LINE_SPACING && items[3] == SettingsItem::PARAGRAPH_GAP &&
+           items[4] == SettingsItem::PAGE_TURN_KEYS && items[5] == SettingsItem::ABOUT);
 }
 
 int main()

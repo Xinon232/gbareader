@@ -1,4 +1,4 @@
-# gbareader V3.1 (pre-release)
+# gbareader V3.1
 
 Based on V3.0 (`v3.0.0`). A visual redesign after gbamp3 v1.8, an import browser, and Settings on Select. Reading, storage (`.sav` companions, `SETTINGS0/1.DAT`) and the book page are unchanged.
 
@@ -6,10 +6,10 @@ Based on V3.0 (`v3.0.0`). A visual redesign after gbamp3 v1.8, an import browser
 
 - gbamp3 look on every menu screen: small centred header, eight rows, light-blue selected row, long names scrolling on the selected row; no on-screen instructions.
 - Home shows the book list at once (cursor on the last opened book); Up/Down wrap on a fresh press and repeat when held, Left/Right page.
-- `Select` opens Settings (Home and reading). While reading, Settings starts with Go to and has `Back to Files`; it is the way back to the file list.
+- `Select` opens Settings (Home and reading). While reading, the first row is `Back to Files`, the way back to the file list. If the page shown is not the saved one, it asks `Continue without saving?` in that row: `A` leaves, `B` returns to `Back to Files`.
 - `Start` on Home: import browser from the SD root (`Import to /gbareader`), folders first; `Import into /gbareader?` (No/Yes) copies a TXT/EPUB book into `/gbareader`, creating the folder if needed, never overwriting, removing a partial copy on failure.
 - `L/R page turns` row in Settings; the last choice (Settings or hold Up while reading) is saved and restored at launch. `L/R on startup` is gone.
-- About rewritten: About (V3.1, gba@halim-jarrar.de), Controls (the four essential controls), License, Text and fonts, Arabic font, SD card and files, EPUB and engine.
+- About rewritten: About (V3.1, halimj.itch.io, gba@halim-jarrar.de), Controls (the four essential controls), License, Text and fonts, Arabic font, SD card and files, EPUB and engine.
 
 ## Removed
 

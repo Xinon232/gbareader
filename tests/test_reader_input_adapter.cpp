@@ -47,6 +47,7 @@ Sprites sprites;
 bool pending_back=false,redraw_page=false,redraw_ui=false;
 int page_turns=0,goto_percent=0,goto_before=0;
 const char* open_name="synthetic.txt";
+unsigned saved_offset=99;
 int settings_opens=0;
 void open_settings(bool book_open){assert(book_open);++settings_opens;scene=Scene::SETTINGS;}
 void frame(unsigned keys){bn::keypad::pressed=keys&~bn::keypad::held;bn::keypad::held=keys;
@@ -112,6 +113,7 @@ for(Scene other : {Scene::LIBRARY,Scene::SETTINGS,Scene::ABOUT,Scene::IMPORT,Sce
 App p;p.frame(0);reader::forwards=reader::backs=reader::saves=0;
 for(unsigned key : {8u,16u,4u,32u,64u}){p.frame(key);p.frame(0);}
 assert(reader::forwards==2 && reader::backs==2 && reader::saves==1);
+assert(p.saved_offset==p.page.start_offset); // A successful Start save marks the page as saved.
 assert(p.page_turns==0); // Two forward and two back turns cancel out.
 p.frame(256|512);p.frame(0);assert(reader::forwards==2 && reader::backs==2);
 p.frame(1);for(int i=0;i<48;++i)p.frame(1);p.frame(0);

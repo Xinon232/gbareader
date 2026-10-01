@@ -30,7 +30,7 @@ for block in text.strip().split('\n\n'):
   for line in block.splitlines():flow.append(Paragraph(formatted(line[2:]),styles['BodyControls'],bulletText='\u2022'))
  else:flow.append(Paragraph(formatted(block.replace('\n',' ')),styles['BodyControls']))
 flow += [PageBreak(), Paragraph('Credits and font licenses', styles['Heading1']),
-         Paragraph('Made by Halim Jarrar<br/>(C) 2026<br/>halim-jarrar.de<br/>gba@halim-jarrar.de', styles['BodyControls'])]
+         Paragraph('Made by Halim Jarrar<br/>(C) 2026<br/>halimj.itch.io<br/>gba@halim-jarrar.de', styles['BodyControls'])]
 notices = [
  'Ghoulam Regular © 2025 Imad AlFil / mloukhiyye, CC BY 4.0. Converted actual contextual GSUB forms to native 11px monochrome ROM glyphs; this modified representation is not author endorsement. Source: https://mloukhiyye.itch.io/ghoulam-arabic-pixel-art-font-version-1 — License: https://creativecommons.org/licenses/by/4.0/.',
  'SuperFW fonts, renderer and SD foundation: David Guillen Fandos, © 2024–2025, GPL v3 or later. https://superfw.davidgf.net/. The original SuperFW and supplemental font packs are unchanged.',
@@ -53,7 +53,7 @@ joined='\n'.join('\n'.join(line for line in page.extract_text().splitlines()
 for required in ['Read TXT and EPUB','/gbareader','Select','Start','Left','Right','Up','Down','previous page','shoulder','Settings','Save failed','Halim Jarrar','no text editing','L/R page turns','SETTINGS0.DAT','Import into /gbareader','Back to Files','Settings save failed']:
  assert required.lower() in joined.lower(),required
 instructions='\n\n'.join(b for b in text.strip().split('\n\n') if not b.startswith('See ['))
-markdown='# gbareader V3.1\n\n## Full controls\n\n'+instructions+'\n\n## Credits and font licenses\n\nMade by Halim Jarrar\n(C) 2026\nhalim-jarrar.de\ngba@halim-jarrar.de\n\n'+'\n\n'.join(notices)+'\n'
+markdown='# gbareader V3.1\n\n## Full controls\n\n'+instructions+'\n\n## Credits and font licenses\n\nMade by Halim Jarrar\n(C) 2026\nhalimj.itch.io\ngba@halim-jarrar.de\n\n'+'\n\n'.join(notices)+'\n'
 (root/'docs/gbareader-full-controls.md').write_text(markdown,encoding='utf-8')
 def normalized(s):
  return re.sub(r'\s+','',s.replace('`','').replace('\u2022',''))

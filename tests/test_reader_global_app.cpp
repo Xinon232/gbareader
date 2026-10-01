@@ -60,6 +60,7 @@ struct App {
     int restarts=0,retargets=0;
     const char* open_name="one.txt";
     const char* message=nullptr;int message_frames=0;
+    uint32_t saved_offset=0;bool confirm_leave=false;
     reader::ListNav home{},settings_nav{};
     reader::SettingsItem settings_items[reader::SETTINGS_MAX_ROWS];int settings_count=0;
     ListKeys list_keys;reader::KeyRepeat goto_left,goto_right;reader::Marquee marquee;
@@ -72,13 +73,13 @@ struct App {
         (void)count_refresh_frames;(void)about_page;(void)redraw_ui;(void)redraw_page;(void)open_name;
         (void)active_source;(void)message_frames;(void)save_message_timer;(void)pending_back;(void)list_keys;
         (void)goto_left;(void)goto_right;(void)marquee;(void)frame;(void)import_nav;(void)import_depth;
-        (void)import_ok;(void)confirm_nav;(void)import_source;(void)import_name;(void)storage_ok;
+        (void)import_ok;(void)saved_offset;(void)confirm_leave;(void)confirm_nav;(void)import_source;(void)import_name;(void)storage_ok;
         this->home=home;this->reader_hold=reader_hold;this->scene=scene;this->message=message;
         this->settings_before=settings_before;
     }
     void flash(const char* text){message=text;message_frames=MESSAGE_FRAMES;redraw_ui=true;}
     void open_settings(bool open){
-        settings_count=reader::settings_items(open,settings_items);settings_nav={};
+        settings_count=reader::settings_items(open,settings_items);settings_nav={};confirm_leave=false;
         if(!open){settings.line_spacing=global_settings.values.line_spacing;settings.paragraph_gap=global_settings.values.paragraph_gap;}
         settings_before=settings;list_keys.reset();scene=Scene::SETTINGS;redraw_ui=true;
     }
@@ -118,14 +119,15 @@ int main(){
         assert(a.global_settings.values.shoulder_page_turns!=turns&&a.file.saves==0);
         App cold;cold.boot();assert(cold.reader_hold.shoulder_page_turns!=turns&&cold.home.selected==2);
     }
-    // Settings rows, as drawn: Go to (page info), spacing (lines info), gap, L/R, Back to Files, About.
+    // Settings rows, as drawn: Back to Files, Go to (page info), spacing (lines info), gap, L/R, About.
     files.clear();reset_fault();
     {App a;a.boot();a.opened(reader::OpenResult::OPENED,"one.txt");a.enter();a.goto_percent=a.goto_before=0;a.settings_draw();
      assert(title=="Settings"&&rows.size()==6);
-     assert(std::get<1>(rows[0])=="Go to: 0%"&&std::get<2>(rows[0])&&std::get<3>(rows[0]).find("Page ")==0);
-     assert(std::get<1>(rows[1])=="Line spacing: 1"&&std::get<3>(rows[1])==std::to_string(reader::lines_per_page(a.settings))+" lines");
-     assert(std::get<1>(rows[2])=="Paragraph gap: Full"&&std::get<3>(rows[2]).empty());
-     assert(std::get<1>(rows[3])=="L/R page turns: Off"&&std::get<1>(rows[4])=="Back to Files"&&std::get<1>(rows[5])=="About");
+     assert(std::get<1>(rows[0])=="Back to Files"&&std::get<2>(rows[0])&&std::get<3>(rows[0]).empty());
+     assert(std::get<1>(rows[1])=="Go to: 0%"&&std::get<3>(rows[1]).find("Page ")==0);
+     assert(std::get<1>(rows[2])=="Line spacing: 1"&&std::get<3>(rows[2])==std::to_string(reader::lines_per_page(a.settings))+" lines");
+     assert(std::get<1>(rows[3])=="Paragraph gap: Full"&&std::get<3>(rows[3]).empty());
+     assert(std::get<1>(rows[4])=="L/R page turns: Off"&&std::get<1>(rows[5])=="About");
      for(int i=1;i<6;++i)assert(!std::get<2>(rows[i]));
      // Up / Down move the cursor; a fresh press wraps around.
      a.tap(UP);assert(a.settings_nav.selected==5);a.tap(DOWN);assert(a.settings_nav.selected==0);
@@ -136,7 +138,7 @@ int main(){
     // Go to: Left / Right 1% (held: repeats), L / R 10%; A jumps now; B applies too.
     for(unsigned exit:{unsigned(B),unsigned(START),unsigned(SELECT),unsigned(A)}){
         files.clear();reset_fault();App a;a.boot();a.opened(reader::OpenResult::OPENED,"one.txt");
-        a.enter();int w=writes;a.tap(RIGHT);a.tap(RIGHT);assert(a.goto_percent==2);
+        a.enter();a.row_to(SettingsItem::GOTO);int w=writes;a.tap(RIGHT);a.tap(RIGHT);assert(a.goto_percent==2);
         a.frame(0);for(int i=0;i<1+24+8*3;++i)a.frame(RIGHT);a.frame(0);assert(a.goto_percent==2+1+4);
         a.tap(L);assert(a.goto_percent==0);a.tap(R);a.tap(R);assert(a.goto_percent==20);
         int retarget=a.retargets,restart=a.restarts;a.tap(exit);
@@ -157,13 +159,24 @@ int main(){
      a.enter();a.row_to(SettingsItem::LINE_SPACING);a.tap(RIGHT);fault='w';ordinal=1;calls=0;a.tap(B);
      assert(a.scene==Scene::READER&&a.global_settings.dirty()&&overlay=="Settings save failed");
      reset_fault();a.enter();a.tap(B);assert(!a.global_settings.dirty());}
-    // Back to Files closes the book (no bookmark save), keeps the settings and returns Home.
-    {files.clear();reset_fault();App a;a.boot();a.opened(reader::OpenResult::OPENED,"one.txt");
+    // Back to Files on the saved page closes the book at once, keeps the settings and returns Home.
+    {files.clear();reset_fault();App a;a.boot();a.opened(reader::OpenResult::OPENED,"one.txt");a.saved_offset=a.page.start_offset;
      a.enter();a.row_to(SettingsItem::LINE_SPACING);a.tap(RIGHT);a.row_to(SettingsItem::BACK_TO_FILES);int w=writes,r0=a.restarts;
      a.tap(A);assert(a.scene==Scene::LIBRARY&&!a.open_name&&!a.file.open&&!a.epub.open&&a.file.saves==0);
      assert(writes==w+1&&a.global_settings.values.line_spacing==2&&a.restarts==r0);
      // About opens from its row; B returns to Settings (main's ABOUT branch).
      a.enter();a.row_to(SettingsItem::ABOUT);a.tap(A);assert(a.scene==Scene::ABOUT&&a.about_page==0);}
+    // Not on the saved page: the row asks "Continue without saving?"; B takes it back, A leaves.
+    {files.clear();reset_fault();App a;a.boot();a.opened(reader::OpenResult::OPENED,"one.txt");a.saved_offset=a.page.start_offset+1;
+     a.enter();assert(a.settings_items[a.settings_nav.selected]==SettingsItem::BACK_TO_FILES);
+     a.tap(A);assert(a.scene==Scene::SETTINGS&&a.confirm_leave&&a.open_name);
+     a.settings_draw();assert(std::get<1>(rows[0])=="Continue without saving?"&&std::get<2>(rows[0]));
+     a.tap(B);assert(a.scene==Scene::SETTINGS&&!a.confirm_leave);a.settings_draw();assert(std::get<1>(rows[0])=="Back to Files");
+     a.tap(A);assert(a.confirm_leave);a.tap(DOWN);assert(!a.confirm_leave&&a.scene==Scene::SETTINGS); // Moving away cancels too.
+     a.tap(UP);a.tap(A);assert(a.confirm_leave);a.tap(A);
+     assert(a.scene==Scene::LIBRARY&&!a.open_name&&!a.file.open&&a.file.saves==0);
+     // Settings opens without the question.
+     a.open_name="one.txt";a.enter();assert(!a.confirm_leave);}
     // Settings from Home: no Go to / Back to Files; values come from (and go to) the saved globals.
     {files.clear();reset_fault();GlobalPreferences p{};p.line_spacing=3;files[paths[0]]=record(p,1);
      App a;a.boot();a.open_name=nullptr;a.settings.line_spacing=1;a.open_settings(false);

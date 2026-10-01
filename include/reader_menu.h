@@ -44,7 +44,7 @@ struct Marquee {
     bool step(int text_width, int available, unsigned frame);
 };
 
-// Settings rows. Go to and Back to Files only exist while a book is open.
+// Settings rows. Back to Files (first) and Go to only exist while a book is open.
 enum class SettingsItem : uint8_t {
     GOTO, LINE_SPACING, PARAGRAPH_GAP, PAGE_TURN_KEYS, BACK_TO_FILES, ABOUT
 };

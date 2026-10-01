@@ -25,10 +25,10 @@ Read TXT and EPUB books, save your reading position, and resume later. Place UTF
 
 ### Settings
 
-- Rows while reading: Go to, Line spacing, Paragraph gap, L/R page turns, Back to Files, About. From Home: Line spacing, Paragraph gap, L/R page turns, About.
+- Rows while reading: Back to Files, Go to, Line spacing, Paragraph gap, L/R page turns, About. From Home: Line spacing, Paragraph gap, L/R page turns, About.
 - `Up` / `Down`: move. `Left` / `Right` change a value; `A` steps it forward and wraps. Grey at the right: the current page (`Page ...`, then `Page about 142` until counted) and lines per page.
 - Go to: `Left` / `Right` 1% (hold to repeat), `L` / `R` 10%; `A` jumps now. The jump starts at the beginning of that paragraph.
-- `Back to Files`: close the book (without saving a newer position) and return Home. `About`: seven pages, `Left` / `Right`, `B` back.
+- `Back to Files`: close the book and return Home. When the page shown is not the last saved one (Start), the row asks `Continue without saving?` first: `A` leaves without saving, `B` or `Up`/`Down` keeps the book open. `About`: seven pages, `Left` / `Right`, `B` back.
 - `B`, `Select` or `Start`: apply and return. Changed values are saved once; spacing/gap apply to every book.
 
 History is reused only when its renderer marker and effective spacing/gap/Arabic match. Otherwise the exact saved byte anchor survives while history and page information rebuild. Back rebuilds incrementally from a nearby line start (about 8 KiB back, not the book start), prefetching older blocks. Early Back shows `Loading back...`; partial rebuilds restart safely at their anchor, not an incomplete scan.
@@ -71,7 +71,7 @@ Requires compatible Supercard SD hardware. Host filesystem tests and emulator UI
 
 Made by Halim Jarrar
 (C) 2026
-halim-jarrar.de
+halimj.itch.io
 gba@halim-jarrar.de
 
 Ghoulam Regular © 2025 Imad AlFil / mloukhiyye, CC BY 4.0. Converted actual contextual GSUB forms to native 11px monochrome ROM glyphs; this modified representation is not author endorsement. Source: https://mloukhiyye.itch.io/ghoulam-arabic-pixel-art-font-version-1 — License: https://creativecommons.org/licenses/by/4.0/.
