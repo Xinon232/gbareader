@@ -119,6 +119,23 @@ void row(uint8_t* pixels, int slot, const char* text, bool selected, bool folder
     }
 }
 
+void status_mark(uint8_t* pixels, int x, int y, bool ok)
+{
+    const int left = x - 8;
+    for(int t = 0; t < 3; ++t) {  // three pixels thick
+        if(ok) {
+            // Short stroke down to the corner, long stroke up to the right.
+            for(int i = 0; i <= 5; ++i) put(pixels, left + 1 + i, y + 8 + i + t, GREEN);
+            for(int i = 0; i <= 10; ++i) put(pixels, left + 6 + i, y + 13 - i + t, GREEN);
+        } else {
+            for(int i = 0; i <= 14; ++i) {
+                put(pixels, left + 1 + i, y + 1 + i + t, RED);
+                put(pixels, left + 1 + i, y + 15 - i + t, RED);
+            }
+        }
+    }
+}
+
 void message(uint8_t* pixels, const char* text)
 {
     fill(pixels, 0, 140, WIDTH, 16, WHITE);

@@ -36,6 +36,7 @@ constexpr int BACKGROUND_WORK_TICKS=1,IMPORT_DEPTH=16,MESSAGE_FRAMES=120;
 #include "reader_sampler.inc"
 #include "list_keys.inc"
 struct Sprites {void clear(){}};
+static const char* const demo_import_notice[]={""};static const char* const demo_save_notice[]={""};
 static std::string overlay;
 void show_overlay(int,Sprites&,const char* text,int=64){overlay=text;}
 struct Source:reader::ByteSource {
@@ -73,10 +74,12 @@ struct App {
         (void)count_refresh_frames;(void)about_page;(void)redraw_ui;(void)redraw_page;(void)open_name;
         (void)active_source;(void)message_frames;(void)save_message_timer;(void)pending_back;(void)list_keys;
         (void)goto_left;(void)goto_right;(void)marquee;(void)frame;(void)import_nav;(void)import_depth;
-        (void)import_ok;(void)saved_offset;(void)confirm_leave;(void)confirm_nav;(void)import_source;(void)import_name;(void)storage_ok;
+        (void)import_ok;(void)demo_notice;(void)demo_return;(void)saved_offset;(void)confirm_leave;(void)confirm_nav;(void)import_source;(void)import_name;(void)storage_ok;
         this->home=home;this->reader_hold=reader_hold;this->scene=scene;this->message=message;
         this->settings_before=settings_before;
     }
+    int demo_notices=0;
+    void show_demo_notice(const char* const*,Scene){++demo_notices;}
     void flash(const char* text){message=text;message_frames=MESSAGE_FRAMES;redraw_ui=true;}
     void open_settings(bool open){
         settings_count=reader::settings_items(open,settings_items);settings_nav={};confirm_leave=false;
@@ -194,5 +197,6 @@ int main(){
     {files.clear();reset_fault();App a;a.boot();fault='w';ordinal=1;
      a.opened(reader::OpenResult::OPENED,"two.epub");assert(a.global_settings.dirty()&&overlay=="Settings save failed"&&a.file.saves==0);
      reset_fault();a.opened(reader::OpenResult::OPENED,"two.epub");assert(!a.global_settings.dirty()&&a.file.saves==0);}
+    static_assert(!GBAREADER_DEMO, "the host tests check the full version");
     puts("PASS: extracted main boot (last book, last L/R), open saves, Settings rows/draw/wrap/repeat, Go to, A wraps values, Back to Files, About, Settings from Home, failed saves");
 }

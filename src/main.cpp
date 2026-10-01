@@ -38,10 +38,11 @@ namespace {
 using reader::Scene;
 namespace screen = reader::screen;
 
-// 0-3: book page (white, black, Arabic greys); 4-5: gbamp3 light blue and grey.
+// 0-3: book page (white, black, Arabic greys); 4-5: gbamp3 light blue and grey;
+// 6-7: green / red status marks (demo start screen).
 constexpr bn::color palette_colors[16] = {
     bn::color(31, 31, 31), bn::color(0, 0, 0), bn::color(12, 12, 12), bn::color(20, 20, 20),
-    bn::color(21, 26, 31), bn::color(16, 16, 16), bn::color(), bn::color(), bn::color(), bn::color(),
+    bn::color(21, 26, 31), bn::color(16, 16, 16), bn::color(4, 20, 6), bn::color(27, 4, 4), bn::color(), bn::color(),
     bn::color(), bn::color(), bn::color(), bn::color(), bn::color(), bn::color()
 };
 constexpr bn::bg_palette_item palette_item(bn::span<const bn::color>(palette_colors), bn::bpp_mode::BPP_8);
@@ -241,6 +242,16 @@ void draw_list(uint8_t* pixels, const char* title, const reader::ListNav& nav, i
 
 bool no_folder(int) { return false; }
 
+// Demo build notices: what is not possible, where the full version is.
+constexpr const char* demo_import_notice[] = {
+    "Importing files is not possible", "in demo version.", "", "Get the full version at", "halimj.itch.io", "",
+    "Press any button to continue."
+};
+constexpr const char* demo_save_notice[] = {
+    "Saving page is not possible", "in demo version.", "", "Get the full version at", "halimj.itch.io", "",
+    "Press any button to continue."
+};
+
 const char* settings_label(reader::SettingsItem item, bool shoulder, int goto_percent,
                            bool confirm_leave, bn::string<48>& out)
 {
@@ -304,7 +315,10 @@ int main()
     settings = reader::default_settings();
     bool storage_ok = reader::storage_init();
     const auto globals_loaded = storage_ok ? global_settings.load() : reader::GlobalLoadResult::ERROR;
-    Scene scene = Scene::LIBRARY;
+    Scene scene = GBAREADER_DEMO ? Scene::DEMO_INTRO : Scene::LIBRARY;
+    // Demo notice: its text and the screen a button press returns to.
+    const char* const* demo_notice = demo_import_notice;
+    Scene demo_return = Scene::LIBRARY;
     reader::ListNav home{};
     home.selected = storage_ok ? reader::remembered_library_selection(
             global_settings.values.last_book, reader::library_count(), reader::library_name) : 0;
@@ -350,6 +364,15 @@ int main()
         message_frames = MESSAGE_FRAMES;
         redraw_ui = true;
     };
+    auto show_demo_notice = [&](const char* const* notice, Scene back) {
+        demo_notice = notice;
+        demo_return = back;
+        sprites.clear();
+        save_sprites.clear();
+        scene = Scene::DEMO_NOTICE;
+        redraw_ui = true;
+    };
+    (void)show_demo_notice;
     auto open_settings = [&](bool book_open) {
         settings_count = reader::settings_items(book_open, settings_items);
         settings_nav = {};
@@ -389,7 +412,8 @@ int main()
             if(bn::keypad::select_pressed()) {
                 open_settings(false);
             } else if(bn::keypad::start_pressed()) {
-                if(!storage_ok) flash("No SD card");
+                if(GBAREADER_DEMO) show_demo_notice(demo_import_notice, Scene::LIBRARY);
+                else if(!storage_ok) flash("No SD card");
                 else { import_depth = 0; import_nav[0] = {}; enter_import("/"); }
             } else if(bn::keypad::a_pressed() && count) {
                 const char* library_status = nullptr;
@@ -499,6 +523,11 @@ int main()
                 }
             } else if(bn::keypad::start_pressed()) {
                 pending_back = false;
+#if GBAREADER_DEMO
+                reader::cancel_save_message(save_message_timer);
+                show_demo_notice(demo_save_notice, Scene::READER);
+            } else if(false) {
+#endif
                 reader::TxtSaveFooter footer{page.start_offset, settings, history, history_rebuild};
                 reader::cancel_save_message(save_message_timer);
                 show_saving_overlay(save_ui, save_sprites);
@@ -586,7 +615,12 @@ int main()
             const reader::SettingsItem item = settings_items[settings_nav.selected];
             int delta = bn::keypad::left_pressed() ? -1 : bn::keypad::right_pressed() ? 1 : 0;
             bool close = bn::keypad::b_pressed() || bn::keypad::select_pressed() ||
-                         bn::keypad::start_pressed();
+                         (!GBAREADER_DEMO && bn::keypad::start_pressed());
+            if(GBAREADER_DEMO && bn::keypad::start_pressed()) {
+                // Demo: Start is the save button; say why it does nothing.
+                show_demo_notice(demo_save_notice, Scene::SETTINGS);
+                close = false;
+            }
             if(confirm_leave && bn::keypad::b_pressed()) {
                 // B takes the question back; Settings stays open.
                 confirm_leave = false;
@@ -630,7 +664,8 @@ int main()
                 }
             } else if(item == reader::SettingsItem::BACK_TO_FILES) {
                 if(bn::keypad::a_pressed()) {
-                    if(confirm_leave || page.start_offset == saved_offset) back_to_files = true;
+                    // The demo cannot save, so there is nothing to ask.
+                    if(confirm_leave || page.start_offset == saved_offset || GBAREADER_DEMO) back_to_files = true;
                     else { confirm_leave = true; redraw_ui = true; }
                 }
             } else if(bn::keypad::a_pressed()) {
@@ -719,6 +754,15 @@ int main()
                     redraw_ui = true;
                 }
             }
+        } else if(scene == Scene::DEMO_INTRO) {
+            if(bn::keypad::a_pressed()) { scene = Scene::LIBRARY; list_keys.reset(); redraw_ui = true; }
+        } else if(scene == Scene::DEMO_NOTICE) {
+            if(bn::keypad::any_pressed()) {
+                scene = demo_return;
+                list_keys.reset();
+                if(scene == Scene::READER) redraw_page = true;
+                else redraw_ui = true;
+            }
         } else if(scene == Scene::IMPORT_CONFIRM) {
             if(list_keys.update(confirm_nav, 2, false)) redraw_ui = true;
             const bool yes = bn::keypad::a_pressed() && confirm_nav.selected == 1;
@@ -783,6 +827,22 @@ int main()
                     draw_list(pixels, "Import to /gbareader", import_nav[import_depth], count,
                               import_label, reader::browse_is_folder, marquee.offset);
                 }
+            } else if(scene == Scene::DEMO_INTRO) {
+                const auto found = reader::storage_status();
+                const int books = storage_ok ? reader::library_count() : 0;
+                bn::string<48> count = bn::to_string<12>(books);
+                count += books == 1 ? " book found in /gbareader" : " books found in /gbareader";
+                screen::header(pixels, "gbareader demo");
+                screen::center_text(pixels, 30, count.data());
+                screen::text_fit(pixels, 44, 62, 150, "Flashcart compatible", screen::BLACK);
+                screen::status_mark(pixels, 196, 62, found.flashcart);
+                screen::text_fit(pixels, 44, 88, 150, "SD card", screen::BLACK);
+                screen::status_mark(pixels, 196, 88, found.sd_card);
+                screen::center_text(pixels, 128, "Press A to continue.");
+            } else if(scene == Scene::DEMO_NOTICE) {
+                screen::header(pixels, "gbareader demo");
+                for(int i = 0; i < 7; ++i)
+                    if(demo_notice[i][0]) screen::center_text(pixels, 22 + i * 18, demo_notice[i]);
             } else if(scene == Scene::IMPORT_CONFIRM) {
                 screen::header(pixels, "Import into /gbareader?");
                 screen::row(pixels, 0, "No", confirm_nav.selected == 0);

@@ -1,4 +1,5 @@
 #include "reader_menu.h"
+#include "reader_ui_state.h"
 
 namespace reader {
 
@@ -75,7 +76,7 @@ const char* const about_titles[ABOUT_PAGE_COUNT] = {
 };
 
 const char* const about_lines[ABOUT_PAGE_COUNT][ABOUT_LINES] = {
-    {"gbareader V3.1", "", "Made by Halim Jarrar", "(C) 2026", "", "halimj.itch.io",
+    {GBAREADER_DEMO ? "gbareader V3.1 demo" : "gbareader V3.1", "", "Made by Halim Jarrar", "(C) 2026", "", "halimj.itch.io",
      "gba@halim-jarrar.de", ""},
     {"#Books", "Put books in /gbareader", "#File list", "Start: Import books", "#Reading",
      "Start: Save position", "Hold Up: L/R page turns on/off", ""},

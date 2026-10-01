@@ -78,13 +78,24 @@ jobs:
           DEVKITPRO: /opt/devkitpro
           DEVKITARM: /opt/devkitpro/devkitARM
         run: make -j2 LIBBUTANO="$GITHUB_WORKSPACE/_butano/butano"
-      - name: Verify ROM exists
-        run: test -s gbareader.gba
+      - name: Build demo ROM
+        env:
+          DEVKITPRO: /opt/devkitpro
+          DEVKITARM: /opt/devkitpro/devkitARM
+        run: make -j2 DEMO=1 LIBBUTANO="$GITHUB_WORKSPACE/_butano/butano"
+      - name: Verify ROMs exist
+        run: test -s gbareader.gba && test -s demo_gbareader.gba
       - name: Upload complete ROM
         uses: actions/upload-artifact@v4
         with:
           name: GBAReader-${{ github.sha }}
           path: gbareader.gba
+          if-no-files-found: error
+      - name: Upload demo ROM
+        uses: actions/upload-artifact@v4
+        with:
+          name: GBAReader-demo-${{ github.sha }}
+          path: demo_gbareader.gba
           if-no-files-found: error
 
   # Manual only: attach this exact build and the controls manual to a draft release

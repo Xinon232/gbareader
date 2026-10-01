@@ -12,6 +12,8 @@ constexpr uint8_t WHITE = 0;
 constexpr uint8_t BLACK = 1;
 constexpr uint8_t BLUE = 4;  // gbamp3 0x7f55, RGB(170,210,255)
 constexpr uint8_t GREY = 5;  // gbamp3 0x4210
+constexpr uint8_t GREEN = 6;
+constexpr uint8_t RED = 7;
 
 constexpr int WIDTH = 240;
 constexpr int HEIGHT = 160;
@@ -37,6 +39,8 @@ void row(uint8_t* pixels, int slot, const char* text, bool selected,
          bool folder = false, const char* info = nullptr, unsigned skip = 0);
 // Width available to a row's text (marquee limit).
 int row_text_width(bool folder, const char* info);
+// A 17x17 check mark (green) or cross (red) centred on x, top at y.
+void status_mark(uint8_t* pixels, int x, int y, bool ok);
 // gbamp3 message: small black text on a white strip near the bottom.
 void message(uint8_t* pixels, const char* text);
 
