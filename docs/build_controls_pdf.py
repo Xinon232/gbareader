@@ -1,66 +1,138 @@
 #!/usr/bin/env python3
-"""Build the full-controls PDF from the current README controls section.
-Requires reportlab and pypdf. Run from any directory.
+"""Build docs/gbareader-full-controls.pdf from the hand-written manual
+docs/gbareader-full-controls.md (headings, paragraphs, lists, tables,
+screenshots and links). Requires reportlab, pypdf and Pillow.
+Checks afterwards that every line of the Markdown text is in the PDF.
 """
 from pathlib import Path
 import re
 from xml.sax.saxutils import escape
-from reportlab.platypus import SimpleDocTemplate,Paragraph,PageBreak,Flowable
-from reportlab.lib.styles import getSampleStyleSheet,ParagraphStyle
-from reportlab.lib.colors import HexColor
 from reportlab import rl_config
-
-rl_config.invariant = 1  # Rebuilding unchanged controls produces identical bytes.
-
+from reportlab.lib.colors import HexColor
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.platypus import (Image, KeepTogether, ListFlowable, ListItem, PageBreak, Paragraph,
+                                SimpleDocTemplate, Spacer, Table, TableStyle)
 from pypdf import PdfReader
-root=Path(__file__).resolve().parents[1]
-text=(root/'README.md').read_text().split('## Controls\n',1)[1].split('## Hardware and files',1)[0]
-styles=getSampleStyleSheet()
-styles.add(ParagraphStyle(name='BodyControls',fontName='Helvetica',fontSize=11,leading=16,spaceAfter=8))
-styles['Heading1'].textColor=styles['Heading2'].textColor=HexColor('#254d83')
-flow: list[Flowable]=[Paragraph('gbareader V3.1',styles['Title']),Paragraph('Full controls',styles['Heading1'])]
-def formatted(t):
- return re.sub(r'`([^`]+)`',r'<b>\1</b>',escape(t))
+
+rl_config.invariant = 1  # Rebuilding an unchanged manual gives identical bytes.
+
+root = Path(__file__).resolve().parents[1]
+source = root / 'docs/gbareader-full-controls.md'
+out = root / 'docs/gbareader-full-controls.pdf'
+text = source.read_text(encoding='utf-8')
+
+BLUE = HexColor('#254d83')
+BAR = HexColor('#aad2ff')   # the app's selection bar
+GREY = HexColor('#526070')
+styles = getSampleStyleSheet()
+title = ParagraphStyle('ManualTitle', parent=styles['Title'], textColor=BLUE, fontSize=26, leading=30, spaceAfter=2)
+subtitle = ParagraphStyle('ManualSubtitle', parent=styles['Normal'], textColor=GREY, fontSize=13, leading=16,
+                          alignment=1, spaceAfter=14)
+heading = ParagraphStyle('ManualHeading', parent=styles['Heading2'], textColor=BLUE, fontSize=15, leading=19,
+                         spaceBefore=12, spaceAfter=6)
+body = ParagraphStyle('ManualBody', parent=styles['Normal'], fontName='Helvetica', fontSize=10.5, leading=15,
+                      spaceAfter=7)
+cell = ParagraphStyle('ManualCell', parent=body, fontSize=9.5, leading=12.5, spaceAfter=0)
+cell_head = ParagraphStyle('ManualCellHead', parent=cell, fontName='Helvetica-Bold')
+
+
+def inline(t):
+    """`keys` in bold, URLs as links."""
+    parts = re.split(r'(`[^`]+`|https?://\S+)', t)
+    html = []
+    for p in parts:
+        if p.startswith('`') and p.endswith('`'):
+            html.append('<b>' + escape(p[1:-1]) + '</b>')
+        elif p.startswith('http'):
+            url = p.rstrip('.,')
+            html.append(f'<link href="{escape(url)}" color="#254d83"><u>{escape(url)}</u></link>'
+                        + escape(p[len(url):]))
+        else:
+            html.append(escape(p))
+    return ''.join(html)
+
+
+def table(lines):
+    rows = [[c.strip() for c in l.strip().strip('|').split('|')] for l in lines if not re.match(r'^\|\s*-', l)]
+    data = [[Paragraph(inline(c), cell_head if r == 0 else cell) for c in row] for r, row in enumerate(rows)]
+    n = len(rows[0])
+    widths = {3: [0.2, 0.22, 0.58], 2: [0.33, 0.67]}[n]
+    t = Table(data, colWidths=[w * 499 for w in widths], repeatRows=1)
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), BAR),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LINEBELOW', (0, 0), (-1, -1), 0.4, HexColor('#c8d3df')),
+        ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    return [KeepTogether([t]) if len(rows) <= 12 else t, Spacer(1, 8)]
+
+
+flow = []
 for block in text.strip().split('\n\n'):
- if block.startswith('See ['):continue
- if block.startswith('### '):
-  if block in ('### Settings','### Migration and failed saves'):flow.append(PageBreak())
-  flow.append(Paragraph(block[4:],styles['Heading2']))
- elif block.startswith('- '):
-  for line in block.splitlines():flow.append(Paragraph(formatted(line[2:]),styles['BodyControls'],bulletText='\u2022'))
- else:flow.append(Paragraph(formatted(block.replace('\n',' ')),styles['BodyControls']))
-flow += [PageBreak(), Paragraph('Credits and font licenses', styles['Heading1']),
-         Paragraph('Made by Halim Jarrar<br/>(C) 2026<br/>halimj.itch.io<br/>gba@halim-jarrar.de', styles['BodyControls'])]
-notices = [
- 'Ghoulam Regular © 2025 Imad AlFil / mloukhiyye, CC BY 4.0. Converted actual contextual GSUB forms to native 11px monochrome ROM glyphs; this modified representation is not author endorsement. Source: https://mloukhiyye.itch.io/ghoulam-arabic-pixel-art-font-version-1 — License: https://creativecommons.org/licenses/by/4.0/.',
- 'SuperFW fonts, renderer and SD foundation: David Guillen Fandos, © 2024–2025, GPL v3 or later. https://superfw.davidgf.net/. The original SuperFW and supplemental font packs are unchanged.',
- 'UNSCII by Viznut: the included unscii-16-full-derived font pack is GPL, not wholly public domain. It incorporates GNU Unifont and public-domain Fixedsys Excelsior glyphs. https://viznut.fi/unscii/.',
- 'GNU Unifont / Hangul: Roman Czyborra, Paul Hardy and Unifont contributors. GPL v2 or later with the GNU font embedding exception. https://www.unifoundry.com/unifont/. The inherited exact font snapshot version is not recorded; no claim of eligibility for a newer alternative OFL license is made.',
- 'UI font: the 5x7 font from gbamp3 v0.9.8 by Halim Jarrar, part of this project family (GPL v3 or later). https://github.com/Xinon232/gbamp3.',
- 'Butano engine: Gustavo Valiente, zlib license. Built with devkitARM / devkitPro. FatFs © 2022 ChaN, permissive redistribution terms in src/ff.c. Framework dependency notices remain in the Butano source distribution.',
- 'miniz: MIT license; © 2010–2014 Rich Geldreich and Tenacious Software LLC; © 2013–2014 RAD Game Tools and Valve Software. Complete notice in third_party/miniz/LICENSE.',
- 'Based on gba-vocab-trainer-CC v0.2.5. Project license: GPL v3 or later. Full source and notices: https://github.com/Xinon232/gbareader. In-ROM Credits keeps the personal block on page one and third-party credits on the following six pages. Left/Right changes pages; B or Start closes.'
-]
-for notice in notices: flow.append(Paragraph(escape(notice), styles['BodyControls']))
-out=root/'docs/gbareader-full-controls.pdf';out.parent.mkdir(exist_ok=True)
-def footer(canvas,doc):
- canvas.setFont('Helvetica',9);canvas.setFillColor(HexColor('#526070'));canvas.drawString(42,25,'gbareader · Full controls · Halim Jarrar');canvas.drawRightString(553,25,str(doc.page))
-SimpleDocTemplate(str(out),pagesize=(595,842),leftMargin=48,rightMargin=48,topMargin=38,bottomMargin=46,title='gbareader V3.1 — Full controls',author='Halim Jarrar').build(flow,onFirstPage=footer,onLaterPages=footer)
-pdf=PdfReader(out)
-joined='\n'.join('\n'.join(line for line in page.extract_text().splitlines()
-    if line not in ('gbareader · Full controls · Halim Jarrar',str(index)))
-    for index,page in enumerate(pdf.pages,1))
-for required in ['Read TXT and EPUB','/gbareader','Select','Start','Left','Right','Up','Down','previous page','shoulder','Settings','Save failed','Halim Jarrar','no text editing','L/R page turns','SETTINGS0.DAT','Import into /gbareader','Back to Files','Settings save failed']:
- assert required.lower() in joined.lower(),required
-instructions='\n\n'.join(b for b in text.strip().split('\n\n') if not b.startswith('See ['))
-markdown='# gbareader V3.1\n\n## Full controls\n\n'+instructions+'\n\n## Credits and font licenses\n\nMade by Halim Jarrar\n(C) 2026\nhalimj.itch.io\ngba@halim-jarrar.de\n\n'+'\n\n'.join(notices)+'\n'
-(root/'docs/gbareader-full-controls.md').write_text(markdown,encoding='utf-8')
-def normalized(s):
- return re.sub(r'\s+','',s.replace('`','').replace('\u2022',''))
-visible=normalized(joined)
-for block in markdown.strip().split('\n\n'):
- for line in (block.splitlines() if block.startswith('- ') else [block]):
-  plain=re.sub(r'^#+\s*','',line)
-  if plain.startswith('- '):plain=plain[2:]
-  assert normalized(plain) in visible,('PDF text omitted',plain)
-print(f'{out}: {len(pdf.pages)} pages; complete Markdown/PDF block parity verified')
+    lines = block.splitlines()
+    if block.startswith('# '):
+        flow.append(Paragraph(escape(block[2:]), title))
+    elif block == '## Full controls':
+        flow.append(Paragraph('Full controls', subtitle))
+    elif block.startswith('## '):
+        if block == '## Credits and licenses':
+            flow.append(PageBreak())  # Credits get a page of their own.
+        flow.append(Paragraph(escape(block[3:]), heading))
+    elif block.startswith('!['):
+        m = re.match(r'!\[([^\]]*)\]\(([^)]+)\)', block)
+        img = Image(str(root / 'docs' / m.group(2)), width=240, height=160)
+        # A thin frame like a GBA screen edge, so the white screen stands out.
+        framed = Table([[img]], colWidths=[244], rowHeights=[164])
+        framed.setStyle(TableStyle([('BOX', (0, 0), (-1, -1), 2, HexColor('#3a3f4a')),
+                                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                                    ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                                    ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0)]))
+        flow.append(KeepTogether([Spacer(1, 2), framed, Spacer(1, 10)]))
+    elif block.startswith('|'):
+        flow += table(lines)
+    elif block.startswith('- ') or re.match(r'^\d+\. ', block):
+        numbered = not block.startswith('- ')
+        items = [ListItem(Paragraph(inline(re.sub(r'^(- |\d+\. )', '', l)), body), leftIndent=14) for l in lines]
+        flow.append(ListFlowable(items, bulletType='1' if numbered else 'bullet', start=1 if numbered else '•',
+                                 leftIndent=14, bulletFontSize=10.5 if numbered else 9))
+    else:
+        flow.append(Paragraph(inline(' '.join(lines)), body))
+
+
+# A heading always starts on the same page as what follows it.
+kept = []
+for f in flow:
+    if kept and isinstance(kept[-1], Paragraph) and kept[-1].style is heading:
+        kept[-1] = KeepTogether([kept[-1], f])
+    else:
+        kept.append(f)
+flow = kept
+
+
+def footer(canvas, doc):
+    canvas.setFont('Helvetica', 9)
+    canvas.setFillColor(GREY)
+    canvas.drawString(48, 25, 'gbareader V3.1 · Full controls · github.com/Xinon232/gbareader')
+    canvas.drawRightString(547, 25, str(doc.page))
+
+
+SimpleDocTemplate(str(out), pagesize=(595, 842), leftMargin=48, rightMargin=48, topMargin=40, bottomMargin=46,
+                  title='gbareader V3.1 - Full controls', author='Halim Jarrar').build(
+    flow, onFirstPage=footer, onLaterPages=footer)
+
+# Every line of the manual must be in the PDF.
+pdf = PdfReader(out)
+visible = re.sub(r'\s+', '', ''.join(page.extract_text() for page in pdf.pages))
+for block in text.strip().split('\n\n'):
+    if block.startswith('!['):
+        continue
+    for line in block.splitlines():
+        if re.match(r'^\|\s*-', line):
+            continue
+        for piece in (line.strip('|').split('|') if line.startswith('|') else [line]):
+            plain = re.sub(r'^(#+ |- |\d+\. )', '', piece.strip()).replace('`', '')
+            assert re.sub(r'\s+', '', plain) in visible, ('PDF text omitted', plain)
+for required in ['https://github.com/Xinon232/gbareader', 'Import into /gbareader?', 'Continue without saving?',
+                 'Halim Jarrar', 'gba@halim-jarrar.de', 'halimj.itch.io', 'CC BY 4.0', 'GPL 3.0 or later']:
+    assert re.sub(r'\s+', '', required) in visible, required
+print(f'{out}: {len(pdf.pages)} pages; every manual line verified in the PDF')

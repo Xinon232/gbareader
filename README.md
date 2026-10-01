@@ -65,7 +65,7 @@ V3.1 publication is separate from updating `main`; unrelated historical releases
 
 Read TXT and EPUB books, save your reading position, and resume later. Place UTF-8 `.txt` and supported `.epub` files directly in `/gbareader` on the SD-card root, then restart the app, or import them with `Start`. It lists every supported file (no limit), not subfolders, with eight books visible at once. A missing or empty folder shows `No books found`; `Start` imports books from anywhere on the card. This reader has no text editing, typing or user-facing export controls.
 
-See [the full controls PDF](docs/gbareader-full-controls.pdf) and [downloadable instructions Markdown](docs/gbareader-full-controls.md).
+The user manual with screenshots, credits and licenses: [PDF](docs/gbareader-full-controls.pdf) / [Markdown](docs/gbareader-full-controls.md). This section is the technical reference.
 
 ### Home (file list)
 
@@ -132,7 +132,7 @@ Requires compatible Supercard SD hardware. Host filesystem tests and emulator UI
 
 ## Hardware and files
 
-The Supercard SD driver, FatFS configuration, fonts, normal page-turn inputs, Arabic geometry and existing OAM capacity assertions are retained. The live shoulder-page-turn mode is session-only; its startup default is global, never per-book. Reading state uses the existing checked 800-byte serializer within the SAV banks, including history-layout metadata checked against the effective global-plus-book layout before reuse. Read-only legacy handling remains in the reader; the old embedded writer is retained only as a host fixture generator, not a device save route.
+The Supercard SD driver, FatFS configuration, fonts, normal page-turn inputs, Arabic geometry and existing OAM capacity assertions are retained. The shoulder-page-turn mode is global, never per-book, and the last choice is saved. Reading state uses the existing checked 800-byte serializer within the SAV banks, including history-layout metadata checked against the effective global-plus-book layout before reuse. Read-only legacy handling remains in the reader; the old embedded writer is retained only as a host fixture generator, not a device save route.
 
 ## Building and testing
 
@@ -147,7 +147,7 @@ python3 tests/fatfs/run.py
 GBAREADER_FATFS_FIXTURE=legacy-v047.epub python3 tests/fatfs/run.py
 ```
 
-The runnable output is `gbareader.gba`. Real FAT image tests require GCC/G++, `dosfstools` and `mtools`; see [test documentation](tests/fatfs/README.md). Regenerate the full PDF and Markdown with `python3 docs/build_controls_pdf.py` in an environment containing ReportLab and pypdf.
+The runnable output is `gbareader.gba`. Real FAT image tests require GCC/G++, `dosfstools` and `mtools`; see [test documentation](tests/fatfs/README.md). The manual is written by hand in `docs/gbareader-full-controls.md` (screenshots in `docs/images/`); rebuild its PDF with `python3 docs/build_controls_pdf.py` (needs ReportLab, pypdf and Pillow).
 
 The inherited `make test` frontend smoke wrapper is not sufficient boot evidence. It can report a pass after a display/frontend startup failure; verify actual application pixels independently. Physical Supercard testing remains separate.
 
