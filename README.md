@@ -2,6 +2,8 @@
 
 Read TXT and EPUB books on your Game Boy Advance. Save your place and return to it later. Put books directly in `/gbareader` on a compatible Supercard SD card; they appear on Home.
 
+This repository has the complete source code under GPL v3. No prebuilt ROM is published here: build `gbareader.gba` yourself as described in [Building and testing](#building-and-testing).
+
 ## V3.1: gbamp3 look, Import, Settings from Select
 
 Every screen except the book page now looks like gbamp3 v1.8: white background, a small centred header, eight 17-pixel rows and a light-blue bar on the selected row. Long names scroll on the selected row. No instructions stay on screen; the most important controls are on About > Controls.
@@ -45,7 +47,7 @@ A companion holds the byte bookmark, sticky Arabic ON/OFF, compatible 64-entry B
 
 The V1.4 storage design preserved page layout, fonts, shaping, input and ordinary page-turn behavior. It preserves the existing lazy cache policy: ZIP/package/spine guards, source fingerprint, header and checksum table are checked on opening; normalized blocks are checked as needed. Original chapter inflation/CRC is deferred on a valid cache hit. A failed block is not displayed: validated originals are used, or reading fails safely. New cache creation includes sequential saved-payload readback. No physical SD speed claim is made.
 
-V3.1 publication is separate from updating `main`; unrelated historical releases remain unchanged. Technical details: [SAV format, limits and recovery](docs/sidecar-format.md).
+Technical details: [SAV format, limits and recovery](docs/sidecar-format.md).
 
 ## Features and bounds
 
