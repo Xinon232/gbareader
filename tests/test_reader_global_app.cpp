@@ -36,7 +36,7 @@ constexpr int BACKGROUND_WORK_TICKS=1,IMPORT_DEPTH=16,MESSAGE_FRAMES=120;
 #include "reader_sampler.inc"
 #include "list_keys.inc"
 struct Sprites {void clear(){}};
-static const char* const demo_import_notice[]={""};static const char* const demo_save_notice[]={""};
+static const char* const demo_goto_notice[]={""};static const char* const demo_save_notice[]={""};
 static std::string overlay;
 void show_overlay(int,Sprites&,const char* text,int=64){overlay=text;}
 struct Source:reader::ByteSource {

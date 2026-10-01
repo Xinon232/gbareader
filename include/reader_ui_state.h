@@ -1,7 +1,7 @@
 #pragma once
 
-// make DEMO=1 builds demo_gbareader.gba: a start screen, no Import, no
-// position saving (each shows a notice pointing to the full version).
+// make DEMO=1 builds demo_gbareader.gba: a start screen, no position saving
+// and no Go to (each shows a notice pointing to the full version).
 #ifndef GBAREADER_DEMO
 #define GBAREADER_DEMO 0
 #endif

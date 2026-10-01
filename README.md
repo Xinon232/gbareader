@@ -147,7 +147,7 @@ python3 tests/fatfs/run.py
 GBAREADER_FATFS_FIXTURE=legacy-v047.epub python3 tests/fatfs/run.py
 ```
 
-The runnable output is `gbareader.gba`. `make DEMO=1` builds `demo_gbareader.gba` (in `build_demo/`): it opens with a start screen (books found in `/gbareader`, Flashcart compatible and SD card checks), and Import and saving the reading position show a notice pointing to the full version at halimj.itch.io instead. CI builds both. Real FAT image tests require GCC/G++, `dosfstools` and `mtools`; see [test documentation](tests/fatfs/README.md). The manual is written by hand in `docs/gbareader-full-controls.md` (screenshots in `docs/images/`); rebuild its PDF with `python3 docs/build_controls_pdf.py` (needs ReportLab, pypdf and Pillow).
+The runnable output is `gbareader.gba`. `make DEMO=1` builds `demo_gbareader.gba` (in `build_demo/`): it opens with a start screen (books found in `/gbareader`, Flashcart compatible and SD card checks), each book opens behind a "You are reading the demo version" screen, and saving the reading position and Go to show a notice pointing to the full version at halimj.itch.io instead. Import works, so the demo also checks that the card can be written. CI builds both. Real FAT image tests require GCC/G++, `dosfstools` and `mtools`; see [test documentation](tests/fatfs/README.md). The manual is written by hand in `docs/gbareader-full-controls.md` (screenshots in `docs/images/`); rebuild its PDF with `python3 docs/build_controls_pdf.py` (needs ReportLab, pypdf and Pillow).
 
 The inherited `make test` frontend smoke wrapper is not sufficient boot evidence. It can report a pass after a display/frontend startup failure; verify actual application pixels independently. Physical Supercard testing remains separate.
 

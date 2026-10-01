@@ -243,8 +243,12 @@ void draw_list(uint8_t* pixels, const char* title, const reader::ListNav& nav, i
 bool no_folder(int) { return false; }
 
 // Demo build notices: what is not possible, where the full version is.
-constexpr const char* demo_import_notice[] = {
-    "Importing files is not possible", "in demo version.", "", "Get the full version at", "halimj.itch.io", "",
+constexpr const char* demo_open_notice[] = {
+    "You are reading the", "demo version.", "", "Get the full version at", "halimj.itch.io", "",
+    "Press any button to continue."
+};
+constexpr const char* demo_goto_notice[] = {
+    "Go to is not possible", "in demo version.", "", "Get the full version at", "halimj.itch.io", "",
     "Press any button to continue."
 };
 constexpr const char* demo_save_notice[] = {
@@ -317,7 +321,7 @@ int main()
     const auto globals_loaded = storage_ok ? global_settings.load() : reader::GlobalLoadResult::ERROR;
     Scene scene = GBAREADER_DEMO ? Scene::DEMO_INTRO : Scene::LIBRARY;
     // Demo notice: its text and the screen a button press returns to.
-    const char* const* demo_notice = demo_import_notice;
+    const char* const* demo_notice = demo_save_notice;
     Scene demo_return = Scene::LIBRARY;
     reader::ListNav home{};
     home.selected = storage_ok ? reader::remembered_library_selection(
@@ -412,8 +416,7 @@ int main()
             if(bn::keypad::select_pressed()) {
                 open_settings(false);
             } else if(bn::keypad::start_pressed()) {
-                if(GBAREADER_DEMO) show_demo_notice(demo_import_notice, Scene::LIBRARY);
-                else if(!storage_ok) flash("No SD card");
+                if(!storage_ok) flash("No SD card");
                 else { import_depth = 0; import_nav[0] = {}; enter_import("/"); }
             } else if(bn::keypad::a_pressed() && count) {
                 const char* library_status = nullptr;
@@ -473,6 +476,11 @@ int main()
                     message = nullptr; message_frames = 0;
                     sprites.clear();
                     redraw_page = true;
+#if GBAREADER_DEMO
+                    // Every book opens behind the demo notice; any button shows the page.
+                    redraw_page = false;
+                    show_demo_notice(demo_open_notice, Scene::READER);
+#endif
                 } else {
                     if(! library_status) library_status = epub_name(open_name) ?
                             reader::epub_error_string(epub.error()) : "Book read failed";
@@ -628,7 +636,12 @@ int main()
                 redraw_ui = true;
             }
             bool go_now = false, back_to_files = false;
-            if(item == reader::SettingsItem::GOTO) {
+            if(GBAREADER_DEMO && item == reader::SettingsItem::GOTO) {
+                // Demo: Go to would stand in for the saved position.
+                if(bn::keypad::a_pressed() || bn::keypad::left_pressed() || bn::keypad::right_pressed() ||
+                   bn::keypad::l_pressed() || bn::keypad::r_pressed())
+                    show_demo_notice(demo_goto_notice, Scene::SETTINGS);
+            } else if(item == reader::SettingsItem::GOTO) {
                 const int l = goto_left.update(bn::keypad::left_held(), bn::keypad::left_pressed());
                 const int r = goto_right.update(bn::keypad::right_held(), bn::keypad::right_pressed());
                 delta = l ? -1 : r ? 1 : 0;

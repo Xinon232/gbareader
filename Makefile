@@ -14,7 +14,7 @@
 #   - butano at /home/hlm/butano/butano
 #---------------------------------------------------------------------------------------------------------------------
 
-# make DEMO=1: demo_gbareader.gba (start screen, no Import, no position saving).
+# make DEMO=1: demo_gbareader.gba (start screen, no position saving, no Go to).
 DEMO        ?=  0
 ifeq ($(DEMO),1)
 TARGET      :=  demo_gbareader
