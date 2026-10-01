@@ -82,7 +82,6 @@ gbareader is free software under the [GNU GPL v3 or later](LICENSE). It builds o
 
 - The Supercard SD and FatFs support comes from the author's earlier Game Boy Advance vocabulary trainer.
 - [SuperFW](references/superfw/) font rendering and font packs (GPL v3 or later). The UNSCII-based pack includes GNU Unifont and public-domain Fixedsys Excelsior glyphs.
-- The menu font from [gbamp3](https://github.com/Xinon232/gbamp3) v0.9.8.
 - [Ghoulam](https://mloukhiyye.itch.io/ghoulam-arabic-pixel-art-font-version-1) Arabic pixel font © 2025 Imad AlFil / mloukhiyye, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), converted to fit the Game Boy screen. This conversion is not endorsed by the font's author.
 - [Butano](https://github.com/GValiente/butano) game engine (zlib license).
 - FatFs by ChaN (permissive license).
