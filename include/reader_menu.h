@@ -46,10 +46,14 @@ struct Marquee {
 
 // Settings rows. Back to Files (first) and Go to only exist while a book is open.
 enum class SettingsItem : uint8_t {
-    GOTO, LINE_SPACING, PARAGRAPH_GAP, PAGE_TURN_KEYS, BACK_TO_FILES, ABOUT
+    GOTO, LINE_SPACING, PARAGRAPH_GAP, PAGE_TURN_KEYS, FILE_EXTENSIONS, BACK_TO_FILES, ABOUT
 };
-constexpr int SETTINGS_MAX_ROWS = 6;
+constexpr int SETTINGS_MAX_ROWS = 7;
 int settings_items(bool book_open, SettingsItem (&items)[SETTINGS_MAX_ROWS]);
+
+// Home list name: without show_extension, the part from the last '.' is cut
+// (a leading '.' stays). Writes at most size bytes, terminator included.
+void library_display_name(const char* name, bool show_extension, char* out, int size);
 
 // About: one topic per page.
 constexpr int ABOUT_PAGE_COUNT = 7;

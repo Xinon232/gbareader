@@ -7,3 +7,4 @@ build/
 *.gba
 *.zip
 .DS_Store
+build_demo/

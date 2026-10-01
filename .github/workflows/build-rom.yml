@@ -1,0 +1,124 @@
+name: Build GBA ROM
+
+# Every push and pull request: host, sanitizer and FatFS tests, then the full
+# and the demo ROM build. The full ROM is never published or kept here; build
+# gbareader.gba yourself (see README) or get it from halimj.itch.io.
+# Manual run with a tag: publish only the demo ROM (demo_gbareader.gba) as a
+# release, with DEMO_RELEASE_NOTES.md.
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Demo release tag created on this commit (e.g. v3.2.0-demo); empty: build and test only'
+        required: false
+        default: ''
+      name:
+        description: 'Release title (default: the tag)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm:20260610
+    steps:
+      - name: Check out GBAReader
+        uses: actions/checkout@v4
+      - name: Check out pinned Butano
+        uses: actions/checkout@v4
+        with:
+          repository: GValiente/butano
+          ref: 77dcbcb3d8783596a9f333c64eedbccec77b05dc
+          path: _butano
+      - name: Run host tests
+        run: bash tests/run_host_tests.sh
+      - name: Run host tests with sanitizers
+        env:
+          EXTRA_CXXFLAGS: -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer
+        run: bash tests/run_host_tests.sh
+      - name: Install FAT image test tools
+        run: apt-get update && apt-get install -y --no-install-recommends dosfstools mtools
+      - name: Test real FatFS transient-error recovery
+        run: python3 tests/fatfs/run.py
+      - name: Test legacy EPUB migration recovery
+        env:
+          GBAREADER_FATFS_FIXTURE: legacy-v047.epub
+        run: python3 tests/fatfs/run.py
+      - name: Test fast cached open on a 303-entry EPUB
+        env:
+          GBAREADER_FATFS_FIXTURE: many-entries.epub
+        run: python3 tests/fatfs/run.py
+      - name: Build complete ROM
+        env:
+          DEVKITPRO: /opt/devkitpro
+          DEVKITARM: /opt/devkitpro/devkitARM
+        run: make -j2 LIBBUTANO="$GITHUB_WORKSPACE/_butano/butano"
+      - name: Build demo ROM
+        env:
+          DEVKITPRO: /opt/devkitpro
+          DEVKITARM: /opt/devkitpro/devkitARM
+        run: make -j2 DEMO=1 LIBBUTANO="$GITHUB_WORKSPACE/_butano/butano"
+      - name: Verify ROMs exist
+        run: test -s gbareader.gba && test -s demo_gbareader.gba
+      # Only the demo ROM leaves this job.
+      - name: Upload demo ROM
+        uses: actions/upload-artifact@v4
+        with:
+          name: GBAReader-demo-${{ github.sha }}
+          path: demo_gbareader.gba
+          if-no-files-found: error
+
+  # Manual only: publish this exact demo build as a release, creating the tag on
+  # this commit.
+  publish-demo:
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out GBAReader
+        uses: actions/checkout@v4
+      - name: Download tested demo ROM
+        uses: actions/download-artifact@v4
+        with:
+          name: GBAReader-demo-${{ github.sha }}
+          path: dist
+      - name: Publish demo release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          NAME: ${{ inputs.name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          R="$GITHUB_REPOSITORY"
+          case "$TAG" in *-demo) ;; *) echo "Demo tags end in -demo" >&2; exit 1 ;; esac
+          if gh api "repos/$R/releases/tags/$TAG" > /dev/null 2>&1; then
+            echo "A release for $TAG already exists" >&2; exit 1
+          fi
+          cd dist
+          test -s demo_gbareader.gba
+          test ! -e gbareader.gba
+          sha256sum demo_gbareader.gba > SHA256SUMS
+          {
+            cat ../DEMO_RELEASE_NOTES.md
+            printf '\nSource/tag: `%s` (`%s`). The ROM is the GitHub Actions build of this exact commit ([run](%s)), which also ran the host, sanitizer and FatFS test steps.\n\n```text\n' "$GITHUB_SHA" "$TAG" "$RUN_URL"
+            cat SHA256SUMS
+            printf '```\n'
+          } > body.md
+          ID=$(gh api -X POST "repos/$R/releases" -f tag_name="$TAG" -f target_commitish="$GITHUB_SHA" \
+            -f name="${NAME:-$TAG}" -F draft=true --jq '.id')
+          gh api -X POST "https://uploads.github.com/repos/$R/releases/$ID/assets?name=demo_gbareader.gba" \
+            -H "Content-Type: application/octet-stream" --input demo_gbareader.gba > /dev/null
+          gh api -X PATCH "repos/$R/releases/$ID" -F body=@body.md -F draft=false -F prerelease=false \
+            -f make_latest=true --jq '.html_url'
