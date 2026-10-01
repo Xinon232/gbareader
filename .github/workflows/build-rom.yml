@@ -29,6 +29,11 @@ on:
         type: boolean
         required: false
         default: false
+      demo:
+        description: 'Publish the demo ROM (demo_gbareader.gba) with DEMO_RELEASE_NOTES.md instead of the full version'
+        type: boolean
+        required: false
+        default: false
       gbawriter_ref:
         description: 'Optional: build this Xinon232/gbawriter commit instead and publish it here as a pre-release (needs a tag)'
         required: false
@@ -113,7 +118,7 @@ jobs:
       - name: Download tested ROM
         uses: actions/download-artifact@v4
         with:
-          name: GBAReader-${{ github.sha }}
+          name: ${{ inputs.demo && 'GBAReader-demo' || 'GBAReader' }}-${{ github.sha }}
           path: dist
       - name: Upload assets and publish release
         env:
@@ -122,6 +127,7 @@ jobs:
           TAG: ${{ inputs.tag }}
           NAME: ${{ inputs.name }}
           PRERELEASE: ${{ inputs.prerelease && 'true' || 'false' }}
+          DEMO: ${{ inputs.demo && 'true' || 'false' }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
@@ -134,17 +140,22 @@ jobs:
             RELEASE_ID=$(gh api -X POST "repos/$R/releases" -f tag_name="$TAG" \
               -f target_commitish="$GITHUB_SHA" -f name="${NAME:-$TAG}" -F draft=true --jq '.id')
           fi
-          cp docs/gbareader-full-controls.pdf docs/gbareader-full-controls.md dist/
+          if [ "$DEMO" = true ]; then
+            NOTES=DEMO_RELEASE_NOTES.md; FILES="demo_gbareader.gba"
+          else
+            NOTES=RELEASE_NOTES.md; FILES="gbareader.gba gbareader-full-controls.pdf gbareader-full-controls.md"
+            cp docs/gbareader-full-controls.pdf docs/gbareader-full-controls.md dist/
+          fi
           cd dist
-          test -s gbareader.gba
-          sha256sum gbareader-full-controls.md gbareader-full-controls.pdf gbareader.gba > SHA256SUMS
+          for name in $FILES; do test -s "$name"; done
+          sha256sum $FILES > SHA256SUMS
           {
-            cat ../RELEASE_NOTES.md
+            cat "../$NOTES"
             printf '\nSource/tag: `%s` (`%s`). The ROM is the GitHub Actions build of this exact commit ([run](%s)), which also ran the host, sanitizer and FatFS test steps.\n\n```text\n' "$GITHUB_SHA" "$TAG" "$RUN_URL"
             cat SHA256SUMS
             printf '```\n'
           } > body.md
-          for name in gbareader.gba gbareader-full-controls.pdf gbareader-full-controls.md SHA256SUMS; do
+          for name in $FILES SHA256SUMS; do
             for id in $(gh api "repos/$R/releases/$RELEASE_ID/assets" --jq ".[] | select(.name == \"$name\") | .id"); do
               gh api -X DELETE "repos/$R/releases/assets/$id"
             done
