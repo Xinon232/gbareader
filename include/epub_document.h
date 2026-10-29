@@ -1,0 +1,116 @@
+#pragma once
+
+#include "reader_core.h"
+#include "miniz.h"
+
+#include <cstdint>
+
+namespace reader {
+
+constexpr int EPUB_MAX_SPINE_ITEMS = 256;
+constexpr int EPUB_MAX_PATH = 256;
+constexpr uint32_t EPUB_TEXT_WINDOW_BYTES = 16 * 1024;
+constexpr uint32_t EPUB_INFLATE_DICTIONARY_BYTES = 32 * 1024;
+constexpr uint32_t EPUB_MAX_XHTML_BYTES = 32 * 1024 * 1024;
+constexpr uint32_t EPUB_MAX_METADATA_BYTES = 64 * 1024;
+constexpr uint32_t EPUB_MAX_COMPRESSED_BYTES = 16 * 1024 * 1024;
+constexpr uint32_t EPUB_MAX_ARCHIVE_BYTES = 128 * 1024 * 1024;
+
+enum class EpubError : uint8_t {
+    NONE, READ_FAILED, NOT_ZIP, MULTI_DISK, ZIP64, ENCRYPTED,
+    UNSUPPORTED_COMPRESSION, MALFORMED_ZIP, ARCHIVE_TOO_LARGE,
+    METADATA_TOO_LARGE, COMPRESSED_ENTRY_TOO_LARGE, CHAPTER_TOO_LARGE,
+    TOO_MANY_SPINE_ITEMS, BOOK_TEXT_TOO_LARGE,
+    MISSING_CONTAINER, MISSING_ROOTFILE, MISSING_MANIFEST_ITEM, MISSING_SPINE,
+    UNSAFE_PATH, INVALID_XHTML
+};
+
+const char* epub_error_string(EpubError error);
+
+class EpubDocument final : public ByteSource {
+public:
+    EpubDocument();
+    bool open(const ByteSource& archive);
+    void close();
+    uint32_t size() const override { return _virtual_size; }
+    bool byte_at(uint32_t offset, unsigned char& value) const override;
+    bool read_range(uint32_t offset, unsigned char* output, uint32_t count) const override;
+    bool export_text(TextSink sink, void* context) const override;
+    uint32_t optimized_size() const override { return _optimized ? _virtual_size : 0; }
+    bool optimized_byte_at(uint32_t offset, unsigned char& value) const override;
+    bool cache_archive_layout(uint32_t& central_offset, uint32_t& central_size,
+                              uint16_t& entry_count) const override;
+    EpubError error() const { return _error; }
+    void cache_persisted() const override { _cache_written = true; }
+    bool needs_cache_persistence() const {
+        uint32_t central,bytes;uint16_t entries;
+        return cache_archive_layout(central,bytes,entries);
+    }
+
+private:
+    struct ZipEntry {
+        char name[EPUB_MAX_PATH];
+        uint32_t compressed_size;
+        uint32_t uncompressed_size;
+        uint32_t local_offset;
+        uint32_t central_offset;
+        uint32_t crc32;
+        uint16_t method;
+        uint16_t flags;
+        uint16_t name_length;
+    };
+    struct SpineItem { uint32_t central_offset; uint32_t start; uint32_t size; };
+
+    bool parse_zip();
+    bool build_spine();
+    bool load_entry(const ZipEntry& entry, uint32_t uncompressed_limit) const;
+    bool stream_chapter(int spine_index, uint32_t window_start, bool count_only,
+                        TextSink sink = nullptr, void* context = nullptr, bool validate_only = false) const;
+    int find_entry(const char* name, ZipEntry& entry) const;
+    bool read_entry(uint32_t central_offset, ZipEntry& entry) const;
+    bool validate_local_entry(const ZipEntry& entry, uint32_t& data_offset) const;
+    bool load_owned_cache();
+    bool read_cache(uint32_t offset, unsigned char* bytes, uint32_t count) const;
+    mutable bool _external_cache = false;
+    // Opened from a companion cache without the ZIP scan/spine (see open()).
+    mutable bool _structure_deferred = false;
+    bool load_structure() const;
+    bool index_original() const;
+    bool load_cache_block(uint32_t offset) const;
+    bool fail(EpubError error) const;
+
+    const ByteSource* _archive;
+    mutable SpineItem _spine[EPUB_MAX_SPINE_ITEMS];
+    uint32_t _central_offset;
+    uint32_t _central_size;
+    int _entry_count;
+    // One bounded central-offset bucket per hash. Collisions use the full scan
+    // (including duplicate detection); this is an accelerator, never authority.
+    uint32_t _entry_lookup[512];
+    uint32_t _source_fingerprint;
+    int _spine_count;
+    mutable uint32_t _virtual_size;
+    mutable EpubError _error;
+    mutable int _cached_spine;
+    mutable uint32_t _window_start;
+    mutable uint32_t _window_size;
+    mutable uint32_t _buffer_size;
+    mutable bool _optimized;
+    uint32_t _cache_data_offset;
+    mutable bool _block_cache;
+    mutable bool _cache_written;
+    mutable uint32_t _verified_block;
+    mutable uint32_t _table_window;
+    mutable tinfl_decompressor _inflator;
+    mutable unsigned char _input[512];
+    union Workspace {
+        unsigned char metadata[EPUB_MAX_METADATA_BYTES];
+        struct {
+            unsigned char dictionary[EPUB_INFLATE_DICTIONARY_BYTES];
+            unsigned char text[EPUB_TEXT_WINDOW_BYTES];
+        } stream;
+    };
+    mutable Workspace _workspace;
+};
+
+}

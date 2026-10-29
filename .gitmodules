@@ -1,0 +1,3 @@
+[submodule "gbasd"]
+	path = gbasd
+	url = https://github.com/Xinon232/gbaSD.git

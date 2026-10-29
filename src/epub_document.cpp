@@ -1,0 +1,1610 @@
+#include "epub_document.h"
+#include "reader_crc32.h"
+
+#include <cstring>
+
+#if defined(__GNUC__)
+#pragma GCC diagnostic ignored "-Wmisleading-indentation"
+#endif
+
+namespace reader {
+namespace {
+
+bool read_bytes(const ByteSource& source, uint32_t offset, unsigned char* out, uint32_t count)
+{
+    if(offset > source.size() || count > source.size() - offset) return false;
+    return source.read_range(offset, out, count);
+}
+
+bool read16(const ByteSource& s, uint32_t o, uint16_t& v)
+{
+    unsigned char b[2];
+    if(!read_bytes(s, o, b, 2)) return false;
+    v = uint16_t(b[0] | (uint16_t(b[1]) << 8));
+    return true;
+}
+
+bool read32(const ByteSource& s, uint32_t o, uint32_t& v)
+{
+    unsigned char b[4];
+    if(!read_bytes(s, o, b, 4)) return false;
+    v = uint32_t(b[0]) | (uint32_t(b[1]) << 8) | (uint32_t(b[2]) << 16) | (uint32_t(b[3]) << 24);
+    return true;
+}
+
+constexpr char CACHE_NAME[] = "META-INF/gbareader/cache-v5";
+constexpr unsigned char CACHE_MAGIC[] = {'G', 'B', 'A', 'R', 'E', 'P', 'C', '5'};
+constexpr uint32_t CACHE_HEADER_SIZE = 32;
+constexpr uint16_t CACHE_FORMAT_VERSION = 5;
+constexpr uint16_t TEXT_FORMAT_VERSION = 1;
+uint16_t read16_mem(const unsigned char* p)
+{
+    return uint16_t(p[0] | (uint16_t(p[1]) << 8));
+}
+uint32_t read32_mem(const unsigned char* p)
+{
+    return uint32_t(p[0]) | (uint32_t(p[1]) << 8) | (uint32_t(p[2]) << 16) | (uint32_t(p[3]) << 24);
+}
+
+uint32_t name_bucket(const char* name)
+{
+    uint32_t hash = 2166136261u;
+    while(*name) hash = (hash ^ static_cast<unsigned char>(*name++)) * 16777619u;
+    return hash & 511;
+}
+
+constexpr uint16_t ZIP_RELEVANT_FLAGS = 0x284Fu;
+constexpr uint16_t ZIP_ENCRYPTION_FLAGS = 0x2041u;
+
+char ascii_lower(char value)
+{
+    return value >= 'A' && value <= 'Z' ? char(value + ('a' - 'A')) : value;
+}
+
+bool ascii_equal(const char* left, const char* right)
+{
+    while(*left && *right) {
+        if(ascii_lower(*left++) != ascii_lower(*right++)) return false;
+    }
+    return !*left && !*right;
+}
+
+bool ascii_ends_with(const char* value, const char* suffix)
+{
+    const uint32_t value_size = uint32_t(std::strlen(value));
+    const uint32_t suffix_size = uint32_t(std::strlen(suffix));
+    if(suffix_size > value_size) return false;
+    const char* start = value + value_size - suffix_size;
+    for(uint32_t index = 0; index < suffix_size; ++index)
+        if(ascii_lower(start[index]) != suffix[index]) return false;
+    return true;
+}
+
+bool image_path(const char* path)
+{
+    static const char* extensions[] = {".jpg",  ".jpeg", ".png",  ".gif", ".webp", ".svg",  ".svgz", ".bmp",
+                                       ".avif", ".tif",  ".tiff", ".ico", ".jxl",  ".heic", ".heif"};
+    for(const char* extension : extensions)
+        if(ascii_ends_with(path, extension)) return true;
+    return false;
+}
+
+bool image_media_type(const char* media)
+{
+    const char prefix[] = "image/";
+    for(uint32_t index = 0; index < sizeof(prefix) - 1; ++index)
+        if(!media[index] || ascii_lower(media[index]) != prefix[index]) return false;
+    return true;
+}
+
+const char* bounded_find(const char* data, uint32_t size, const char* needle, uint32_t from = 0)
+{
+    const uint32_t n = uint32_t(std::strlen(needle));
+    if(!n || n > size) return nullptr;
+    for(uint32_t i = from; i <= size - n; ++i)
+        if(std::memcmp(data + i, needle, n) == 0) return data + i;
+    return nullptr;
+}
+
+bool xml_name_char(char c)
+{
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-' ||
+           c == '.' || c == ':';
+}
+
+bool xml_space(char c)
+{
+    return c == ' ' || c == '\t' || c == '\r' || c == '\n';
+}
+
+const char* next_open_tag(const char* data, uint32_t size, const char* local_name, uint32_t from = 0)
+{
+    const uint32_t wanted = uint32_t(std::strlen(local_name));
+    for(uint32_t i = from; i < size; ++i) {
+        if(i + 4 <= size && !std::memcmp(data + i, "<!--", 4)) {
+            const char* marker = bounded_find(data, size, "-->", i + 4);
+            if(!marker) return nullptr;
+            i = uint32_t(marker - data) + 2;
+            continue;
+        }
+        if(i + 9 <= size && !std::memcmp(data + i, "<![CDATA[", 9)) {
+            const char* marker = bounded_find(data, size, "]]>", i + 9);
+            if(!marker) return nullptr;
+            i = uint32_t(marker - data) + 2;
+            continue;
+        }
+        if(i + 2 <= size && data[i] == '<' && data[i + 1] == '?') {
+            const char* marker = bounded_find(data, size, "?>", i + 2);
+            if(!marker) return nullptr;
+            i = uint32_t(marker - data) + 1;
+            continue;
+        }
+        if(data[i] != '<' || i + 1 >= size || data[i + 1] == '/' || data[i + 1] == '!' || data[i + 1] == '?') continue;
+        uint32_t start = i + 1, end = start;
+        while(end < size && xml_name_char(data[end])) ++end;
+        if(end == start || (end < size && data[end] != ' ' && data[end] != '\t' && data[end] != '\r' &&
+                            data[end] != '\n' && data[end] != '/' && data[end] != '>'))
+            continue;
+        uint32_t local = start;
+        for(uint32_t p = start; p < end; ++p)
+            if(data[p] == ':') local = p + 1;
+        if(end - local == wanted && !std::memcmp(data + local, local_name, wanted)) return data + i;
+    }
+    return nullptr;
+}
+
+const char* tag_end(const char* tag, const char* limit)
+{
+    char quote = 0;
+    for(const char* p = tag; p < limit; ++p) {
+        if(quote) {
+            if(*p == quote) quote = 0;
+        } else if(*p == '\'' || *p == '"')
+            quote = *p;
+        else if(*p == '>')
+            return p;
+    }
+    return nullptr;
+}
+
+const char* next_close_tag(const char* data, uint32_t size, const char* local_name, uint32_t from)
+{
+    const uint32_t wanted = uint32_t(std::strlen(local_name));
+    for(uint32_t i = from; i + 2 < size; ++i) {
+        if(i + 4 <= size && !std::memcmp(data + i, "<!--", 4)) {
+            const char* marker = bounded_find(data, size, "-->", i + 4);
+            if(!marker) return nullptr;
+            i = uint32_t(marker - data) + 2;
+            continue;
+        }
+        if(i + 9 <= size && !std::memcmp(data + i, "<![CDATA[", 9)) {
+            const char* marker = bounded_find(data, size, "]]>", i + 9);
+            if(!marker) return nullptr;
+            i = uint32_t(marker - data) + 2;
+            continue;
+        }
+        if(i + 2 <= size && data[i] == '<' && data[i + 1] == '?') {
+            const char* marker = bounded_find(data, size, "?>", i + 2);
+            if(!marker) return nullptr;
+            i = uint32_t(marker - data) + 1;
+            continue;
+        }
+        if(data[i] != '<' || data[i + 1] != '/') continue;
+        uint32_t start = i + 2, end = start;
+        while(end < size && xml_name_char(data[end])) ++end;
+        uint32_t local = start;
+        for(uint32_t p = start; p < end; ++p)
+            if(data[p] == ':') local = p + 1;
+        if(end - local != wanted || std::memcmp(data + local, local_name, wanted)) continue;
+        while(end < size && (data[end] == ' ' || data[end] == '\t' || data[end] == '\r' || data[end] == '\n')) ++end;
+        if(end < size && data[end] == '>') return data + i;
+    }
+    return nullptr;
+}
+
+bool xml_section(const char* data, uint32_t size, const char* local_name, const char*& content, const char*& close)
+{
+    const char* open = next_open_tag(data, size, local_name);
+    if(!open) return false;
+    const char* open_end = tag_end(open, data + size);
+    if(!open_end) return false;
+    close = next_close_tag(data, size, local_name, uint32_t(open_end + 1 - data));
+    if(!close) return false;
+    content = open_end + 1;
+    return true;
+}
+
+enum class ExtraResult { OK, MALFORMED, ZIP64 };
+
+ExtraResult check_extra(const ByteSource& source, uint32_t offset, uint32_t size)
+{
+    uint32_t used = 0;
+    while(used < size) {
+        if(size - used < 4) return ExtraResult::MALFORMED;
+        uint16_t id, length;
+        if(!read16(source, offset + used, id) || !read16(source, offset + used + 2, length))
+            return ExtraResult::MALFORMED;
+        if(id == 0x0001) return ExtraResult::ZIP64;
+        used += 4;
+        if(uint32_t(length) > size - used) return ExtraResult::MALFORMED;
+        used += length;
+    }
+    return ExtraResult::OK;
+}
+
+int hex_digit(char value);
+int encode_utf8(uint32_t cp, unsigned char* out);
+
+bool attribute(const char* tag, const char* end, const char* name, char* out, int cap)
+{
+    const int name_len = int(std::strlen(name));
+    for(const char* p = tag; p + name_len < end; ++p) {
+        if(std::memcmp(p, name, name_len) || p == tag || !xml_space(p[-1])) continue;
+        p += name_len;
+        while(p < end && (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n')) ++p;
+        if(p == end || *p++ != '=') continue;
+        while(p < end && (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n')) ++p;
+        if(p == end || (*p != '\'' && *p != '"')) return false;
+        const char quote = *p++;
+        int n = 0;
+        while(p < end && *p != quote) {
+            if(*p != '&') {
+                if(n + 1 >= cap) return false;
+                out[n++] = *p++;
+                continue;
+            }
+            const char* reference = ++p;
+            while(p < end && *p != ';' && p - reference <= 12) ++p;
+            if(p == end || *p != ';' || p == reference) return false;
+            const uint32_t length = uint32_t(p - reference);
+            uint32_t cp = 0;
+            if(length == 3 && !std::memcmp(reference, "amp", 3))
+                cp = '&';
+            else if(length == 2 && !std::memcmp(reference, "lt", 2))
+                cp = '<';
+            else if(length == 2 && !std::memcmp(reference, "gt", 2))
+                cp = '>';
+            else if(length == 4 && !std::memcmp(reference, "quot", 4))
+                cp = '"';
+            else if(length == 4 && !std::memcmp(reference, "apos", 4))
+                cp = '\'';
+            else if(reference[0] == '#') {
+                uint32_t index = 1;
+                int base = 10;
+                if(index < length && (reference[index] == 'x' || reference[index] == 'X')) {
+                    base = 16;
+                    ++index;
+                }
+                if(index == length) return false;
+                for(; index < length; ++index) {
+                    const int digit = hex_digit(reference[index]);
+                    if(digit < 0 || digit >= base || cp > (0x10FFFFu - uint32_t(digit)) / uint32_t(base)) return false;
+                    cp = cp * uint32_t(base) + uint32_t(digit);
+                }
+                if(!cp || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) return false;
+            } else
+                return false;
+            unsigned char bytes[4];
+            const int count = encode_utf8(cp, bytes);
+            if(n + count >= cap) return false;
+            for(int index = 0; index < count; ++index) out[n++] = char(bytes[index]);
+            ++p;
+        }
+        if(p == end) return false;
+        out[n] = 0;
+        return true;
+    }
+    return false;
+}
+
+int hex_digit(char value)
+{
+    if(value >= '0' && value <= '9') return value - '0';
+    value = ascii_lower(value);
+    return value >= 'a' && value <= 'f' ? value - 'a' + 10 : -1;
+}
+
+bool normalize_path(const char* base_file, const char* relative, char* out)
+{
+    char joined[EPUB_MAX_PATH * 2];
+    int n = 0;
+    int slash = -1;
+    for(int i = 0; base_file[i]; ++i)
+        if(base_file[i] == '/') slash = i;
+    for(int i = 0; i <= slash; ++i) {
+        if(n + 1 >= int(sizeof(joined))) return false;
+        joined[n++] = base_file[i];
+    }
+    for(int i = 0; relative[i]; ++i) {
+        if(relative[i] == '?' || relative[i] == '#') break;
+        unsigned char decoded = static_cast<unsigned char>(relative[i]);
+        if(relative[i] == '%') {
+            if(!relative[i + 1] || !relative[i + 2]) return false;
+            const int high = hex_digit(relative[i + 1]);
+            const int low = high >= 0 ? hex_digit(relative[i + 2]) : -1;
+            if(low < 0) return false;
+            decoded = static_cast<unsigned char>((high << 4) | low);
+            i += 2;
+        }
+        if(!decoded || decoded == '\\' || decoded == '/' || n + 1 >= int(sizeof(joined))) {
+            if(decoded == '/' && relative[i] == '/')
+                joined[n++] = '/';
+            else
+                return false;
+        } else {
+            joined[n++] = char(decoded);
+        }
+    }
+    joined[n] = 0;
+    if(relative[0] == '/') return false;
+    int out_n = 0;
+    int segment_starts[EPUB_MAX_PATH / 2];
+    int segments = 0;
+    for(int i = 0; i <= n;) {
+        while(joined[i] == '/') ++i;
+        int start = i;
+        while(joined[i] && joined[i] != '/') ++i;
+        int len = i - start;
+        if(!len) break;
+        if(len == 1 && joined[start] == '.') continue;
+        if(len == 2 && joined[start] == '.' && joined[start + 1] == '.') {
+            if(!segments) return false;
+            out_n = segment_starts[--segments];
+            continue;
+        }
+        if(segments >= int(sizeof(segment_starts) / sizeof(segment_starts[0]))) return false;
+        segment_starts[segments++] = out_n;
+        if(out_n) {
+            if(out_n + 1 >= EPUB_MAX_PATH) return false;
+            out[out_n++] = '/';
+        }
+        if(out_n + len >= EPUB_MAX_PATH) return false;
+        std::memcpy(out + out_n, joined + start, size_t(len));
+        out_n += len;
+    }
+    out[out_n] = 0;
+    return out_n > 0;
+}
+
+bool is_block(const char* name)
+{
+    static const char* blocks[] = {"p",   "div",    "br",     "li",    "blockquote", "section",    "article", "aside",
+                                   "nav", "header", "footer", "main",  "figure",     "figcaption", "pre",     "hr",
+                                   "dl",  "dt",     "dd",     "table", "thead",      "tbody",      "tfoot",   "tr"};
+    for(const char* block : blocks)
+        if(!std::strcmp(name, block)) return true;
+    return name[0] == 'h' && name[1] >= '1' && name[1] <= '6' && !name[2];
+}
+
+bool is_table_cell(const char* name)
+{
+    return !std::strcmp(name, "td") || !std::strcmp(name, "th");
+}
+
+int encode_utf8(uint32_t cp, unsigned char* out)
+{
+    if(cp <= 0x7F) {
+        out[0] = uint8_t(cp);
+        return 1;
+    }
+    if(cp <= 0x7FF) {
+        out[0] = uint8_t(0xC0 | (cp >> 6));
+        out[1] = uint8_t(0x80 | (cp & 63));
+        return 2;
+    }
+    if(cp <= 0xFFFF && !(cp >= 0xD800 && cp <= 0xDFFF)) {
+        out[0] = uint8_t(0xE0 | (cp >> 12));
+        out[1] = uint8_t(0x80 | ((cp >> 6) & 63));
+        out[2] = uint8_t(0x80 | (cp & 63));
+        return 3;
+    }
+    if(cp <= 0x10FFFF) {
+        out[0] = uint8_t(0xF0 | (cp >> 18));
+        out[1] = uint8_t(0x80 | ((cp >> 12) & 63));
+        out[2] = uint8_t(0x80 | ((cp >> 6) & 63));
+        out[3] = uint8_t(0x80 | (cp & 63));
+        return 4;
+    }
+    out[0] = '?';
+    return 1;
+}
+
+struct TextParser {
+    enum Mode { TEXT, TAG, COMMENT, CDATA } mode = TEXT;
+    unsigned char* window;
+    uint32_t window_start, window_size = 0, total = 0;
+    int suppressed = 0, name_size = 0, tag_prefix_size = 0, entity_size = 0;
+    char name[16]{}, tag_prefix[8]{}, entity[13]{}, quote = 0, comment_a = 0, comment_b = 0;
+    char cdata_pending[2]{};
+    int cdata_size = 0;
+    bool closing = false, in_name = false, last_slash = false, pending_space = false, entity_active = false;
+    unsigned char last = 0;
+    TextSink sink = nullptr;
+    void* context = nullptr;
+    bool sink_ok = true;
+
+    bool flush()
+    {
+        if(sink && window_size && sink_ok) {
+            sink_ok = sink(context, window, window_size);
+            window_size = 0;
+        }
+        return sink_ok;
+    }
+
+    void emit(unsigned char c)
+    {
+        if(total >= window_start && window_size < EPUB_TEXT_WINDOW_BYTES) window[window_size++] = c;
+        ++total;
+        last = c;
+        if(sink && window_size == EPUB_TEXT_WINDOW_BYTES) flush();
+    }
+    void ordinary(unsigned char c)
+    {
+        if(c == '\r' || c == '\n' || c == '\t' || c == ' ') {
+            if(total && last != '\n' && last != ' ') pending_space = true;
+            return;
+        }
+        if(pending_space) {
+            emit(' ');
+            pending_space = false;
+        }
+        emit(c);
+    }
+    void newline()
+    {
+        pending_space = false;
+        if(total && last != '\n') emit('\n');
+    }
+    bool hidden_name() const
+    {
+        return !std::strcmp(name, "head") || !std::strcmp(name, "style") || !std::strcmp(name, "script");
+    }
+    void finish_tag()
+    {
+        name[name_size] = 0;
+        if(!closing && !last_slash && hidden_name()) ++suppressed;
+        if(closing && hidden_name() && suppressed) --suppressed;
+        if(!suppressed && is_block(name))
+            newline();
+        else if(!suppressed && is_table_cell(name))
+            ordinary(' ');
+        mode = TEXT;
+        quote = 0;
+        name_size = 0;
+        tag_prefix_size = 0;
+        in_name = false;
+    }
+    void finish_entity(bool semicolon)
+    {
+        uint32_t cp = '?';
+        bool valid = semicolon;
+        const char* s = entity;
+        uint32_t len = uint32_t(entity_size);
+        if(valid) {
+            if(len == 3 && !std::memcmp(s, "amp", 3))
+                cp = '&';
+            else if(len == 2 && !std::memcmp(s, "lt", 2))
+                cp = '<';
+            else if(len == 2 && !std::memcmp(s, "gt", 2))
+                cp = '>';
+            else if(len == 4 && !std::memcmp(s, "quot", 4))
+                cp = '"';
+            else if(len == 4 && !std::memcmp(s, "apos", 4))
+                cp = '\'';
+            else if(len == 4 && !std::memcmp(s, "nbsp", 4))
+                cp = ' ';
+            else if(len == 5 && !std::memcmp(s, "mdash", 5))
+                cp = 0x2014;
+            else if(len == 5 && !std::memcmp(s, "ndash", 5))
+                cp = 0x2013;
+            else if(len == 6 && !std::memcmp(s, "hellip", 6))
+                cp = 0x2026;
+            else if(len == 4 && !std::memcmp(s, "copy", 4))
+                cp = 0x00A9;
+            else if(len == 5 && !std::memcmp(s, "lsquo", 5))
+                cp = 0x2018;
+            else if(len == 5 && !std::memcmp(s, "rsquo", 5))
+                cp = 0x2019;
+            else if(len == 5 && !std::memcmp(s, "ldquo", 5))
+                cp = 0x201C;
+            else if(len == 5 && !std::memcmp(s, "rdquo", 5))
+                cp = 0x201D;
+            else if(len == 3 && !std::memcmp(s, "reg", 3))
+                cp = 0x00AE;
+            else if(len == 5 && !std::memcmp(s, "trade", 5))
+                cp = 0x2122;
+            else if(len == 4 && !std::memcmp(s, "euro", 4))
+                cp = 0x20AC;
+            else if(len == 5 && !std::memcmp(s, "pound", 5))
+                cp = 0x00A3;
+            else if(len == 3 && !std::memcmp(s, "yen", 3))
+                cp = 0x00A5;
+            else if(len == 4 && !std::memcmp(s, "bull", 4))
+                cp = 0x2022;
+            else if(len == 6 && !std::memcmp(s, "middot", 6))
+                cp = 0x00B7;
+            else if(len >= 2 && s[0] == '#') {
+                cp = 0;
+                uint32_t i = 1;
+                int base = 10;
+                if(i < len && (s[i] == 'x' || s[i] == 'X')) {
+                    base = 16;
+                    ++i;
+                }
+                if(i == len) valid = false;
+                for(; valid && i < len; ++i) {
+                    int d = s[i] >= '0' && s[i] <= '9'   ? s[i] - '0'
+                            : s[i] >= 'a' && s[i] <= 'f' ? s[i] - 'a' + 10
+                            : s[i] >= 'A' && s[i] <= 'F' ? s[i] - 'A' + 10
+                                                         : -1;
+                    if(d < 0 || d >= base || cp > (0x10FFFF - uint32_t(d)) / uint32_t(base))
+                        valid = false;
+                    else
+                        cp = cp * uint32_t(base) + uint32_t(d);
+                }
+                if(!valid || cp == 0 || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) cp = '?';
+            }
+        }
+        unsigned char bytes[4];
+        int count = encode_utf8(cp, bytes);
+        if(pending_space) {
+            emit(' ');
+            pending_space = false;
+        }
+        for(int i = 0; i < count; ++i) emit(bytes[i]);
+        if(!semicolon)
+            for(int i = 0; i < entity_size; ++i) ordinary(static_cast<unsigned char>(entity[i]));
+        entity_size = 0;
+        entity_active = false;
+    }
+    void feed(unsigned char c)
+    {
+        if(!sink_ok) return;
+        if(mode == COMMENT) {
+            if(comment_a == '-' && comment_b == '-' && c == '>') {
+                mode = TEXT;
+                comment_a = comment_b = 0;
+            } else {
+                comment_a = comment_b;
+                comment_b = char(c);
+            }
+            return;
+        }
+        if(mode == CDATA) {
+            if(cdata_size < 2) {
+                cdata_pending[cdata_size++] = char(c);
+                return;
+            }
+            if(cdata_pending[0] == ']' && cdata_pending[1] == ']' && c == '>') {
+                mode = TEXT;
+                cdata_size = 0;
+                return;
+            }
+            if(!suppressed) ordinary(static_cast<unsigned char>(cdata_pending[0]));
+            cdata_pending[0] = cdata_pending[1];
+            cdata_pending[1] = char(c);
+            return;
+        }
+        if(mode == TAG) {
+            if(tag_prefix_size < 8) {
+                tag_prefix[tag_prefix_size++] = char(c);
+                if(tag_prefix_size == 3 && tag_prefix[0] == '!' && tag_prefix[1] == '-' && tag_prefix[2] == '-') {
+                    mode = COMMENT;
+                    return;
+                }
+                if(tag_prefix_size == 8 && !std::memcmp(tag_prefix, "![CDATA[", 8)) {
+                    mode = CDATA;
+                    cdata_size = 0;
+                    return;
+                }
+            }
+            if(quote) {
+                if(c == quote) quote = 0;
+                return;
+            }
+            if(c == '\'' || c == '"') {
+                quote = char(c);
+                return;
+            }
+            if(c == '>') {
+                finish_tag();
+                return;
+            }
+            if(!in_name && name_size) {
+                if(!xml_space(char(c))) last_slash = c == '/';
+                return;
+            }
+            if(!in_name) {
+                if(xml_space(char(c))) return;
+                if(c == '/' && !name_size) {
+                    closing = true;
+                    return;
+                }
+                in_name = true;
+            }
+            if(in_name && xml_name_char(char(c))) {
+                char n = ascii_lower(char(c));
+                if(n == ':')
+                    name_size = 0;
+                else if(name_size < 15)
+                    name[name_size++] = n;
+            } else
+                in_name = false;
+            if(!xml_space(char(c))) last_slash = c == '/';
+            return;
+        }
+        if(entity_active) {
+            if(c == ';') {
+                finish_entity(true);
+                return;
+            }
+            if(c == '<' || c == '&' || entity_size >= 12) {
+                finish_entity(false);
+                feed(c);
+                return;
+            }
+            entity[entity_size++] = char(c);
+            return;
+        }
+        if(c == '<') {
+            mode = TAG;
+            closing = false;
+            in_name = false;
+            last_slash = false;
+            name_size = tag_prefix_size = 0;
+            return;
+        }
+        if(suppressed) return;
+        if(c == '&') {
+            entity_active = true;
+            entity_size = 0;
+            return;
+        }
+        ordinary(c);
+    }
+    bool finish()
+    {
+        if(mode != TEXT) return false;
+        if(entity_active) finish_entity(false);
+        pending_space = false;
+        if(total && last != '\n') emit('\n');
+        return true;
+    }
+};
+} // namespace
+
+const char* epub_error_string(EpubError e)
+{
+    switch(e) {
+    case EpubError::NONE:
+        return "EPUB ready";
+    case EpubError::READ_FAILED:
+        return "EPUB read failed";
+    case EpubError::NOT_ZIP:
+        return "Not an EPUB ZIP";
+    case EpubError::MULTI_DISK:
+        return "Multi-disk EPUB";
+    case EpubError::ZIP64:
+        return "ZIP64 EPUB unsupported";
+    case EpubError::ENCRYPTED:
+        return "Encrypted EPUB";
+    case EpubError::UNSUPPORTED_COMPRESSION:
+        return "EPUB compression unsupported";
+    case EpubError::ARCHIVE_TOO_LARGE:
+        return "EPUB archive too large";
+    case EpubError::METADATA_TOO_LARGE:
+        return "EPUB metadata too large";
+    case EpubError::COMPRESSED_ENTRY_TOO_LARGE:
+        return "EPUB compressed entry too large";
+    case EpubError::CHAPTER_TOO_LARGE:
+        return "EPUB chapter too large";
+    case EpubError::TOO_MANY_SPINE_ITEMS:
+        return "EPUB has too many chapters";
+    case EpubError::BOOK_TEXT_TOO_LARGE:
+        return "EPUB text total too large";
+    case EpubError::MISSING_CONTAINER:
+        return "EPUB container missing";
+    case EpubError::MISSING_ROOTFILE:
+        return "EPUB package missing";
+    case EpubError::MISSING_MANIFEST_ITEM:
+        return "EPUB manifest broken";
+    case EpubError::MISSING_SPINE:
+        return "EPUB spine missing";
+    case EpubError::UNSAFE_PATH:
+        return "Unsafe EPUB path";
+    case EpubError::INVALID_XHTML:
+        return "EPUB text malformed";
+    default:
+        return "Corrupt EPUB";
+    }
+}
+
+EpubDocument::EpubDocument()
+{
+    close();
+}
+void EpubDocument::close()
+{
+    _structure_deferred = false;
+    _archive = nullptr;
+    _central_offset = 0;
+    _central_size = 0;
+    _entry_count = 0;
+    _spine_count = 0;
+    _virtual_size = 0;
+    _error = EpubError::NONE;
+    _cached_spine = -1;
+    _window_start = 0;
+    _window_size = 0;
+    _buffer_size = 0;
+    _optimized = false;
+    _cache_data_offset = 0;
+    _block_cache = false;
+    _cache_written = false;
+    _verified_block = 0xffffffffu;
+    _table_window = 0xffffffffu;
+    std::memset(_entry_lookup, 0, sizeof(_entry_lookup));
+}
+bool EpubDocument::fail(EpubError e) const
+{
+    _error = e;
+    return false;
+}
+
+bool EpubDocument::open(const ByteSource& archive)
+{
+    close();
+    _archive = &archive;
+    if(archive.optimized_size()) {
+        _virtual_size = archive.optimized_size();
+        _optimized = true;
+        return true;
+    }
+    if(archive.size() > EPUB_MAX_ARCHIVE_BYTES) return fail(EpubError::ARCHIVE_TOO_LARGE);
+    // Companion cache hit: the companion was accepted for this exact source (size,
+    // samples and central-directory fingerprint), and the cache header names the
+    // same fingerprint. Every entry's checksum is part of that fingerprint, so the
+    // ZIP structure and spine it was built from are unchanged: skip re-scanning
+    // local headers and re-inflating container/OPF. They are loaded only if a
+    // cached block later fails its CRC and the originals are needed.
+    uint32_t trusted = 0;
+    if(archive.companion_present() && archive.archive_fingerprint(trusted)) {
+        _source_fingerprint = trusted;
+        // Block caches only: an older whole-text cache is upgraded by the full path.
+        if(load_owned_cache() && _external_cache && _block_cache) {
+            _structure_deferred = true;
+            return true;
+        }
+        close();
+        _archive = &archive;
+    }
+    if(!parse_zip() || !build_spine()) {
+        _virtual_size = 0;
+        return false;
+    }
+    // ZIP/package and required-entry metadata are checked before trusting the
+    // source fingerprint/version and authenticated normalized-cache metadata. A hit
+    // deliberately defers original chapter payload CRC/inflate checks.
+    if(load_owned_cache()) return true;
+    return index_original();
+}
+
+// The ZIP scan and spine skipped by a companion cache hit; the directory must
+// still carry the fingerprint the cache was trusted for.
+bool EpubDocument::load_structure() const
+{
+    if(!_structure_deferred) return true;
+    const uint32_t trusted = _source_fingerprint;
+    auto& self = const_cast<EpubDocument&>(*this); // EpubDocument objects are never const
+    if(!self.parse_zip() || !self.build_spine()) return false;
+    if(_source_fingerprint != trusted) return fail(EpubError::MALFORMED_ZIP);
+    _structure_deferred = false;
+    return true;
+}
+
+bool EpubDocument::index_original() const
+{
+    if(!load_structure()) {
+        _virtual_size = 0;
+        return false;
+    }
+    _optimized = false;
+    _external_cache = false;
+    _block_cache = false;
+    _cache_written = false;
+    _verified_block = 0xffffffffu;
+    _table_window = 0xffffffffu;
+    _virtual_size = 0;
+    _cached_spine = -1;
+    _error = EpubError::NONE;
+    for(int i = 0; i < _spine_count; ++i) {
+        if(!stream_chapter(i, 0, true)) {
+            _virtual_size = 0;
+            return false;
+        }
+        _spine[i].start = _virtual_size;
+        _spine[i].size = _buffer_size;
+        if(_virtual_size > 0xffffffffu - _buffer_size) {
+            _virtual_size = 0;
+            return fail(EpubError::BOOK_TEXT_TOO_LARGE);
+        }
+        _virtual_size += _buffer_size;
+    }
+    _cached_spine = -1;
+    _error = EpubError::NONE;
+    return true;
+}
+
+bool EpubDocument::cache_archive_layout(uint32_t& central_offset, uint32_t& central_size, uint16_t& entry_count) const
+{
+    if(_cache_written || (_optimized && _block_cache && _external_cache) || !_archive || _error != EpubError::NONE ||
+       _entry_count <= 0 || _entry_count > 0xFFFF)
+        return false;
+    central_offset = _central_offset;
+    central_size = _central_size;
+    entry_count = static_cast<uint16_t>(_entry_count);
+    return true;
+}
+
+bool EpubDocument::read_cache(uint32_t offset, unsigned char* bytes, uint32_t count) const
+{
+    return _external_cache ? _archive->companion_read(offset, bytes, count)
+                           : read_bytes(*_archive, offset, bytes, count);
+}
+
+bool EpubDocument::load_owned_cache()
+{
+    ZipEntry cache{};
+    uint32_t data = 0;
+    _external_cache = _archive->companion_present();
+    if(_external_cache) {
+        if(!_archive->companion_cache(cache.uncompressed_size, cache.crc32) ||
+           cache.uncompressed_size < CACHE_HEADER_SIZE)
+            return false;
+    } else {
+        const int status = find_entry(CACHE_NAME, cache);
+        if(status <= 0 || cache.method != 0 || cache.flags || cache.compressed_size != cache.uncompressed_size ||
+           cache.uncompressed_size < CACHE_HEADER_SIZE)
+            return false;
+        if(!validate_local_entry(cache, data)) {
+            _error = EpubError::NONE;
+            return false;
+        }
+    }
+    unsigned char header[CACHE_HEADER_SIZE];
+    if(!read_cache(data, header, sizeof(header)) || std::memcmp(header, CACHE_MAGIC, sizeof(CACHE_MAGIC)) ||
+       (read16_mem(header + 8) != CACHE_FORMAT_VERSION && read16_mem(header + 8) != 6) ||
+       read16_mem(header + 10) != TEXT_FORMAT_VERSION) {
+        _error = EpubError::NONE;
+        return false;
+    }
+    const uint32_t length = read32_mem(header + 16);
+    const bool blocks = read16_mem(header + 8) == 6;
+    const uint32_t table_bytes = blocks ? ((length / 4096u) + (length % 4096u != 0)) * 4u : 0;
+    if(!length || uint64_t(length) + table_bytes != cache.uncompressed_size - CACHE_HEADER_SIZE ||
+       read32_mem(header + 28) != crc32_bytes(header, 28)) {
+        _error = EpubError::NONE;
+        return false;
+    }
+    if(read32_mem(header + 12) != _source_fingerprint) {
+        _error = EpubError::NONE;
+        return false;
+    }
+    if(blocks) {
+        // Authenticate the small table, and reconstruct the ZIP member CRC from
+        // its stored block CRCs. No normalized text is read until requested.
+        uint32_t table_crc = 0xffffffffu, text_crc = 0, left = length;
+        unsigned char table[512];
+        for(uint32_t pos = 0; pos < table_bytes;) {
+            const uint32_t take = table_bytes - pos > sizeof(table) ? sizeof(table) : table_bytes - pos;
+            if(!read_cache(data + CACHE_HEADER_SIZE + length + pos, table, take)) return false;
+            table_crc = crc32_update(table_crc, table, take);
+            for(uint32_t i = 0; i < take; i += 4) {
+                const uint32_t n = left > 4096 ? 4096 : left;
+                text_crc = n == 4096 ? crc32_combine_4096(text_crc, read32_mem(table + i))
+                                     : crc32_combine(text_crc, read32_mem(table + i), n);
+                left -= n;
+            }
+            pos += take;
+        }
+        uint32_t whole = crc32_combine(crc32_bytes(header, sizeof(header)), text_crc, length);
+        whole = crc32_combine(whole, ~table_crc, table_bytes);
+        if(~table_crc != read32_mem(header + 24) || text_crc != read32_mem(header + 20) || whole != cache.crc32)
+            return false;
+        _cache_data_offset = data + CACHE_HEADER_SIZE;
+        _virtual_size = length;
+        _optimized = true;
+        _block_cache = true;
+        return true;
+    }
+    uint32_t crc = 0xffffffffu;
+    uint32_t at = data + CACHE_HEADER_SIZE, left = length;
+    unsigned char block[512];
+    while(left) {
+        const uint32_t take = left > sizeof(block) ? sizeof(block) : left;
+        if(!read_cache(at, block, take)) return false;
+        crc = crc32_update(crc, block, take);
+        at += take;
+        left -= take;
+    }
+    const uint32_t text_crc = ~crc;
+    const uint32_t whole_crc = crc32_combine(crc32_bytes(header, sizeof(header)), text_crc, length);
+    if(text_crc != read32_mem(header + 20) || whole_crc != cache.crc32) return false;
+    _cache_data_offset = data + CACHE_HEADER_SIZE;
+    _virtual_size = length;
+    _optimized = true;
+    return true;
+}
+
+bool EpubDocument::parse_zip()
+{
+    if(_archive->size() < 22) return fail(EpubError::NOT_ZIP);
+    uint32_t min = _archive->size() > 65557 ? _archive->size() - 65557 : 0, eocd = 0, sig = 0;
+    bool found = false;
+    for(uint32_t p = _archive->size() - 22;; --p) {
+        if(!read32(*_archive, p, sig)) return fail(EpubError::READ_FAILED);
+        if(sig == 0x06054b50) {
+            uint16_t candidate_comment;
+            uint32_t candidate_size, candidate_offset;
+            if(!read16(*_archive, p + 20, candidate_comment) || !read32(*_archive, p + 12, candidate_size) ||
+               !read32(*_archive, p + 16, candidate_offset))
+                return fail(EpubError::READ_FAILED);
+            uint32_t locator_sig = 0;
+            const bool locator = p >= 20 && read32(*_archive, p - 20, locator_sig) && locator_sig == 0x07064b50;
+            const uint32_t cd_end = locator ? p - 20 : p;
+            if(candidate_comment == _archive->size() - p - 22u && candidate_offset <= cd_end &&
+               candidate_size == cd_end - candidate_offset) {
+                eocd = p;
+                found = true;
+                break;
+            }
+        }
+        if(p == min) break;
+    }
+    if(!found) return fail(EpubError::NOT_ZIP);
+    uint16_t disk, cd_disk, on_disk, count, comment;
+    uint32_t cd_size, cd_offset;
+    if(!read16(*_archive, eocd + 4, disk) || !read16(*_archive, eocd + 6, cd_disk) ||
+       !read16(*_archive, eocd + 8, on_disk) || !read16(*_archive, eocd + 10, count) ||
+       !read32(*_archive, eocd + 12, cd_size) || !read32(*_archive, eocd + 16, cd_offset) ||
+       !read16(*_archive, eocd + 20, comment))
+        return fail(EpubError::READ_FAILED);
+    uint32_t locator_sig = 0;
+    if(eocd >= 20 && !read32(*_archive, eocd - 20, locator_sig)) return fail(EpubError::READ_FAILED);
+    if(eocd >= 20 && locator_sig == 0x07064b50) return fail(EpubError::ZIP64);
+    if(disk || cd_disk || on_disk != count) return fail(EpubError::MULTI_DISK);
+    if(count == 0xFFFF || cd_size == 0xFFFFFFFF || cd_offset == 0xFFFFFFFF) return fail(EpubError::ZIP64);
+    if(comment != _archive->size() - eocd - 22u || cd_offset > _archive->size() ||
+       cd_size > _archive->size() - cd_offset || cd_offset + cd_size > eocd)
+        return fail(EpubError::MALFORMED_ZIP);
+    uint32_t p = cd_offset, fingerprint = 0xffffffffu;
+    for(int i = 0; i < count; ++i) {
+        uint32_t s, crc, cs, us, lo;
+        uint16_t flags, method, nl, xl, cl, dstart;
+        unsigned char h[46];
+        if(!read_bytes(*_archive, p, h, sizeof(h))) return fail(EpubError::READ_FAILED);
+        s = read32_mem(h);
+        if(s != 0x02014b50) return fail(EpubError::MALFORMED_ZIP);
+        flags = read16_mem(h + 8);
+        method = read16_mem(h + 10);
+        crc = read32_mem(h + 16);
+        cs = read32_mem(h + 20);
+        us = read32_mem(h + 24);
+        nl = read16_mem(h + 28);
+        xl = read16_mem(h + 30);
+        cl = read16_mem(h + 32);
+        dstart = read16_mem(h + 34);
+        lo = read32_mem(h + 42);
+        if(dstart) return fail(EpubError::MULTI_DISK);
+        if(!nl || nl >= EPUB_MAX_PATH || p > _archive->size() || 46u + nl + xl + cl > _archive->size() - p)
+            return fail(EpubError::MALFORMED_ZIP);
+        ExtraResult central_extra = check_extra(*_archive, p + 46u + nl, xl);
+        if(central_extra == ExtraResult::ZIP64) return fail(EpubError::ZIP64);
+        if(central_extra == ExtraResult::MALFORMED) return fail(EpubError::MALFORMED_ZIP);
+        char central_name[EPUB_MAX_PATH];
+        if(!read_bytes(*_archive, p + 46, (unsigned char*)central_name, nl)) return fail(EpubError::READ_FAILED);
+        central_name[nl] = 0;
+        if(nl < 19 || std::memcmp(central_name, "META-INF/gbareader/", 19)) {
+            fingerprint = crc32_update(fingerprint, h, sizeof(h));
+            fingerprint = crc32_update(fingerprint, reinterpret_cast<unsigned char*>(central_name), nl);
+            unsigned char extra[512];
+            for(uint32_t pos = 0; pos < uint32_t(xl) + cl;) {
+                const uint32_t left = uint32_t(xl) + cl - pos, take = left > sizeof(extra) ? sizeof(extra) : left;
+                if(!read_bytes(*_archive, p + 46u + nl + pos, extra, take)) return fail(EpubError::READ_FAILED);
+                fingerprint = crc32_update(fingerprint, extra, take);
+                pos += take;
+            }
+        }
+        uint32_t& bucket = _entry_lookup[name_bucket(central_name)];
+        bucket = bucket ? 0xffffffffu : p;
+        if(image_path(central_name)) {
+            p += 46u + nl + xl + cl;
+            continue;
+        }
+        if(flags & ZIP_ENCRYPTION_FLAGS) return fail(EpubError::ENCRYPTED);
+        if(lo > _archive->size()) return fail(EpubError::MALFORMED_ZIP);
+        uint32_t local_sig, local_crc, local_cs, local_us;
+        uint16_t local_flags, local_method, local_nl, local_xl;
+        unsigned char local[30];
+        if(!read_bytes(*_archive, lo, local, sizeof(local))) return fail(EpubError::READ_FAILED);
+        local_sig = read32_mem(local);
+        local_flags = read16_mem(local + 6);
+        local_method = read16_mem(local + 8);
+        local_crc = read32_mem(local + 14);
+        local_cs = read32_mem(local + 18);
+        local_us = read32_mem(local + 22);
+        local_nl = read16_mem(local + 26);
+        local_xl = read16_mem(local + 28);
+        if(local_sig != 0x04034b50 || local_method != method || local_nl != nl ||
+           (local_flags & ZIP_RELEVANT_FLAGS) != (flags & ZIP_RELEVANT_FLAGS))
+            return fail(EpubError::MALFORMED_ZIP);
+        if(local_flags & ZIP_ENCRYPTION_FLAGS) return fail(EpubError::ENCRYPTED);
+        if(30u + uint32_t(local_nl) + uint32_t(local_xl) > _archive->size() - lo) return fail(EpubError::MALFORMED_ZIP);
+        ExtraResult local_extra = check_extra(*_archive, lo + 30u + local_nl, local_xl);
+        if(local_extra == ExtraResult::ZIP64) return fail(EpubError::ZIP64);
+        if(local_extra == ExtraResult::MALFORMED) return fail(EpubError::MALFORMED_ZIP);
+        unsigned char local_name[EPUB_MAX_PATH];
+        if(!read_bytes(*_archive, lo + 30, local_name, nl)) return fail(EpubError::READ_FAILED);
+        if(std::memcmp(central_name, local_name, nl)) return fail(EpubError::MALFORMED_ZIP);
+        uint32_t data = lo + 30u + local_nl + local_xl;
+        if(cs > _archive->size() - data || data > cd_offset || cs > cd_offset - data)
+            return fail(EpubError::MALFORMED_ZIP);
+        if(!(flags & 0x0008u)) {
+            if(local_crc != crc || local_cs != cs || local_us != us) return fail(EpubError::MALFORMED_ZIP);
+        } else {
+            if((local_crc && local_crc != crc) || (local_cs && local_cs != cs) || (local_us && local_us != us))
+                return fail(EpubError::MALFORMED_ZIP);
+            const uint32_t descriptor = data + cs;
+            if(descriptor > cd_offset) return fail(EpubError::MALFORMED_ZIP);
+            const uint32_t before_cd = cd_offset - descriptor;
+            uint32_t first = 0, second = 0, third = 0, fourth = 0;
+            bool unsigned_values = false, signed_values = false;
+            if(before_cd >= 12u) {
+                if(!read32(*_archive, descriptor, first) || !read32(*_archive, descriptor + 4u, second) ||
+                   !read32(*_archive, descriptor + 8u, third))
+                    return fail(EpubError::READ_FAILED);
+                unsigned_values = first == crc && second == cs && third == us;
+                if(first == 0x08074b50u && before_cd >= 16u) {
+                    if(!read32(*_archive, descriptor + 12u, fourth)) return fail(EpubError::READ_FAILED);
+                    signed_values = second == crc && third == cs && fourth == us;
+                }
+            }
+            bool endpoint_read_failed = false;
+            auto legal_endpoint = [&](uint32_t length) {
+                const uint32_t end = descriptor + length;
+                if(end == cd_offset) return true;
+                uint32_t next_sig = 0;
+                if(end > cd_offset || cd_offset - end < 4u) return false;
+                if(!read32(*_archive, end, next_sig)) {
+                    endpoint_read_failed = true;
+                    return false;
+                }
+                return next_sig == 0x04034b50u || next_sig == 0x02014b50u;
+            };
+            const bool valid = (unsigned_values && legal_endpoint(12u)) || (signed_values && legal_endpoint(16u));
+            if(endpoint_read_failed) return fail(EpubError::READ_FAILED);
+            if(!valid) return fail(EpubError::MALFORMED_ZIP);
+        }
+        p += 46u + nl + xl + cl;
+    }
+    if(p != cd_offset + cd_size) return fail(EpubError::MALFORMED_ZIP);
+    _central_offset = cd_offset;
+    _central_size = cd_size;
+    _entry_count = count;
+    _source_fingerprint = ~fingerprint;
+    return true;
+}
+
+int EpubDocument::find_entry(const char* name, ZipEntry& entry) const
+{
+    if(!name || !_archive) return -1;
+    const uint32_t indexed = _entry_lookup[name_bucket(name)];
+    if(!indexed) return 0;
+    if(indexed != 0xffffffffu) {
+        if(!read_entry(indexed, entry)) return -1;
+        return entry.name_length == std::strlen(name) && std::strcmp(entry.name, name) == 0 ? 1 : 0;
+    }
+    const uint32_t wanted = uint32_t(std::strlen(name));
+    bool found = false;
+    uint32_t p = _central_offset;
+    for(int i = 0; i < _entry_count; ++i) {
+        uint32_t sig, crc, cs, us, lo;
+        uint16_t flags, method, nl, xl, cl;
+        unsigned char h[46];
+        if(!read_bytes(*_archive, p, h, sizeof(h))) {
+            fail(EpubError::READ_FAILED);
+            return -1;
+        }
+        sig = read32_mem(h);
+        flags = read16_mem(h + 8);
+        method = read16_mem(h + 10);
+        crc = read32_mem(h + 16);
+        cs = read32_mem(h + 20);
+        us = read32_mem(h + 24);
+        nl = read16_mem(h + 28);
+        xl = read16_mem(h + 30);
+        cl = read16_mem(h + 32);
+        lo = read32_mem(h + 42);
+        if(sig != 0x02014b50 || !nl || nl >= EPUB_MAX_PATH || p > _archive->size() ||
+           46u + nl + xl + cl > _archive->size() - p) {
+            fail(EpubError::MALFORMED_ZIP);
+            return -1;
+        }
+        bool match = wanted == nl;
+        unsigned char candidate[EPUB_MAX_PATH];
+        if(match) {
+            if(!read_bytes(*_archive, p + 46, candidate, nl)) {
+                fail(EpubError::READ_FAILED);
+                return -1;
+            }
+            match = !std::memcmp(candidate, name, nl);
+        }
+        if(match) {
+            if(found) {
+                fail(EpubError::MALFORMED_ZIP);
+                return -1;
+            }
+            if(!read_bytes(*_archive, p + 46, (unsigned char*)entry.name, nl)) {
+                fail(EpubError::READ_FAILED);
+                return -1;
+            }
+            entry.name[nl] = 0;
+            entry.compressed_size = cs;
+            entry.uncompressed_size = us;
+            entry.local_offset = lo;
+            entry.central_offset = p;
+            entry.crc32 = crc;
+            entry.method = method;
+            entry.flags = flags;
+            entry.name_length = nl;
+            found = true;
+        }
+        p += 46u + nl + xl + cl;
+    }
+    if(p != _central_offset + _central_size) {
+        fail(EpubError::MALFORMED_ZIP);
+        return -1;
+    }
+    return found ? 1 : 0;
+}
+
+bool EpubDocument::read_entry(uint32_t p, ZipEntry& entry) const
+{
+    uint32_t sig, crc, cs, us, lo;
+    uint16_t flags, method, nl, xl, cl;
+    unsigned char h[46];
+    if(!read_bytes(*_archive, p, h, sizeof(h))) return fail(EpubError::READ_FAILED);
+    sig = read32_mem(h);
+    flags = read16_mem(h + 8);
+    method = read16_mem(h + 10);
+    crc = read32_mem(h + 16);
+    cs = read32_mem(h + 20);
+    us = read32_mem(h + 24);
+    nl = read16_mem(h + 28);
+    xl = read16_mem(h + 30);
+    cl = read16_mem(h + 32);
+    lo = read32_mem(h + 42);
+    const uint32_t central_end = _central_offset + _central_size;
+    if(sig != 0x02014b50 || !nl || nl >= EPUB_MAX_PATH || p < _central_offset || p > _archive->size() ||
+       46u + nl + xl + cl > _archive->size() - p || p + 46u + nl + xl + cl > central_end)
+        return fail(EpubError::MALFORMED_ZIP);
+    if(!read_bytes(*_archive, p + 46, (unsigned char*)entry.name, nl)) return fail(EpubError::READ_FAILED);
+    entry.name[nl] = 0;
+    entry.compressed_size = cs;
+    entry.uncompressed_size = us;
+    entry.local_offset = lo;
+    entry.central_offset = p;
+    entry.crc32 = crc;
+    entry.method = method;
+    entry.flags = flags;
+    entry.name_length = nl;
+    return true;
+}
+
+bool EpubDocument::validate_local_entry(const ZipEntry& z, uint32_t& data) const
+{
+    uint32_t sig, local_crc, local_cs, local_us;
+    uint16_t flags, method, nl, xl;
+    unsigned char h[30];
+    if(!read_bytes(*_archive, z.local_offset, h, sizeof(h))) return fail(EpubError::READ_FAILED);
+    sig = read32_mem(h);
+    flags = read16_mem(h + 6);
+    method = read16_mem(h + 8);
+    local_crc = read32_mem(h + 14);
+    local_cs = read32_mem(h + 18);
+    local_us = read32_mem(h + 22);
+    nl = read16_mem(h + 26);
+    xl = read16_mem(h + 28);
+    if(sig != 0x04034b50 || method != z.method || nl != z.name_length ||
+       (flags & ZIP_RELEVANT_FLAGS) != (z.flags & ZIP_RELEVANT_FLAGS))
+        return fail(EpubError::MALFORMED_ZIP);
+    if(flags & ZIP_ENCRYPTION_FLAGS) return fail(EpubError::ENCRYPTED);
+    if(30u + uint32_t(nl) + uint32_t(xl) > _archive->size() - z.local_offset) return fail(EpubError::MALFORMED_ZIP);
+    ExtraResult local_extra = check_extra(*_archive, z.local_offset + 30u + nl, xl);
+    if(local_extra == ExtraResult::ZIP64) return fail(EpubError::ZIP64);
+    if(local_extra == ExtraResult::MALFORMED) return fail(EpubError::MALFORMED_ZIP);
+    unsigned char name[EPUB_MAX_PATH];
+    if(!read_bytes(*_archive, z.local_offset + 30, name, nl)) return fail(EpubError::READ_FAILED);
+    if(std::memcmp(name, z.name, nl)) return fail(EpubError::MALFORMED_ZIP);
+    data = z.local_offset + 30u + nl + xl;
+    if(z.compressed_size > _archive->size() - data || data > _central_offset ||
+       z.compressed_size > _central_offset - data)
+        return fail(EpubError::MALFORMED_ZIP);
+    if(!(flags & 0x0008u))
+        return local_crc == z.crc32 && local_cs == z.compressed_size && local_us == z.uncompressed_size
+                   ? true
+                   : fail(EpubError::MALFORMED_ZIP);
+    if((local_crc && local_crc != z.crc32) || (local_cs && local_cs != z.compressed_size) ||
+       (local_us && local_us != z.uncompressed_size))
+        return fail(EpubError::MALFORMED_ZIP);
+    const uint32_t descriptor = data + z.compressed_size;
+    if(descriptor > _central_offset) return fail(EpubError::MALFORMED_ZIP);
+    const uint32_t available = _central_offset - descriptor;
+    uint32_t first = 0, second = 0, third = 0, fourth = 0;
+    bool unsigned_values = false, signed_values = false;
+    if(available >= 12u) {
+        if(!read32(*_archive, descriptor, first) || !read32(*_archive, descriptor + 4u, second) ||
+           !read32(*_archive, descriptor + 8u, third))
+            return fail(EpubError::READ_FAILED);
+        unsigned_values = first == z.crc32 && second == z.compressed_size && third == z.uncompressed_size;
+        if(first == 0x08074b50u && available >= 16u) {
+            if(!read32(*_archive, descriptor + 12u, fourth)) return fail(EpubError::READ_FAILED);
+            signed_values = second == z.crc32 && third == z.compressed_size && fourth == z.uncompressed_size;
+        }
+    }
+    bool endpoint_read_failed = false;
+    auto legal_endpoint = [&](uint32_t length) {
+        const uint32_t end = descriptor + length;
+        if(end == _central_offset) return true;
+        uint32_t next_sig = 0;
+        if(end > _central_offset || _central_offset - end < 4u) return false;
+        if(!read32(*_archive, end, next_sig)) {
+            endpoint_read_failed = true;
+            return false;
+        }
+        return next_sig == 0x04034b50u || next_sig == 0x02014b50u;
+    };
+    const bool valid = (unsigned_values && legal_endpoint(12u)) || (signed_values && legal_endpoint(16u));
+    if(endpoint_read_failed) return fail(EpubError::READ_FAILED);
+    return valid ? true : fail(EpubError::MALFORMED_ZIP);
+}
+
+bool EpubDocument::load_entry(const ZipEntry& z, uint32_t uncompressed_limit) const
+{
+    if(z.method != 0 && z.method != 8) return fail(EpubError::UNSUPPORTED_COMPRESSION);
+    if(z.compressed_size > EPUB_MAX_COMPRESSED_BYTES) return fail(EpubError::COMPRESSED_ENTRY_TOO_LARGE);
+    if(z.uncompressed_size > uncompressed_limit) return fail(EpubError::METADATA_TOO_LARGE);
+    uint32_t data;
+    if(!validate_local_entry(z, data)) return false;
+    if(z.method == 0) {
+        if(z.compressed_size != z.uncompressed_size) return fail(EpubError::MALFORMED_ZIP);
+        if(!read_bytes(*_archive, data, _workspace.metadata, z.uncompressed_size)) return fail(EpubError::READ_FAILED);
+        if(crc32_bytes(_workspace.metadata, z.uncompressed_size) != z.crc32) return fail(EpubError::MALFORMED_ZIP);
+        _buffer_size = z.uncompressed_size;
+        return true;
+    }
+    tinfl_init(&_inflator);
+    uint32_t in_pos = 0, out_pos = 0;
+    size_t avail = 0, used = 0;
+    tinfl_status status = TINFL_STATUS_NEEDS_MORE_INPUT;
+    while(status > 0) {
+        if(used == avail) {
+            uint32_t left = z.compressed_size - in_pos;
+            uint32_t take = left > sizeof(_input) ? sizeof(_input) : left;
+            if(!take) return fail(EpubError::MALFORMED_ZIP);
+            if(!read_bytes(*_archive, data + in_pos, _input, take)) return fail(EpubError::READ_FAILED);
+            in_pos += take;
+            avail = take;
+            used = 0;
+        }
+        size_t in_count = avail - used, out_count = z.uncompressed_size - out_pos;
+        uint32_t f = TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF;
+        if(in_pos < z.compressed_size || used + in_count < avail) f |= TINFL_FLAG_HAS_MORE_INPUT;
+        status = tinfl_decompress(&_inflator, _input + used, &in_count, _workspace.metadata,
+                                  _workspace.metadata + out_pos, &out_count, f);
+        used += in_count;
+        out_pos += uint32_t(out_count);
+        if(out_pos > z.uncompressed_size || (status == TINFL_STATUS_HAS_MORE_OUTPUT && out_pos == z.uncompressed_size))
+            return fail(EpubError::MALFORMED_ZIP);
+    }
+    const uint32_t consumed = in_pos - uint32_t(avail - used);
+    if(status != TINFL_STATUS_DONE || out_pos != z.uncompressed_size || consumed != z.compressed_size ||
+       crc32_bytes(_workspace.metadata, out_pos) != z.crc32)
+        return fail(EpubError::MALFORMED_ZIP);
+    _buffer_size = out_pos;
+    return true;
+}
+
+bool EpubDocument::build_spine()
+{
+    ZipEntry container{};
+    int container_status = find_entry("META-INF/container.xml", container);
+    if(container_status < 0) return false;
+    if(!container_status) return fail(EpubError::MISSING_CONTAINER);
+    if(!load_entry(container, EPUB_MAX_METADATA_BYTES)) return false;
+    const char* container_data = (char*)_workspace.metadata;
+    const char *rootfiles, *rootfiles_close;
+    if(!xml_section(container_data, _buffer_size, "rootfiles", rootfiles, rootfiles_close))
+        return fail(EpubError::MISSING_ROOTFILE);
+    char opf_path[EPUB_MAX_PATH]{};
+    bool root_found = false;
+    uint32_t root_pos = 0;
+    const uint32_t rootfiles_size = uint32_t(rootfiles_close - rootfiles);
+    while(const char* root = next_open_tag(rootfiles, rootfiles_size, "rootfile", root_pos)) {
+        const char* end = tag_end(root, rootfiles_close);
+        if(!end) return fail(EpubError::MISSING_ROOTFILE);
+        char candidate[EPUB_MAX_PATH], media[EPUB_MAX_PATH];
+        if(attribute(root, end, "full-path", candidate, sizeof(candidate))) {
+            if(!root_found) {
+                std::strcpy(opf_path, candidate);
+                root_found = true;
+            }
+            if(attribute(root, end, "media-type", media, sizeof(media)) &&
+               ascii_equal(media, "application/oebps-package+xml")) {
+                std::strcpy(opf_path, candidate);
+                break;
+            }
+        }
+        root_pos = uint32_t(end - rootfiles) + 1;
+    }
+    if(!root_found) return fail(EpubError::MISSING_ROOTFILE);
+    char normalized[EPUB_MAX_PATH];
+    if(!normalize_path("", opf_path, normalized)) return fail(EpubError::UNSAFE_PATH);
+    ZipEntry opf{};
+    int opf_status = find_entry(normalized, opf);
+    if(opf_status < 0) return false;
+    if(!opf_status) return fail(EpubError::MISSING_ROOTFILE);
+    if(!load_entry(opf, EPUB_MAX_METADATA_BYTES)) return false;
+    const char* data = (char*)_workspace.metadata;
+    const char *manifest, *manifest_close, *spine, *spine_close;
+    if(!xml_section(data, _buffer_size, "manifest", manifest, manifest_close))
+        return fail(EpubError::MISSING_MANIFEST_ITEM);
+    if(!xml_section(data, _buffer_size, "spine", spine, spine_close)) return fail(EpubError::MISSING_SPINE);
+    int refs = 0;
+    uint32_t pos = 0;
+    const uint32_t spine_size = uint32_t(spine_close - spine);
+    const uint32_t manifest_size = uint32_t(manifest_close - manifest);
+    while(const char* itemref = next_open_tag(spine, spine_size, "itemref", pos)) {
+        const char* e = tag_end(itemref, spine_close);
+        if(!e) return fail(EpubError::MISSING_SPINE);
+        char idref[EPUB_MAX_PATH];
+        if(!attribute(itemref, e, "idref", idref, sizeof(idref))) return fail(EpubError::MISSING_SPINE);
+        bool matched = false, skip_image = false;
+        uint32_t manifest_pos = 0;
+        while(const char* item = next_open_tag(manifest, manifest_size, "item", manifest_pos)) {
+            const char* item_end = tag_end(item, manifest_close);
+            if(!item_end) return fail(EpubError::MISSING_MANIFEST_ITEM);
+            char id[EPUB_MAX_PATH], href[EPUB_MAX_PATH], media[EPUB_MAX_PATH];
+            if(attribute(item, item_end, "id", id, sizeof(id)) && !std::strcmp(id, idref) &&
+               attribute(item, item_end, "href", href, sizeof(href))) {
+                const bool has_media = attribute(item, item_end, "media-type", media, sizeof(media));
+                if(has_media && image_media_type(media)) {
+                    matched = true;
+                    skip_image = true;
+                    break;
+                }
+                if(has_media && !ascii_equal(media, "application/xhtml+xml") && !ascii_equal(media, "text/html"))
+                    return fail(EpubError::MISSING_MANIFEST_ITEM);
+                if(refs >= EPUB_MAX_SPINE_ITEMS) return fail(EpubError::TOO_MANY_SPINE_ITEMS);
+                char path[EPUB_MAX_PATH];
+                if(!normalize_path(normalized, href, path)) return fail(EpubError::UNSAFE_PATH);
+                ZipEntry entry{};
+                int entry_status = find_entry(path, entry);
+                if(entry_status < 0) return false;
+                if(!entry_status) return fail(EpubError::MISSING_MANIFEST_ITEM);
+                // Keep required-entry guards even when a cache avoids streaming.
+                if(entry.method != 0 && entry.method != 8) return fail(EpubError::UNSUPPORTED_COMPRESSION);
+                if(entry.compressed_size > EPUB_MAX_COMPRESSED_BYTES)
+                    return fail(EpubError::COMPRESSED_ENTRY_TOO_LARGE);
+                if(entry.uncompressed_size > EPUB_MAX_XHTML_BYTES) return fail(EpubError::CHAPTER_TOO_LARGE);
+                // The initial scan already checked non-image local headers,
+                // descriptors, names and current-directory payload bounds.
+                // Image-looking required entries were deliberately skipped there.
+                uint32_t payload;
+                if(image_path(entry.name) && !validate_local_entry(entry, payload)) return false;
+                if(entry.method == 0 && entry.compressed_size != entry.uncompressed_size)
+                    return fail(EpubError::MALFORMED_ZIP);
+                _spine[refs].central_offset = entry.central_offset;
+                matched = true;
+                break;
+            }
+            manifest_pos = uint32_t(item_end - manifest) + 1;
+        }
+        if(!matched) return fail(EpubError::MISSING_MANIFEST_ITEM);
+        if(!skip_image) ++refs;
+        pos = uint32_t(e - spine) + 1;
+    }
+    if(!refs) return fail(EpubError::MISSING_SPINE);
+    _spine_count = refs;
+    _virtual_size = 0;
+    _cached_spine = -1;
+    _cached_spine = -1;
+    return true;
+}
+
+bool EpubDocument::stream_chapter(int i, uint32_t window_start, bool count_only, TextSink sink, void* context,
+                                  bool validate_only) const
+{
+    ZipEntry z{};
+    if(!read_entry(_spine[i].central_offset, z)) return false;
+    if(z.method != 0 && z.method != 8) return fail(EpubError::UNSUPPORTED_COMPRESSION);
+    if(z.compressed_size > EPUB_MAX_COMPRESSED_BYTES) return fail(EpubError::COMPRESSED_ENTRY_TOO_LARGE);
+    if(z.uncompressed_size > EPUB_MAX_XHTML_BYTES) return fail(EpubError::CHAPTER_TOO_LARGE);
+    uint32_t data;
+    if(!validate_local_entry(z, data)) return false;
+    TextParser parser{};
+    parser.window = _workspace.stream.text;
+    parser.window_start = window_start;
+    parser.sink = sink;
+    parser.context = context;
+    uint32_t crc = 0xFFFFFFFFu, output = 0;
+    auto consume = [&](const unsigned char* bytes, uint32_t count) {
+        crc = crc32_update(crc, bytes, count);
+        if(!validate_only)
+            for(uint32_t n = 0; n < count; ++n) parser.feed(bytes[n]);
+        output += count;
+    };
+    uint32_t consumed = 0;
+    if(z.method == 0) {
+        if(z.compressed_size != z.uncompressed_size) return fail(EpubError::MALFORMED_ZIP);
+        while(consumed < z.uncompressed_size) {
+            uint32_t take = z.uncompressed_size - consumed;
+            if(take > sizeof(_input)) take = sizeof(_input);
+            if(!read_bytes(*_archive, data + consumed, _input, take)) return fail(EpubError::READ_FAILED);
+            consume(_input, take);
+            if(!parser.sink_ok) return false;
+            consumed += take;
+            if(!count_only && parser.window_size == EPUB_TEXT_WINDOW_BYTES) {
+                _cached_spine = i;
+                _window_start = window_start;
+                _window_size = parser.window_size;
+                return true;
+            }
+        }
+    } else {
+        tinfl_init(&_inflator);
+        uint32_t read_pos = 0, dict_pos = 0;
+        size_t avail = 0, used = 0;
+        tinfl_status status = TINFL_STATUS_NEEDS_MORE_INPUT;
+        while(status > 0) {
+            if(used == avail) {
+                uint32_t left = z.compressed_size - read_pos;
+                uint32_t take = left > sizeof(_input) ? sizeof(_input) : left;
+                if(!take) return fail(EpubError::MALFORMED_ZIP);
+                if(!read_bytes(*_archive, data + read_pos, _input, take)) return fail(EpubError::READ_FAILED);
+                read_pos += take;
+                avail = take;
+                used = 0;
+            }
+            size_t in_count = avail - used, out_count = EPUB_INFLATE_DICTIONARY_BYTES - dict_pos;
+            uint32_t f = 0;
+            if(read_pos < z.compressed_size || used + in_count < avail) f |= TINFL_FLAG_HAS_MORE_INPUT;
+            status = tinfl_decompress(&_inflator, _input + used, &in_count, _workspace.stream.dictionary,
+                                      _workspace.stream.dictionary + dict_pos, &out_count, f);
+            used += in_count;
+            consume(_workspace.stream.dictionary + dict_pos, uint32_t(out_count));
+            dict_pos += uint32_t(out_count);
+            if(!parser.sink_ok) return false;
+            if(dict_pos == EPUB_INFLATE_DICTIONARY_BYTES) dict_pos = 0;
+            if(output > z.uncompressed_size) return fail(EpubError::MALFORMED_ZIP);
+            if(!count_only && parser.window_size == EPUB_TEXT_WINDOW_BYTES) {
+                _cached_spine = i;
+                _window_start = window_start;
+                _window_size = parser.window_size;
+                return true;
+            }
+        }
+        consumed = read_pos - uint32_t(avail - used);
+        if(status != TINFL_STATUS_DONE) return fail(EpubError::MALFORMED_ZIP);
+    }
+    if(output != z.uncompressed_size || consumed != z.compressed_size || ~crc != z.crc32)
+        return fail(EpubError::MALFORMED_ZIP);
+    if(validate_only) return true;
+    if(!parser.finish()) return fail(EpubError::INVALID_XHTML);
+    if(!parser.flush()) return false;
+    _buffer_size = parser.total;
+    if(!count_only) {
+        _cached_spine = i;
+        _window_start = window_start;
+        _window_size = parser.window_size;
+    }
+    return true;
+}
+
+bool EpubDocument::load_cache_block(uint32_t offset) const
+{
+    const uint32_t block = offset / 4096;
+    if(_verified_block == block) return true;
+    _verified_block = 0xffffffffu;
+    const uint32_t start = block * 4096;
+    const uint32_t count = _virtual_size - start > 4096 ? 4096 : _virtual_size - start;
+    // Adjacent text blocks share 128 CRCs, eliminating text/table seek ping-pong.
+    // The inflater dictionary is unused while serving the owned block cache.
+    const uint32_t window = (block * 4) & ~511u;
+    if(_table_window != window) {
+        _table_window = 0xffffffffu;
+        const uint32_t table_bytes = (_virtual_size / 4096 + (_virtual_size % 4096 != 0)) * 4;
+        const uint32_t take = table_bytes - window > 512 ? 512 : table_bytes - window;
+        if(!read_cache(_cache_data_offset + _virtual_size + window, _workspace.stream.dictionary, take)) return false;
+        _table_window = window;
+    }
+    const uint32_t expected = read32_mem(_workspace.stream.dictionary + block * 4 - window);
+    if(!read_cache(_cache_data_offset + start, _workspace.stream.text, count) ||
+       crc32_bytes(_workspace.stream.text, count) != expected)
+        return false;
+    _verified_block = block;
+    return true;
+}
+
+bool EpubDocument::byte_at(uint32_t offset, unsigned char& value) const
+{
+    if(!_archive || !_archive->read_ready()) return false;
+    if(_optimized && _block_cache) {
+        if(offset >= _virtual_size) return false;
+        if(load_cache_block(offset)) {
+            value = _workspace.stream.text[offset % 4096];
+            return true;
+        }
+        // Discard the entire cache before indexing/validating originals. Never
+        // expose the failed block, even when rebuilding the originals fails.
+        const uint32_t cached_size = _virtual_size;
+        if(!index_original()) return false;
+        if(_virtual_size != cached_size) {
+            _virtual_size = 0;
+            return fail(EpubError::MALFORMED_ZIP);
+        }
+    }
+    if(_optimized)
+        return offset < _virtual_size && (_cache_data_offset ? read_cache(_cache_data_offset + offset, &value, 1)
+                                                             : _archive->optimized_byte_at(offset, value));
+    if(offset >= _virtual_size) return false;
+    int lo = 0, hi = _spine_count - 1;
+    while(lo <= hi) {
+        int mid = (lo + hi) / 2;
+        const SpineItem& s = _spine[mid];
+        if(offset < s.start)
+            hi = mid - 1;
+        else if(offset >= s.start + s.size)
+            lo = mid + 1;
+        else {
+            uint32_t local = offset - s.start;
+            if(_cached_spine != mid || local < _window_start || local >= _window_start + _window_size) {
+                uint32_t start = (local / EPUB_TEXT_WINDOW_BYTES) * EPUB_TEXT_WINDOW_BYTES;
+                if(!stream_chapter(mid, start, false)) return false;
+            }
+            if(local < _window_start || local >= _window_start + _window_size) return fail(EpubError::MALFORMED_ZIP);
+            value = _workspace.stream.text[local - _window_start];
+            return true;
+        }
+    }
+    return fail(EpubError::MALFORMED_ZIP);
+}
+
+bool EpubDocument::export_text(TextSink sink, void* context) const
+{
+    if(!sink || !_archive || !_archive->read_ready() || _error != EpubError::NONE) return false;
+    if(_optimized) return ByteSource::export_text(sink, context);
+    _cached_spine = -1;
+    for(int i = 0; i < _spine_count; ++i) {
+        if(!stream_chapter(i, 0, true, sink, context)) return false;
+        if(_buffer_size != _spine[i].size) return fail(EpubError::MALFORMED_ZIP);
+    }
+    return true;
+}
+
+bool EpubDocument::optimized_byte_at(uint32_t offset, unsigned char& value) const
+{
+    return _optimized && byte_at(offset, value);
+}
+
+bool EpubDocument::read_range(uint32_t offset, unsigned char* output, uint32_t count) const
+{
+    if(!output || !_archive || !_archive->read_ready() || offset > _virtual_size || count > _virtual_size - offset)
+        return false;
+    if(_optimized && _cache_data_offset && !_block_cache) return read_cache(_cache_data_offset + offset, output, count);
+    for(uint32_t index = 0; index < count; ++index)
+        if(!byte_at(offset + index, output[index])) return false;
+    return true;
+}
+} // namespace reader

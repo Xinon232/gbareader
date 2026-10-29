@@ -1,0 +1,18 @@
+# House style for gbareader's C++ (used for the files formatted in V3.4; the
+# rest of the code follows it by hand). Format one file: clang-format -i FILE
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 120
+SpaceBeforeParens: Never
+PointerAlignment: Left
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterFunction: true
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: true
+AllowShortBlocksOnASingleLine: Always
+AllowShortFunctionsOnASingleLine: Inline
+SortIncludes: false
+IndentPPDirectives: None
+NamespaceIndentation: None
+AccessModifierOffset: -4
