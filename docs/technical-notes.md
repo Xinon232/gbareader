@@ -1,8 +1,14 @@
-# gbareader 10.0: technical notes
+# gbareader 11.0: technical notes
 
 The player-facing overview is the [README](../README.md). This page keeps the detailed behaviour, limits and version history.
 
 Read TXT and EPUB books and comics on your Game Boy Advance. Save your place and return to it later. Put books directly in `/gbareader` on a compatible Supercard SD card; they appear on Home.
+
+## 11.0: keys, large cards, licence
+
+- Keys: only comic reading takes presses from the VBlank queue (every press, in order); the book list, Import, Settings, About, the other menus and TXT/EPUB books read the frame's keys (Butano's keypad) and empty the queue every loop; a switch between the two drops what waits (`KeySource` in `reader_key_latch.h`).
+- Large cards: tested with gbaSD's large-card kit on exFAT 64 GiB / 2 TiB − 8 MiB (128 and 512 KiB clusters), exFAT 64 GiB with 1 MiB and 2 TiB with 32 MiB clusters, and FAT32 32 GiB cards (`tests/emu/large_card_test.py`). Books of 4 GiB or more (exFAT) are refused instead of being read as shorter ones. `storage_init` calls `gbasd_alloc_hint(&fatfs, "/gbareader")` after the mount and the exFAT repair, so the first new file after start no longer searches the allocation bitmap from the start of the card (2 TiB, 128 KiB clusters: 83 s on the SuperCard model before, now 9 frames as on FAT32). `include/ffconf.h` sets `GBASD_FF_MULTI_BUF 4` (2 KiB in EWRAM, `.sbss`): bitmap reads and new-folder clearing 4 sectors per call.
+- The reader's own code is GPL-3.0-or-later everywhere (the UI runner and `tools/ezfo_diag` said MIT). gbaSD 3ee9d37.
 
 ## 10.0: About and licence, published source
 
@@ -114,7 +120,7 @@ See [the full controls](gbareader-full-controls.md).
 - Hold `Up` alone (about 0.8 s): toggle shoulder page turns (`L` back, `R` forward). `L+R: On` / `L+R: Off` appears for about a second; the choice is saved at once and restored at launch.
 - `Start` (when let go): save the current position, Arabic mode and Back history to the book's `.sav`, and retry pending global settings. The result is `Saved`, `Position save failed`, `Settings save failed` or `Both saves failed`. The D-pad does nothing while Start is held.
 - `Select`: Settings. Holding `Down` does nothing.
-- Every press counts: the keys are read 60 times a second, also while a page is still being laid out, and presses come in turn after it, in order (quick `A` then `B` presses end where the same presses made slowly end). `B` pressed while older pages load (`Loading back...`) goes back once for each press when they are there.
+- Keys are read once a frame, as in the menus: a press made while a page is still being laid out is not kept for later, so pages stop turning when you stop pressing. `B` pressed while older pages load (`Loading back...`) goes back once for each press when they are there.
 - With an Angle other than Normal the D-pad turns with the screen: `Right` is whatever points right on the turned page.
 
 ### Comics
@@ -122,7 +128,7 @@ See [the full controls](gbareader-full-controls.md).
 Comics are `.gbcomic` files, converted on a computer first with the gbcomic conversion software ([halimj.itch.io](https://halimj.itch.io/)); CBZ files are not listed.
 
 - `A`: next screen, then the next page. `B`: the screen before, then the page before. Screens with nothing but paper are passed over (`Skip empty`).
-- `A` / `B` pressed during a slide: the next screen of the grid after the one the slide goes to (as if it had finished), sliding there from where the screen is (Smooth: at speed, without easing in again). Every press counts, also while a slide is loading.
+- `A` / `B` pressed during a slide: the next screen of the grid after the one the slide goes to (as if it had finished), sliding there from where the screen is (Smooth: at speed, without easing in again). Every press counts, also while a slide is loading: in comics the keys are read 60 times a second and presses come in turn, in order (only while reading a comic; the menus, Settings and books read the keys once a frame, and presses still waiting are dropped when you leave the comic or open Settings).
 - `L` / `R` held (when `L/R page turns` is on; the row reads `L/R zoom (held)` while a comic is open): `R` shows the comic at the next bigger zoom of its angle, `L` at the next smaller one, centred where the screen was (during a slide: on the screen it goes to), as long as the button is held (both held cancel out: its own zoom); let go, it goes back to its own zoom: exactly where it was if nothing moved meanwhile, else around the same place. D-pad, `A` and `B` work as usual meanwhile. With no bigger zoom `R` does nothing, with no smaller one `L` does nothing. Opening Settings ends it. In comics `L` / `R` no longer do what `A` / `B` do.
 - D-pad: move around the picture (D-pad scrolling Static: 16 pixels a press, hold to repeat; Slide: while held; Smooth: faster the longer it is held, gliding to a stop in even steps: 6, 6, 4, 4, 2, 2 pixels from full speed). The screens stay a fixed grid. After a move, `A` goes to the next screen of the same row that starts beyond the view, keeping its height; at the row's end (the view at the picture's right edge) to the first screen of the next row (at that row's height, or lower if you moved down past it). `B` the same way back (left edge: the last screen of the row above). Right to left mirrors this; Columns goes down the columns. Holding `Up` does not switch L/R page turns in a comic. A D-pad held while `A` / `B` is pressed does nothing until it is let go (the slide plays, the view stays). A D-pad pressed during a slide stops it where the screen is and moves on from there.
 - `Start` (when let go): save the page. `Select`: Settings (during a slide: closed again, the screen it was going to).
@@ -210,7 +216,7 @@ The inherited `make test` frontend smoke wrapper is not sufficient boot evidence
 - `gbcomic`: `.gbcomic` books: zooms, views, ink grids, unpacking (BIOS LZ77 format, IWRAM) and drawing any part of a picture from its strips. The gbcomic converter makes the files.
 - `comic_layout`: where the screens go (counts, even spreading, reading order, ink cells).
 - `comic_region` / `comic_reader`: the decoded part of the picture around the screen (loaded ahead while there is time), and the comic on screen: A / B on the grid after D-pad moves, sliding (in even steps across the screen: an odd one is a pixel-by-pixel copy, about three times slower; a press during a slide slides on from where the screen is), and drawing only what comes into view (turned copies in IWRAM, `reader_turn.iwram.cpp`).
-- `reader_keys` / `reader_key_latch`: the keys as the reader sees them (the D-pad turned with the screen), read in the VBlank interrupt (`reader_keys.iwram.cpp`, ahead of Butano's own handler) and kept in order (up to 511 changes), so the main loop takes every press even when a frame of it takes longer than a frame.
+- `reader_keys` / `reader_key_latch`: the keys as the reader sees them (the D-pad turned with the screen). They are read in the VBlank interrupt (`reader_keys.iwram.cpp`, ahead of Butano's own handler) and kept in order (up to 511 changes). Only while a comic is read (`KeySource`, queue on) does the main loop take them from there, one press a loop, so every press counts even when a frame of it takes longer than a frame. Everywhere else (book list, Import, Settings, About, the other menus and TXT/EPUB books) it takes the frame's keys from Butano's keypad (`bn::keypad` after `bn::core::update`) and empties the queue every loop, so presses made during a busy stretch are not replayed. Switching between the two empties the queue as well. Keys held at start are no press until let go (L+R held at boot picks the SuperCard driver and does not sleep).
 - `main`: scenes, global startup/open/apply saving, independent manual bookmark save and the saved L/R mode.
 
 Body text and every menu use the double-buffered 8-bit bitmap; only the overlays over book text (`save...`, `L+R: On`) are sprites.

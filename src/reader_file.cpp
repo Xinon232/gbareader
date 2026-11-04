@@ -14,6 +14,7 @@ extern "C" {
 #include "cart_io.h"
 }
 #include "exfat_repair.h"
+#include "alloc_hint.h"
 #endif
 
 namespace reader {
@@ -561,6 +562,12 @@ bool storage_init()
     // /gbareader (books, their .sav files, SETTINGS0/1.DAT), before anything
     // reads or creates there. Nothing on FAT.
     repair_storage();
+    // exFAT keeps no free-space hint on the card: without this, the first
+    // save after every start (SETTINGS0.DAT, a .sav) looked for a free
+    // cluster from the start of the card. On a nearly full 2 TiB card that
+    // read the whole allocation bitmap (gbasd/fatfs/alloc_hint.h). Start
+    // the search after /gbareader's files instead; nothing on FAT32 (FSInfo).
+    gbasd_alloc_hint(&fatfs, "/gbareader");
     // A missing /gbareader is an empty library: Import creates it.
     scan_library();
     return true;
@@ -661,6 +668,12 @@ bool ReaderFile::open_read_only(const char* filename)
     if(_open || _side_open) return false;
 #ifdef __DEVKITARM__
     if(!supported_book_name(filename) || open_repairing(_file, filename, FA_READ | FA_OPEN_EXISTING) != FR_OK) return false;
+    // Books are read with 32-bit offsets (as are their saves): a book of 4 GiB or more
+    // (only possible on exFAT) is not opened, rather than read as a shorter one.
+    if(uint64_t(f_size(&_file)) > uint64_t(UINT32_MAX) - TXT_SAVE_FOOTER_SIZE) {
+        f_close(&_file);
+        return false;
+    }
     _source_owned = true;
     // A comic jumps around a large file: seek through a map of its clusters, not along the FAT.
     _seek.build(_file, _cache, sizeof(_cache));

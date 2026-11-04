@@ -1,9 +1,11 @@
 #pragma once
-// Every press counts: the keys are read at each VBlank (an interrupt, also
-// while the main loop is busy reading the card or laying out a page) and
-// each change is kept in order. The main loop takes them one press at a
-// time, so presses shorter than a busy stretch, or several in one, are all
-// seen, and in the order they came.
+// Reading a comic, every press counts: the keys are read at each VBlank (an
+// interrupt, also while the main loop is busy reading the card or sliding
+// the screen) and each change is kept in order. The main loop takes them one
+// press at a time, so presses shorter than a busy stretch, or several in
+// one, are all seen, and in the order they came. Everywhere else (the book
+// list, Import, Settings, About, the menus and books) the keys are those of
+// the frame, as Butano's keypad reads them (KeySource below).
 #include <cstdint>
 
 namespace rkey {
@@ -105,6 +107,39 @@ struct WakeGuard {
     {
         quiet = held ? 0 : changed ? 1 : quiet + 1;
         if(quiet >= QUIET) active = false;
+    }
+};
+
+// Where a main loop's keys come from. Reading a comic (queue): the latch,
+// one press a loop, in order. Anywhere else: the keys of this frame as
+// Butano's keypad read them in bn::core::update (held, and pressed since
+// the update before), so presses made while the loop was busy are not
+// handed over afterwards; the latch is emptied every loop. Switching
+// between the two empties the latch too: nothing waiting goes across. Keys
+// held at start are no press until they are let go.
+struct KeySource {
+    bool queued = false;
+    unsigned ignore = 0;   // held at start, not yet let go
+
+    void start(unsigned held)
+    {
+        queued = false;
+        ignore = held;
+    }
+
+    Frame next(KeyLatch& latch, bool queue, unsigned held, unsigned pressed)
+    {
+        if(queue != queued) {
+            latch.drain();
+            queued = queue;
+        }
+        if(queue) return latch.next();
+        latch.drain();
+        ignore &= held;
+        Frame f;
+        f.held = held;
+        f.pressed = pressed & ~ignore;
+        return f;
     }
 };
 

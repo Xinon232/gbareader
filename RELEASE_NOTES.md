@@ -1,3 +1,36 @@
+# gbareader 11.0
+
+Text reading, comics, `.sav` companions, `SETTINGS0/1.DAT` and `.gbcomic` files keep working unchanged (file formats unchanged); the About page says 11.0.
+
+## Keys
+
+- Every press counts only while reading a comic. Since 10.0 the keys were read in the VBlank interrupt everywhere and every press was handed over later, in order; in menus and books that replayed presses made while the reader was busy (an Import, a page being laid out), which was annoying. Now only comic reading (page turns and slides) takes the presses from that queue. The book list, Import, Settings, About, every other menu and TXT / EPUB books read the keys once a frame again (Butano's keypad after the frame's update, as before 10.0), and the queue is emptied every frame there. Switching between a comic and anything else (Settings opened from a comic, back to the book list) drops presses still waiting, so nothing leaks across. Sleep (L+R on the book list, START held 1 s to wake), L+R held at boot (SuperCard driver, no sleep) and Start saving when let go work as before.
+- Emulator (`tests/emu/comic_test.py`): the comic quick-press checks are unchanged and pass. New: in a long text book, 60 and 150 `A` presses 3 and 6 frames apart stop turning pages at most 2 frames after the last press (10.0: still turning 142 frames later); on the book list, `Up` pressed 10 times during an Import does not move the selection afterwards (10.0: it did). Host (`test_reader_key_latch.cpp`): menus and books get only the frame's keys, a comic every press, nothing crosses a switch.
+
+## Large cards
+
+- Checked with gbaSD's large-card kit: exFAT 64 GiB and 2 TiB − 8 MiB (the largest SDXC card) with 128 KiB clusters and with the SD Association's 512 KiB clusters, exFAT 64 GiB with 1 MiB and 2 TiB with 32 MiB clusters (exFAT's largest), and FAT32 32 GiB, with `/gbareader` at the far end of the card and no free space but at its end. On the SuperCard, EZ-Flash Omega (also with the kernel's IRQ hook) and EverDrive models the reader starts, lists, opens a book, turns pages and saves; the `.sav` and settings are written at the last LBAs (up to 4294825985), are byte for byte those of a small card, and fsck is clean (`tests/emu/large_card_test.py`, run by `tests/exfat/run.py --emu`; the host part runs gbaSD's large-card host test).
+- Fast free-space search on exFAT (gbaSD 3ee9d37). exFAT keeps no free-space hint on the card, so the first file the reader created after every start (`SETTINGS0.DAT` when a book is opened, a `.sav`) made FatFs look for a free cluster from the start of the card, bit by bit through the allocation bitmap. On a card whose free space is only at its end that was the whole bitmap. gbaSD's FatFs now searches it a word at a time, and the reader starts the search after its own files in `/gbareader` (`gbasd_alloc_hint` right after mounting). Time to open a book on these cards (SuperCard / Omega / Omega IRQ hook / EverDrive models, frames at 59.73 per second):
+
+  | Card | before | now |
+  |---|---|---|
+  | exFAT 2 TiB, 128 KiB clusters | 4984 / 3450 / 3450 / 3446 frames (83 s / 58 s) | 9 / 7 / 7 / 7 frames (0.15 s) |
+  | exFAT 2 TiB, 512 KiB clusters | 1253 / 868 / 868 / 867 (21 s / 14.5 s) | 9 / 7 / 7 / 7 |
+  | exFAT 64 GiB, 128 KiB clusters | 164 / 114 / 114 / 115 (2.7 s / 1.9 s) | 9 / 7 / 7 / 7 |
+  | exFAT 64 GiB, 1 MiB clusters | 28 / 20 / 20 / 21 | 9 / 7 / 7 / 7 |
+  | exFAT 2 TiB, 32 MiB clusters | not readable (no books listed) | 9 / 7 / 7 / 7 |
+  | FAT32 32 GiB | 9 / 7 / 7 / 7 | 9 / 7 / 7 / 7 |
+
+  The test's limit is now 18 frames on every card (it was 5800); the ROM before fails it on every exFAT card, and so does this one without the `gbasd_alloc_hint` call (2 TiB: 108-176 frames).
+- exFAT cards with 32 MiB clusters (gbaSD 3ee9d37): FatFs kept the cluster size in 16 bits and refused them, so the library was empty; they now work like any other card.
+- A new folder on a card with large clusters is cleared 4 sectors per write instead of one (`GBASD_FF_MULTI_BUF 4` in `include/ffconf.h`, 2 KiB of EWRAM). The first Import on a card without `/gbareader` creates it, and the whole first cluster must be zeroed: with 1 MiB clusters the Import took 154 / 107 / 107 / 303 frames (2.6 s / 1.8 s / 5.1 s), with 32 MiB clusters 4813 / 3335 / 3337 / 9618 frames (81 s / 56 s / 161 s; gbaSD measured 109 / 174 / 199 s one sector per write). Only once per card; reading and saving are not affected.
+- The reader's own size arithmetic was audited: it never asks for the card size or free space; LBAs are FatFs's 32-bit ones; the seek maps use 64-bit file offsets and cluster sizes up to 32 MiB. One fix: a book of 4 GiB or more (only possible on exFAT) was opened as a shorter book (its size cut to 32 bits); it is now refused (`Book open failed`).
+
+## Licence
+
+- The reader's own code is GPL-3.0-or-later everywhere: the emulator UI runner (`tests/emu/ui_runner.c`) and the tester diagnostics ROM (`tools/ezfo_diag`) said MIT and now say GPL-3.0-or-later. The 5x7 UI font from gbamp3 by Halim Jarrar is credited as GPL v3 or later (as before). Third-party notices (edio-gba by krikzz, MIT; miniz, MIT; Butano, zlib; FatFs; SuperFW, GPL; the fonts) are unchanged.
+- gbaSD 3ee9d37 (large-card test kit; fast exFAT free-space search, `gbasd_alloc_hint`, 32 MiB clusters, multi-sector folder clearing).
+
 # gbareader 10.0
 
 Based on V3.2 (`v3.2.0`); developed as V3.3 and released as 10.0. Comics, turned screens and settings per book. Text reading, global settings and existing `.sav` companions keep working; the About page says 10.0.

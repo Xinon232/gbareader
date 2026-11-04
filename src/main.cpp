@@ -1,4 +1,4 @@
-// gbareader 10.0 -- streaming Supercard SD TXT/EPUB reader.
+// gbareader 11.0 -- streaming Supercard SD TXT/EPUB reader.
 
 #include "bn_bg_palette_item.h"
 #include "bn_bg_palette_ptr.h"
@@ -701,6 +701,24 @@ void bios_stop()
 
 }
 
+unsigned keypad_held()
+{
+    unsigned keys = 0;
+    for(unsigned key = 1; key <= L; key <<= 1) {
+        if(bn::keypad::held(bn::keypad::key_type(key))) keys |= key;
+    }
+    return keys;
+}
+
+unsigned keypad_pressed()
+{
+    unsigned keys = 0;
+    for(unsigned key = 1; key <= L; key <<= 1) {
+        if(bn::keypad::pressed(bn::keypad::key_type(key))) keys |= key;
+    }
+    return keys;
+}
+
 void sleep_until_start()
 {
     // Butano's bn::core::sleep(START), except that START must stay down for
@@ -736,7 +754,7 @@ void sleep_until_start()
 int main()
 {
     bn::core::init();
-    rkey::start_latch();   // every press counts, also while the loop is busy
+    rkey::start_latch();   // reading a comic, every press counts, also while the loop is busy
     bn::palette_bitmap_bg_ptr background = bn::palette_bitmap_bg_ptr::create(palette_item);
     bn::palette_bitmap_bg_painter painter(background);
     painter.fill(0);
@@ -930,7 +948,8 @@ int main()
     while(true) {
         const bn::timer frame_timer;
         ++frame;
-        rkey::next_frame();
+        // Reading a comic: every press, in order (the latch). Elsewhere: this frame's keys.
+        rkey::next_frame(scene == Scene::READER && comic_open);
         if(scene == Scene::LIBRARY && rkey::lr_chord()) {
             // Book list, L+R: sleep until START, then the same list; this
             // frame's keys and the waking START do nothing else.

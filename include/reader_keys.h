@@ -1,9 +1,9 @@
 #pragma once
 // The keypad as the reader sees it: while a turned book (or its Settings) is
 // on screen, the D-pad turns with the picture. A, B, L, R, Start and Select
-// keep their place. The keys of the frame come from the VBlank latch
-// (reader_key_latch.h: every press counts, also while the loop is busy);
-// tests set frame_ref() themselves.
+// keep their place. The keys of the frame come from Butano's keypad, or,
+// reading a comic, from the VBlank latch (reader_key_latch.h: every press
+// counts, also while the loop is busy); tests set frame_ref() themselves.
 #include "reader_key_latch.h"
 #include "reader_turn.h"
 
@@ -13,15 +13,20 @@ inline reader::Angle& angle_ref() { static reader::Angle angle = reader::Angle::
 inline void set_angle(reader::Angle angle) { angle_ref() = angle; }
 inline Frame& frame_ref() { static Frame frame; return frame; }
 inline WakeGuard& wake_guard_ref() { static WakeGuard guard; return guard; }
+inline KeySource& source_ref() { static KeySource source; return source; }
 
 #ifdef __DEVKITARM__
 // The latch filled by the VBlank interrupt (src/reader_keys.iwram.cpp).
 KeyLatch& latch();
 // After bn::core::init(): the keys are read at each VBlank from now on.
 void start_latch();
-// Once at the start of each main loop: this frame's keys (none while the
-// wake-up guard lasts: those changes are dropped).
-inline void next_frame()
+// The keys of this frame as Butano's keypad read them (main.cpp).
+unsigned keypad_held();
+unsigned keypad_pressed();
+// Once at the start of each main loop: this frame's keys, from the latch
+// while a comic is read (comic), else Butano's (none while the wake-up
+// guard lasts: those changes are dropped).
+inline void next_frame(bool comic)
 {
     WakeGuard& guard = wake_guard_ref();
     if(guard.active) {
@@ -30,7 +35,7 @@ inline void next_frame()
         frame_ref() = Frame{};
         return;
     }
-    frame_ref() = latch().next();
+    frame_ref() = source_ref().next(latch(), comic, keypad_held(), keypad_pressed());
 }
 // The book list's L+R: sleep (screen off, Stop mode) until START is held for
 // 1 s (let go sooner: Stop again, the screen still off), then the keys are

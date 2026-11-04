@@ -293,4 +293,18 @@
 
 
 
+/*---------------------------------------------------------------------------/
+/ gbaSD switches (gbasd/fatfs/ff.h gives the others their defaults)
+/---------------------------------------------------------------------------*/
+
+#define GBASD_FF_MULTI_BUF	4
+#ifdef __DEVKITARM__
+#define GBASD_FF_MULTI_BUF_ATTR	__attribute__((section(".sbss")))
+#endif
+/* A 4-sector buffer (2 KiB, in EWRAM: Butano puts .bss in IWRAM) for the
+/  exFAT free-cluster search's bitmap reads and for clearing a new folder
+/  cluster 4 sectors per write (gbasd/docs/fatfs.md, changes 6 and 8: a new
+/  /gbareader on a card with 1 MiB clusters 3.4 s to 2.5 s on a SuperCard). */
+
+
 /*--- End of configuration options ---*/

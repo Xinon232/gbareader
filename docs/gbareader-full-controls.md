@@ -1,4 +1,4 @@
-# gbareader 10.0
+# gbareader 11.0
 
 ## Full controls
 
@@ -23,7 +23,7 @@ Read TXT and EPUB books and comics, save your reading position, and resume later
 - Hold `Up` alone (about 0.8 s): toggle shoulder page turns (`L` back, `R` forward). `L+R: On` / `L+R: Off` appears for about a second; the choice is saved at once and restored at launch.
 - `Start` (when let go): save the current position, Arabic mode and Back history to the book's `.sav`, and retry pending global settings. The result is `Saved`, `Position save failed`, `Settings save failed` or `Both saves failed`. The D-pad does nothing while Start is held.
 - `Select`: Settings. Holding `Down` does nothing.
-- Every press counts: the keys are read 60 times a second, also while a page is still being laid out, and presses come in turn after it, in order (quick `A` then `B` presses end where the same presses made slowly end). `B` pressed while older pages load (`Loading back...`) goes back once for each press when they are there.
+- Keys are read once a frame, as in the menus: a press made while a page is still being laid out is not kept for later, so pages stop turning when you stop pressing. `B` pressed while older pages load (`Loading back...`) goes back once for each press when they are there.
 - With an Angle other than Normal the D-pad turns with the screen: `Right` is whatever points right on the turned page.
 
 ### Comics
@@ -31,7 +31,7 @@ Read TXT and EPUB books and comics, save your reading position, and resume later
 Comics are `.gbcomic` files, converted on a computer first with the gbcomic conversion software ([halimj.itch.io](https://halimj.itch.io/)); CBZ files are not listed.
 
 - `A`: next screen, then the next page. `B`: the screen before, then the page before. Screens with nothing but paper are passed over (`Skip empty`).
-- `A` / `B` pressed during a slide: the next screen of the grid after the one the slide goes to (as if it had finished), sliding there from where the screen is (Smooth: at speed, without easing in again). Every press counts, also while a slide is loading.
+- `A` / `B` pressed during a slide: the next screen of the grid after the one the slide goes to (as if it had finished), sliding there from where the screen is (Smooth: at speed, without easing in again). Every press counts, also while a slide is loading: in comics the keys are read 60 times a second and presses come in turn, in order (only while reading a comic; the menus, Settings and books read the keys once a frame, and presses still waiting are dropped when you leave the comic or open Settings).
 - `L` / `R` held (when `L/R page turns` is on; the row reads `L/R zoom (held)` while a comic is open): `R` shows the comic at the next bigger zoom of its angle, `L` at the next smaller one, centred where the screen was (during a slide: on the screen it goes to), as long as the button is held (both held cancel out: its own zoom); let go, it goes back to its own zoom: exactly where it was if nothing moved meanwhile, else around the same place. D-pad, `A` and `B` work as usual meanwhile. With no bigger zoom `R` does nothing, with no smaller one `L` does nothing. Opening Settings ends it. In comics `L` / `R` no longer do what `A` / `B` do.
 - D-pad: move around the picture (D-pad scrolling Static: 16 pixels a press, hold to repeat; Slide: while held; Smooth: faster the longer it is held, gliding to a stop in even steps: 6, 6, 4, 4, 2, 2 pixels from full speed). The screens stay a fixed grid. After a move, `A` goes to the next screen of the same row that starts beyond the view, keeping its height; at the row's end (the view at the picture's right edge) to the first screen of the next row (at that row's height, or lower if you moved down past it). `B` the same way back (left edge: the last screen of the row above). Right to left mirrors this; Columns goes down the columns. Holding `Up` does not switch L/R page turns in a comic. A D-pad held while `A` / `B` is pressed does nothing until it is let go (the slide plays, the view stays). A D-pad pressed during a slide stops it where the screen is and moves on from there.
 - `Start` (when let go): save the page. `Select`: Settings (during a slide: closed again, the screen it was going to).
@@ -87,7 +87,7 @@ Runs on the SuperCard SD, EZ-Flash Omega (also the Definitive Edition; start the
 
 ## About / licence
 
-gbareader 10.0
+gbareader 11.0
 
 © 2026 Halim Jarrar · halimj.itch.io · gba@halim-jarrar.de
 

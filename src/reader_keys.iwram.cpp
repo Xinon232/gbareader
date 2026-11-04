@@ -34,6 +34,7 @@ void start_latch()
     const uint16_t was = ime;
     ime = 0;
     key_latch.start(keys_now());
+    source_ref().start(key_latch.seen);
     if(IRQ_VectorTable[0] != vblank) {
         butano_vblank = IRQ_VectorTable[0];
         IRQ_VectorTable[0] = vblank;
