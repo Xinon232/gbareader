@@ -17,7 +17,22 @@ int even_step(int at, int to) { const int d = to - at; return at + (d > 1 || d <
 constexpr int MAP_SIZE = 44;
 constexpr int MAP_FRAMES = 70;
 constexpr int MAP_STILL_FRAMES = 10;
-constexpr int MAX_SLIDE_FRAMES = 60;   // a slide paced to the card: at most a second
+// Every slide of a kind takes the same time, however far it goes: a straight
+// one the time of a whole screen that way (Smooth about 7 pixels a frame,
+// Slide 10), a diagonal one (to another row or column) 1.6 times a sideways one.
+constexpr int frames_for(int pixels, bool smooth) { return smooth ? (pixels + 6) / 7 : (pixels + 9) / 10; }
+constexpr int DIAGONAL_FRAMES_SMOOTH = 55, DIAGONAL_FRAMES_SLIDE = 39;
+constexpr int MAX_SLIDE_FRAMES = 90;   // a slide that waits for the card: at most 1.5 s
+
+// The slide's curve: how far (0..256) it is at time t (0..256). Smooth eases
+// in and out (smoothstep); one that takes over from a slide on its way
+// starts at speed (the second half of the curve); Slide is even.
+int curve(int t, bool smooth, bool chained)
+{
+    if(smooth && chained) { const int u = 128 + t / 2; return (u * u * (768 - 2 * u) / 65536 - 128) * 2; }
+    if(smooth) return t * t * (768 - 2 * t) / 65536;
+    return t;
+}
 
 }
 
@@ -270,10 +285,9 @@ void ComicReader::go_to(const Place& place, Slide slide)
         _last_dy = sign(dy);
         _from_x = _x; _from_y = _y;
         _to_x = tx; _to_y = ty;
-        const int distance = absolute(dx) > absolute(dy) ? absolute(dx) : absolute(dy);
         _anim_frame = 0;
-        _anim_frames = _anim_smooth ? (distance + 6) / 7 : (distance + 9) / 10;
-        if(_anim_frames < 4) _anim_frames = 4;
+        _anim_frames = dx && dy ? (_anim_smooth ? DIAGONAL_FRAMES_SMOOTH : DIAGONAL_FRAMES_SLIDE)
+                                : frames_for(dx ? _view.screen_w : _view.screen_h, _anim_smooth);
     } else {
         _x = tx;
         _y = ty;
@@ -353,28 +367,26 @@ bool ComicReader::draw(gbcomic::Book& book, uint16_t* hidden, const uint16_t* sh
     const bool whole = _full || _shown_picture != _spot.picture || !_region.started();
     if(whole && !_region.start(p, sw, sh)) { failed = true; return false; }
     if(_anim && _anim_follow && !_anim_paced) {
-        // A slide that loads on its way (to another row): as long as reading
-        // what is not in memory yet takes, at an even speed (reading keeps
-        // up all the way), so it moves evenly instead of stopping now and then.
-        // What is loaded already lies near the start, so the reading piles up
-        // towards the end: every eighth of the way must be read by the time
-        // the screen gets there.
+        // A slide that loads on its way (to another row): longer only when
+        // reading what is not in memory yet takes longer, so it moves evenly
+        // instead of stopping now and then. What is loaded already lies near
+        // the start, so the reading piles up towards the end: every eighth of
+        // the way must be read by the time the screen gets there (on its
+        // curve: Smooth is fastest in the middle).
         _anim_paced = true;
         const uint32_t per_frame = _read_speed + 1;
-        int needed = 0;
+        int needed = 0, t = 0;
         for(int i = 1; i <= 8; ++i) {
+            while(t < 256 && curve(t, _anim_smooth, _anim_chained) < i * 32) ++t;
             const int px = _from_x + (_to_x - _from_x) * i / 8, py = _from_y + (_to_y - _from_y) * i / 8;
             const int x0 = _from_x < px ? _from_x : px, y0 = _from_y < py ? _from_y : py;
             const int x1 = (_from_x > px ? _from_x : px) + _view.screen_w;
             const int y1 = (_from_y > py ? _from_y : py) + _view.screen_h;
             const uint32_t missing = _region.packed_missing(book, x0, y0, x1 - x0, y1 - y0);
-            const int frames = int(missing * 8 / (per_frame * uint32_t(i))) + 1;
+            const int frames = int(missing * 256 / (per_frame * uint32_t(t > 0 ? t : 1))) + 1;
             if(frames > needed) needed = frames;
         }
-        if(needed > _anim_frames) {
-            _anim_frames = needed > MAX_SLIDE_FRAMES ? MAX_SLIDE_FRAMES : needed;
-            _anim_smooth = false;
-        }
+        if(needed > _anim_frames) _anim_frames = needed > MAX_SLIDE_FRAMES ? MAX_SLIDE_FRAMES : needed;
     }
     if(_anim) {
         // Along a row everything that comes in is on the screen it goes to.
@@ -443,11 +455,7 @@ bool ComicReader::draw(gbcomic::Book& book, uint16_t* hidden, const uint16_t* sh
 void ComicReader::anim_at(int frame, int& x, int& y) const
 {
     if(frame >= _anim_frames) { x = _to_x; y = _to_y; return; }
-    int t = frame * 256 / _anim_frames;
-    // Smoothstep, 0..256. A slide that takes over from another one starts at
-    // speed (the second half of the curve: no easing in).
-    if(_anim_smooth && _anim_chained) { const int u = 128 + t / 2; t = (u * u * (768 - 2 * u) / 65536 - 128) * 2; }
-    else if(_anim_smooth) t = t * t * (768 - 2 * t) / 65536;
+    const int t = curve(frame * 256 / _anim_frames, _anim_smooth, _anim_chained);
     x = _from_x + (_to_x - _from_x) * t / 256;
     y = _from_y + (_to_y - _from_y) * t / 256;
 }

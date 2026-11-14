@@ -1,3 +1,13 @@
+# gbareader 11.1
+
+Text reading, comics, `.sav` companions, `SETTINGS0/1.DAT` and `.gbcomic` files keep working unchanged (file formats unchanged); the About page says 11.1.
+
+## Comic slides take the same time
+
+- Every slide of a kind now takes the same time, however far it goes: along a row the time of a whole screen (Smooth about 0.6 s, as before), diagonally to the next row about 0.9 s on every page and zoom. Before, the time followed the distance: a row's last screen that is only a little further on slid in a blink, and the diagonal back to the next row on a wide page took 1.1 s.
+- A diagonal slide that has to read the card on its way can still take longer on a slow card, but keeps its Smooth curve (before, it switched to an even speed).
+- Emulator (SuperCard model, a page three screens wide): along a row 34 frames, diagonal 53-56 frames (before 67-70), the screen standing still no more often than before; `tests/emu/comic_test.py` checks the times at two zooms.
+
 # gbareader 11.0
 
 Text reading, comics, `.sav` companions, `SETTINGS0/1.DAT` and `.gbcomic` files keep working unchanged (file formats unchanged); the About page says 11.0.

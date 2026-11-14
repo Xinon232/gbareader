@@ -1,8 +1,15 @@
-# gbareader 11.0: technical notes
+# gbareader 11.1: technical notes
 
 The player-facing overview is the [README](../README.md). This page keeps the detailed behaviour, limits and version history.
 
 Read TXT and EPUB books and comics on your Game Boy Advance. Save your place and return to it later. Put books directly in `/gbareader` on a compatible Supercard SD card; they appear on Home.
+
+## 11.1: comic slide times
+
+- Every slide of a kind takes the same time, however far it goes (`comic_reader.cpp`): a straight one the time of a whole screen that way (Smooth 34 frames sideways, 23 up or down; Slide 24 / 16), a diagonal one to another row or column 55 frames (Slide 39). Before, the time followed the distance (about 7 pixels a frame), so a row's last screen that is only a little further on slid in a few frames and the diagonal back to the next row on a page three screens wide took 67-70 frames (1.1 s).
+- A diagonal that must read the card on its way may still take longer (at most 90 frames, was 60) when the card is slow; it keeps its curve (Smooth was switched to an even speed when stretched), and the check that the reading keeps up follows the curve (Smooth is fastest in the middle).
+- A slide that takes over from one on its way gets the full time of its kind.
+- Measured on the SuperCard model, a page three screens wide at 3.0x, `A` 90 frames apart: along a row 34 frames (as before), diagonal 53-56 (before 67-70) with 0-3 frames the screen stood still (as before); slow card model 61-79 (before 71-84). `tests/emu/comic_test.py` checks the times at 3.0x and 2.2x.
 
 ## 11.0: keys, large cards, licence
 
@@ -128,6 +135,7 @@ See [the full controls](gbareader-full-controls.md).
 Comics are `.gbcomic` files, converted on a computer first with the gbcomic conversion software ([halimj.itch.io](https://halimj.itch.io/)); CBZ files are not listed.
 
 - `A`: next screen, then the next page. `B`: the screen before, then the page before. Screens with nothing but paper are passed over (`Skip empty`).
+- Every slide of a kind takes the same time, however far it goes: along a row (or up and down a column) the time of a whole screen (Smooth about 0.6 s sideways, 0.4 s up or down), diagonally to the next row or column about 0.9 s. Only a diagonal slide that has to read the card on its way can take longer on a slow card.
 - `A` / `B` pressed during a slide: the next screen of the grid after the one the slide goes to (as if it had finished), sliding there from where the screen is (Smooth: at speed, without easing in again). Every press counts, also while a slide is loading: in comics the keys are read 60 times a second and presses come in turn, in order (only while reading a comic; the menus, Settings and books read the keys once a frame, and presses still waiting are dropped when you leave the comic or open Settings).
 - `L` / `R` held (when `L/R page turns` is on; the row reads `L/R zoom (held)` while a comic is open): `R` shows the comic at the next bigger zoom of its angle, `L` at the next smaller one, centred where the screen was (during a slide: on the screen it goes to), as long as the button is held (both held cancel out: its own zoom); let go, it goes back to its own zoom: exactly where it was if nothing moved meanwhile, else around the same place. D-pad, `A` and `B` work as usual meanwhile. With no bigger zoom `R` does nothing, with no smaller one `L` does nothing. Opening Settings ends it. In comics `L` / `R` no longer do what `A` / `B` do.
 - D-pad: move around the picture (D-pad scrolling Static: 16 pixels a press, hold to repeat; Slide: while held; Smooth: faster the longer it is held, gliding to a stop in even steps: 6, 6, 4, 4, 2, 2 pixels from full speed). The screens stay a fixed grid. After a move, `A` goes to the next screen of the same row that starts beyond the view, keeping its height; at the row's end (the view at the picture's right edge) to the first screen of the next row (at that row's height, or lower if you moved down past it). `B` the same way back (left edge: the last screen of the row above). Right to left mirrors this; Columns goes down the columns. Holding `Up` does not switch L/R page turns in a comic. A D-pad held while `A` / `B` is pressed does nothing until it is let go (the slide plays, the view stays). A D-pad pressed during a slide stops it where the screen is and moves on from there.
