@@ -110,7 +110,7 @@ const char* const about_titles[ABOUT_PAGE_COUNT] = {
 };
 
 const char* const about_lines[ABOUT_PAGE_COUNT][ABOUT_LINES] = {
-    {"gbareader 11.3", "(c) 2026 Halim Jarrar", "GPL-3.0-or-later", "No warranty.",
+    {"gbareader 12.0", "(c) 2026 Halim Jarrar", "GPL-3.0-or-later", "No warranty.",
      "Source:", "github.com/Xinon232/gbareader", "halimj.itch.io", "gba@halim-jarrar.de"},
     {"#File list", "Put books in /gbareader", "Start: Import books", "L+R: Sleep, hold Start 1 s: Wake", "#Reading",
      "Start: Save position", "Hold Up: L/R page turns on/off", "Comics: D-pad moves the picture"},

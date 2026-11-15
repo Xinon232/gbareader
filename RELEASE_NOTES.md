@@ -1,31 +1,13 @@
-# gbareader 11.3
+# gbareader 12.0
 
-Text reading, comics, `.sav` companions, `SETTINGS0/1.DAT` and `.gbcomic` files keep working unchanged (file formats unchanged); the About page says 11.3.
+Text reading, comics, `.sav` companions, `SETTINGS0/1.DAT` and `.gbcomic` files keep working unchanged (file formats unchanged); the About page says 12.0.
 
-## Comic slides move evenly
+## Comic slides: even speed, smooth movement
 
-- Diagonal slides no longer stutter: the movement is worked out much more finely (the screen used to jump 8, 16, 8 pixels from frame to frame on wide pages), and the part going down the screen moves pixel by pixel instead of 2, 0, 2. Row slides get the finer curve too.
-- Slide times as in 11.2: along a row a third of a second, a diagonal one time per page.
-
-# gbareader 11.2
-
-Text reading, comics, `.sav` companions, `SETTINGS0/1.DAT` and `.gbcomic` files keep working unchanged (file formats unchanged); the About page says 11.2.
-
-## Comic slides: faster and smooth
-
-- Slides along a row (and up or down) now always take a third of a second, at every zoom. In 11.1 they took 0.57 s, which on many pages meant a slow, jerky movement of a few pixels a frame.
-- A diagonal slide to the next row takes the same time everywhere on a page: about 9 pixels a frame over the page's longest diagonal, or longer when the card has to be read on the way. On a wide page at 3.0x that is about 0.9 s (11.0: 1.1 s), on narrower pages less.
-- Emulator (SuperCard model): along a row 19-20 frames at 1.6x, 2.2x and 3.0x; diagonal 33-34 / 44-45 / 52-53 frames, standing still 0-1 frames each. On a slow card a diagonal can still take longer.
-
-# gbareader 11.1
-
-Text reading, comics, `.sav` companions, `SETTINGS0/1.DAT` and `.gbcomic` files keep working unchanged (file formats unchanged); the About page says 11.1.
-
-## Comic slides take the same time
-
-- Every slide of a kind now takes the same time, however far it goes: along a row the time of a whole screen (Smooth about 0.6 s, as before), diagonally to the next row about 0.9 s on every page and zoom. Before, the time followed the distance: a row's last screen that is only a little further on slid in a blink, and the diagonal back to the next row on a wide page took 1.1 s.
-- A diagonal slide that has to read the card on its way can still take longer on a slow card, but keeps its Smooth curve (before, it switched to an even speed).
-- Emulator (SuperCard model, a page three screens wide): along a row 34 frames, diagonal 53-56 frames (before 67-70), the screen standing still no more often than before; `tests/emu/comic_test.py` checks the times at two zooms.
+- Slides along a row (and up or down) always take a third of a second (20 frames), at every zoom and however far they go. Before, the time followed the distance, so slides on one page could be quick or slow.
+- A diagonal slide to the next row (or column) takes the same time everywhere on a page: the page's longest diagonal at about 9 pixels a frame, or longer when the card has to be read on the way. On a wide page at 3.0x that is about 0.9 s (11.0: 1.1 s), on narrower pages less.
+- Slides move evenly: the movement is worked out much more finely (diagonals across wide pages jumped 8, 16, 8 pixels from frame to frame), only the way across the screen moves in even steps (an odd one is a slow copy) and the way down the screen follows pixel by pixel (it went 2, 0, 2). Smooth keeps its curve also when a slide has to wait for the card.
+- Emulator (SuperCard model): along a row 20 frames at 1.6x, 2.2x and 3.0x; diagonal 32-33 / 43 / 52-53 frames, the same for every row of a page, standing still at most 1 frame each. On a slow card a diagonal can still take longer and pause briefly (the reading on the way). Tests: `tests/emu/comic_test.py` (times at three zooms), `tests/test_slide_steps.py` (the steps frame by frame).
 
 # gbareader 11.0
 

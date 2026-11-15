@@ -1,22 +1,24 @@
-# gbareader 11.3: technical notes
+# gbareader 12.0: technical notes
 
 The player-facing overview is the [README](../README.md). This page keeps the detailed behaviour, limits and version history.
 
 Read TXT and EPUB books and comics on your Game Boy Advance. Save your place and return to it later. Put books directly in `/gbareader` on a compatible Supercard SD card; they appear on Home.
 
-## 11.3: even slide steps
+## 12.0: comic slides (developed as 11.1-11.3)
+
+### Even slide steps
 
 - The slide curve is worked out in 65536ths (`curve_fine`), not 256ths: on a diagonal across a page three screens wide a 256th was nearly 2 pixels, and the frames went 8, 16, 8 pixels sideways; now the steps grow and shrink by at most 4 pixels (even steps across the screen) and 1-2 down it.
 - Only the way across the screen moves in even steps (an odd one is a slow copy in `turn_shift`); up and down the screen any step is a quick copy, so that way follows the curve pixel by pixel (the picture's x upright, its y in the 90° angles). The part of a diagonal down the screen went 2, 0, 2 pixels; now 3, 3, 4.
 - Slide times as in 11.2. `tests/test_slide_steps.py` (host, the reader's code) checks the steps of a diagonal at 3.0x upright and 2.6x sideways.
 
-## 11.2: faster, smooth comic slides
+### Faster slides, one diagonal time a page
 
 - 11.1 gave every straight slide the time of a whole screen (34 frames), so on pages where a row's screens are less than a screen apart a slide moved only about 4 pixels a frame, and its even steps (an odd one is a slow copy) went 4, 2, 4, 6 …: it looked jerky and slow. Now every straight slide takes 20 frames (`STRAIGHT_FRAMES`), at every zoom; its screen is read while the reader waits, so only drawing limits it.
 - Diagonal slides take one time per page (`open_page`, `diagonal_reading`): the page's longest diagonal at 9 pixels a frame (`DIAGONAL_PIXELS`; at 10 they stood still more often on wide pages), or longer when reading the card on the way needs it: for each line change of the picture, with the screen shown and what `load_beside` reads ahead in memory, every eighth of the way read by the time the screen gets there on the Smooth curve, at the reading speed learned so far. The per-slide check stays for slides that find less in memory (after a D-pad move, a slow card).
 - Measured on the SuperCard model, `A` 90 frames apart: along a row 19-20 frames at 1.6x, 2.2x and 3.0x; diagonal 33-34 frames at 1.6x (11.0: 28-34), 44-45 at 2.2x (11.0: 41-42), 52-53 at 3.0x (11.0: 67-68), 0-1 frames standing still each. Slow card model: 48-79, as before. `tests/emu/comic_test.py` checks the row time at three zooms and one diagonal time a page.
 
-## 11.1: comic slide times
+### Slide times by kind (first try, too slow: replaced above)
 
 - Every slide of a kind takes the same time, however far it goes (`comic_reader.cpp`): a straight one the time of a whole screen that way (Smooth 34 frames sideways, 23 up or down; Slide 24 / 16), a diagonal one to another row or column 55 frames (Slide 39). Before, the time followed the distance (about 7 pixels a frame), so a row's last screen that is only a little further on slid in a few frames and the diagonal back to the next row on a page three screens wide took 67-70 frames (1.1 s).
 - A diagonal that must read the card on its way may still take longer (at most 90 frames, was 60) when the card is slow; it keeps its curve (Smooth was switched to an even speed when stretched), and the check that the reading keeps up follows the curve (Smooth is fastest in the middle).
