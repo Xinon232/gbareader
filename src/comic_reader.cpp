@@ -17,11 +17,15 @@ int even_step(int at, int to) { const int d = to - at; return at + (d > 1 || d <
 constexpr int MAP_SIZE = 44;
 constexpr int MAP_FRAMES = 70;
 constexpr int MAP_STILL_FRAMES = 10;
-// Every slide of a kind takes the same time, however far it goes: a straight
-// one the time of a whole screen that way (Smooth about 7 pixels a frame,
-// Slide 10), a diagonal one (to another row or column) 1.6 times a sideways one.
-constexpr int frames_for(int pixels, bool smooth) { return smooth ? (pixels + 6) / 7 : (pixels + 9) / 10; }
-constexpr int DIAGONAL_FRAMES_SMOOTH = 55, DIAGONAL_FRAMES_SLIDE = 39;
+// Slide times. A straight slide (along a row, or up or down) always takes
+// STRAIGHT_FRAMES, however far it goes: the screen it goes to is read while
+// the reader waits, so only drawing limits it, and a third of a second is
+// still seen as a slide. A diagonal one (to another row or column) takes the
+// same time everywhere on a page (open_page / diagonal_reading): the page's
+// longest one at DIAGONAL_PIXELS a frame (faster made it stop now and then
+// on wide pages), or longer when reading the card on the way needs it.
+constexpr int STRAIGHT_FRAMES = 20;
+constexpr int DIAGONAL_PIXELS = 9;
 constexpr int MAX_SLIDE_FRAMES = 90;   // a slide that waits for the card: at most 1.5 s
 
 // The slide's curve: how far (0..256) it is at time t (0..256). Smooth eases
@@ -107,8 +111,88 @@ bool ComicReader::open_page(gbcomic::Book& book, int page, int zoom, gbcomic::Or
     _full = true;
     _map_on_screen = false;
     _map_frames = page_map && _tiles > 1 ? MAP_FRAMES : 0;
+    // One time for every diagonal slide of the page (to another row or
+    // column): its longest one at an even speed, never quicker than a
+    // straight slide.
+    int longest = 0;
+    const bool down = _view.order == gbcomic::Order::COLUMNS;
+    for(int i = 0; i < _view.picture_count; ++i) {
+        const Grid& g = _grids[i];
+        const int count = down ? g.rows : g.columns, lines = down ? g.columns : g.rows;
+        const int16_t* along = down ? g.ys : g.xs;
+        const int16_t* across = down ? g.xs : g.ys;
+        if(lines < 2) continue;
+        const int span = absolute(along[count - 1] - along[0]);
+        if(span > longest) longest = span;
+        for(int l = 1; l < lines; ++l)
+            if(absolute(across[l] - across[l - 1]) > longest) longest = absolute(across[l] - across[l - 1]);
+    }
+    _diagonal_frames = (longest + DIAGONAL_PIXELS - 1) / DIAGONAL_PIXELS;
+    if(_diagonal_frames < STRAIGHT_FRAMES) _diagonal_frames = STRAIGHT_FRAMES;
+    _diagonal_read = false;   // the reading on the way: once the page is drawn (diagonal_reading)
     _moved_frames = 0;
     return true;
+}
+
+// Frames the diagonal slides of the picture on view need for reading on the
+// way, the longest of them: each from a line's last screen to the next
+// line's first, with the screen shown and what is read ahead beside it
+// (Region::load_beside) in memory, every eighth of the way read by the time
+// the screen gets there on the Smooth curve (as draw() checks one slide).
+int ComicReader::diagonal_reading(const gbcomic::Book& book) const
+{
+    const gbcomic::Picture& p = _view.pictures[_spot.picture];
+    const Grid& g = _grids[_spot.picture];
+    const bool down = _view.order == gbcomic::Order::COLUMNS, rtl = _view.order == gbcomic::Order::RIGHT_TO_LEFT;
+    const int lines = down ? g.columns : g.rows;
+    const int sw = _view.screen_w, sh = _view.screen_h, strip = p.strip_w, rows = p.chunk_rows;
+    const int strips = _region.strips_kept(), chunks = _region.chunks_kept();
+    if(lines < 2 || !strip || !rows || !strips || !chunks) return 0;
+    // Strips and chunk rows a rectangle covers (in the picture).
+    auto cover = [&](int x, int y, int w, int h, int (&c)[4]) {
+        const int x0 = x < 0 ? 0 : x, x1 = x + w > p.w ? p.w : x + w, y0 = y < 0 ? 0 : y, y1 = y + h > p.h ? p.h : y + h;
+        if(x0 >= x1 || y0 >= y1) { c[0] = c[2] = 0; c[1] = c[3] = -1; return; }
+        c[0] = x0 / strip; c[1] = (x1 - 1) / strip; c[2] = y0 / rows; c[3] = (y1 - 1) / rows;
+    };
+    auto in = [](const int (&c)[4], int s, int k) { return s >= c[0] && s <= c[1] && k >= c[2] && k <= c[3]; };
+    int t_at[9] = {};
+    for(int i = 1, t = 0; i <= 8; ++i) {
+        while(t < 256 && curve(t, true, false) < i * 32) ++t;
+        t_at[i] = t > 0 ? t : 1;
+    }
+    const uint32_t per_frame = _read_speed + 1;
+    int needed = 0;
+    for(int l = 0; l + 1 < lines; ++l) {
+        int fx, fy, tx, ty;
+        if(down) { fx = g.xs[l]; fy = g.ys[g.rows - 1]; tx = g.xs[l + 1]; ty = g.ys[0]; }
+        else if(rtl) { fx = g.xs[0]; fy = g.ys[l]; tx = g.xs[g.columns - 1]; ty = g.ys[l + 1]; }
+        else { fx = g.xs[g.columns - 1]; fy = g.ys[l]; tx = g.xs[0]; ty = g.ys[l + 1]; }
+        if(fx == tx || fy == ty) continue;   // a straight slide
+        // In memory at the press: the screen shown and the box of both
+        // screens, cut to what fits beside it.
+        int shown[4], target[4], beside[4];
+        cover(fx, fy, sw, sh, shown);
+        cover(tx, ty, sw, sh, target);
+        beside[0] = shown[0] < target[0] ? shown[0] : target[0];
+        beside[1] = shown[1] > target[1] ? shown[1] : target[1];
+        beside[2] = shown[2] < target[2] ? shown[2] : target[2];
+        beside[3] = shown[3] > target[3] ? shown[3] : target[3];
+        if(beside[1] - beside[0] + 1 > strips) { if(target[0] < shown[0]) beside[0] = shown[1] - strips + 1; else beside[1] = shown[0] + strips - 1; }
+        if(beside[3] - beside[2] + 1 > chunks) { if(target[2] < shown[2]) beside[2] = shown[3] - chunks + 1; else beside[3] = shown[2] + chunks - 1; }
+        for(int i = 1; i <= 8; ++i) {
+            const int px = fx + (tx - fx) * i / 8, py = fy + (ty - fy) * i / 8;
+            int box[4];
+            cover(fx < px ? fx : px, fy < py ? fy : py, absolute(px - fx) + sw, absolute(py - fy) + sh, box);
+            const bool too_big = box[1] - box[0] >= strips || box[3] - box[2] >= chunks;
+            uint32_t missing = 0;
+            for(int s = box[0]; s <= box[1]; ++s)
+                for(int k = box[2]; k <= box[3]; ++k)
+                    if(too_big || (!in(shown, s, k) && !in(beside, s, k))) missing += book.packed_bytes(p, s, k, k);
+            const int frames = int(missing * 256 / (per_frame * uint32_t(t_at[i]))) + 1;
+            if(frames > needed) needed = frames;
+        }
+    }
+    return needed > MAX_SLIDE_FRAMES ? MAX_SLIDE_FRAMES : needed;
 }
 
 void ComicReader::finish_anim()
@@ -286,8 +370,7 @@ void ComicReader::go_to(const Place& place, Slide slide)
         _from_x = _x; _from_y = _y;
         _to_x = tx; _to_y = ty;
         _anim_frame = 0;
-        _anim_frames = dx && dy ? (_anim_smooth ? DIAGONAL_FRAMES_SMOOTH : DIAGONAL_FRAMES_SLIDE)
-                                : frames_for(dx ? _view.screen_w : _view.screen_h, _anim_smooth);
+        _anim_frames = dx && dy ? _diagonal_frames : STRAIGHT_FRAMES;
     } else {
         _x = tx;
         _y = ty;
@@ -418,6 +501,13 @@ bool ComicReader::draw(gbcomic::Book& book, uint16_t* hidden, const uint16_t* sh
     const bool want_map = _page_map && _map_frames > 0 && (_still_frames >= MAP_STILL_FRAMES || whole);
     if(whole) {
         if(!_region.load(book, _x, _y) || !book.palette(p, colors)) { failed = true; return false; }
+        if(!_diagonal_read) {
+            // Every diagonal slide of the page the same time: also as long as
+            // the longest one's reading on the way needs.
+            _diagonal_read = true;
+            const int reading = diagonal_reading(book);
+            if(reading > _diagonal_frames) _diagonal_frames = reading;
+        }
         colors_changed = true;
         _region.blit(_x, _y, 0, 0, sw, sh, hidden, angle);
         _full = false;

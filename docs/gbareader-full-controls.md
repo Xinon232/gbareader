@@ -1,4 +1,4 @@
-# gbareader 11.1
+# gbareader 11.2
 
 ## Full controls
 
@@ -31,7 +31,7 @@ Read TXT and EPUB books and comics, save your reading position, and resume later
 Comics are `.gbcomic` files, converted on a computer first with the gbcomic conversion software ([halimj.itch.io](https://halimj.itch.io/)); CBZ files are not listed.
 
 - `A`: next screen, then the next page. `B`: the screen before, then the page before. Screens with nothing but paper are passed over (`Skip empty`).
-- Every slide of a kind takes the same time, however far it goes: along a row (or up and down a column) the time of a whole screen (Smooth about 0.6 s sideways, 0.4 s up or down), diagonally to the next row or column about 0.9 s. Only a diagonal slide that has to read the card on its way can take longer on a slow card.
+- Slide times: along a row (or up and down) always a third of a second (20 frames), however far it goes. A diagonal slide to the next row or column takes the same time everywhere on a page: about 9 pixels a frame over the page's longest one, longer when the card must be read on the way (on a wide page at 3.0x about 0.9 s, on narrower pages less). On a slow card a diagonal slide can still take longer.
 - `A` / `B` pressed during a slide: the next screen of the grid after the one the slide goes to (as if it had finished), sliding there from where the screen is (Smooth: at speed, without easing in again). Every press counts, also while a slide is loading: in comics the keys are read 60 times a second and presses come in turn, in order (only while reading a comic; the menus, Settings and books read the keys once a frame, and presses still waiting are dropped when you leave the comic or open Settings).
 - `L` / `R` held (when `L/R page turns` is on; the row reads `L/R zoom (held)` while a comic is open): `R` shows the comic at the next bigger zoom of its angle, `L` at the next smaller one, centred where the screen was (during a slide: on the screen it goes to), as long as the button is held (both held cancel out: its own zoom); let go, it goes back to its own zoom: exactly where it was if nothing moved meanwhile, else around the same place. D-pad, `A` and `B` work as usual meanwhile. With no bigger zoom `R` does nothing, with no smaller one `L` does nothing. Opening Settings ends it. In comics `L` / `R` no longer do what `A` / `B` do.
 - D-pad: move around the picture (D-pad scrolling Static: 16 pixels a press, hold to repeat; Slide: while held; Smooth: faster the longer it is held, gliding to a stop in even steps: 6, 6, 4, 4, 2, 2 pixels from full speed). The screens stay a fixed grid. After a move, `A` goes to the next screen of the same row that starts beyond the view, keeping its height; at the row's end (the view at the picture's right edge) to the first screen of the next row (at that row's height, or lower if you moved down past it). `B` the same way back (left edge: the last screen of the row above). Right to left mirrors this; Columns goes down the columns. Holding `Up` does not switch L/R page turns in a comic. A D-pad held while `A` / `B` is pressed does nothing until it is let go (the slide plays, the view stays). A D-pad pressed during a slide stops it where the screen is and moves on from there.
@@ -88,7 +88,7 @@ Runs on the SuperCard SD, EZ-Flash Omega (also the Definitive Edition; start the
 
 ## About / licence
 
-gbareader 11.1
+gbareader 11.2
 
 © 2026 Halim Jarrar · halimj.itch.io · gba@halim-jarrar.de
 

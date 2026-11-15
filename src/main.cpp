@@ -1,4 +1,4 @@
-// gbareader 11.1 -- streaming Supercard SD TXT/EPUB reader.
+// gbareader 11.2 -- streaming Supercard SD TXT/EPUB reader.
 
 #include "bn_bg_palette_item.h"
 #include "bn_bg_palette_ptr.h"

@@ -1,3 +1,13 @@
+# gbareader 11.2
+
+Text reading, comics, `.sav` companions, `SETTINGS0/1.DAT` and `.gbcomic` files keep working unchanged (file formats unchanged); the About page says 11.2.
+
+## Comic slides: faster and smooth
+
+- Slides along a row (and up or down) now always take a third of a second, at every zoom. In 11.1 they took 0.57 s, which on many pages meant a slow, jerky movement of a few pixels a frame.
+- A diagonal slide to the next row takes the same time everywhere on a page: about 9 pixels a frame over the page's longest diagonal, or longer when the card has to be read on the way. On a wide page at 3.0x that is about 0.9 s (11.0: 1.1 s), on narrower pages less.
+- Emulator (SuperCard model): along a row 19-20 frames at 1.6x, 2.2x and 3.0x; diagonal 33-34 / 44-45 / 52-53 frames, standing still 0-1 frames each. On a slow card a diagonal can still take longer.
+
 # gbareader 11.1
 
 Text reading, comics, `.sav` companions, `SETTINGS0/1.DAT` and `.gbcomic` files keep working unchanged (file formats unchanged); the About page says 11.1.

@@ -100,6 +100,7 @@ private:
     void finish_anim();
     // Where a slide is on frame (its target from the last frame on).
     void anim_at(int frame, int& x, int& y) const;
+    int diagonal_reading(const gbcomic::Book& book) const;
     void draw_map(uint16_t* hidden, Angle angle) const;
     comic_layout::Cells ink_cells() const;
 
@@ -131,6 +132,8 @@ private:
     int _from_x = 0, _from_y = 0, _to_x = 0, _to_y = 0, _anim_frame = 0, _anim_frames = 0;
     int _last_dx = 0, _last_dy = 0, _moved_frames = 0;
     int _last_dir = 1;   // A (1) or B (-1) last: the screen to load while waiting
+    int _diagonal_frames = 20;   // every diagonal slide of the page (open_page)
+    bool _diagonal_read = false;
 };
 
 }
