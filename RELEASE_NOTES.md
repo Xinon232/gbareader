@@ -1,3 +1,12 @@
+# gbareader 11.3
+
+Text reading, comics, `.sav` companions, `SETTINGS0/1.DAT` and `.gbcomic` files keep working unchanged (file formats unchanged); the About page says 11.3.
+
+## Comic slides move evenly
+
+- Diagonal slides no longer stutter: the movement is worked out much more finely (the screen used to jump 8, 16, 8 pixels from frame to frame on wide pages), and the part going down the screen moves pixel by pixel instead of 2, 0, 2. Row slides get the finer curve too.
+- Slide times as in 11.2: along a row a third of a second, a diagonal one time per page.
+
 # gbareader 11.2
 
 Text reading, comics, `.sav` companions, `SETTINGS0/1.DAT` and `.gbcomic` files keep working unchanged (file formats unchanged); the About page says 11.2.

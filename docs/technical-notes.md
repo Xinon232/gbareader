@@ -1,8 +1,14 @@
-# gbareader 11.2: technical notes
+# gbareader 11.3: technical notes
 
 The player-facing overview is the [README](../README.md). This page keeps the detailed behaviour, limits and version history.
 
 Read TXT and EPUB books and comics on your Game Boy Advance. Save your place and return to it later. Put books directly in `/gbareader` on a compatible Supercard SD card; they appear on Home.
+
+## 11.3: even slide steps
+
+- The slide curve is worked out in 65536ths (`curve_fine`), not 256ths: on a diagonal across a page three screens wide a 256th was nearly 2 pixels, and the frames went 8, 16, 8 pixels sideways; now the steps grow and shrink by at most 4 pixels (even steps across the screen) and 1-2 down it.
+- Only the way across the screen moves in even steps (an odd one is a slow copy in `turn_shift`); up and down the screen any step is a quick copy, so that way follows the curve pixel by pixel (the picture's x upright, its y in the 90° angles). The part of a diagonal down the screen went 2, 0, 2 pixels; now 3, 3, 4.
+- Slide times as in 11.2. `tests/test_slide_steps.py` (host, the reader's code) checks the steps of a diagonal at 3.0x upright and 2.6x sideways.
 
 ## 11.2: faster, smooth comic slides
 

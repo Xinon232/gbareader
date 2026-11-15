@@ -1,4 +1,4 @@
-# gbareader 11.2
+# gbareader 11.3
 
 ## Full controls
 
@@ -88,7 +88,7 @@ Runs on the SuperCard SD, EZ-Flash Omega (also the Definitive Edition; start the
 
 ## About / licence
 
-gbareader 11.2
+gbareader 11.3
 
 © 2026 Halim Jarrar · halimj.itch.io · gba@halim-jarrar.de
 

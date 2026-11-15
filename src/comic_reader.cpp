@@ -28,14 +28,26 @@ constexpr int STRAIGHT_FRAMES = 20;
 constexpr int DIAGONAL_PIXELS = 9;
 constexpr int MAX_SLIDE_FRAMES = 90;   // a slide that waits for the card: at most 1.5 s
 
-// The slide's curve: how far (0..256) it is at time t (0..256). Smooth eases
-// in and out (smoothstep); one that takes over from a slide on its way
-// starts at speed (the second half of the curve); Slide is even.
-int curve(int t, bool smooth, bool chained)
+// The slide's curve: how far (0..65536) it is at time t (0..65536). Smooth
+// eases in and out (smoothstep); one that takes over from a slide on its way
+// starts at speed (the second half of the curve); Slide is even. (Fine
+// enough that a long slide moves evenly: 256 steps were nearly 2 pixels each
+// on a diagonal across a wide page, and its frames went 8, 16, 8 pixels.)
+int32_t curve_fine(int32_t t, bool smooth, bool chained)
 {
-    if(smooth && chained) { const int u = 128 + t / 2; return (u * u * (768 - 2 * u) / 65536 - 128) * 2; }
-    if(smooth) return t * t * (768 - 2 * t) / 65536;
+    auto step = [](int64_t u) { return int32_t(u * u * (3 * 65536 - 2 * u) >> 32); };
+    if(smooth && chained) return (step(32768 + t / 2) - 32768) * 2;
+    if(smooth) return step(t);
     return t;
+}
+// The same in 256ths (for the reading checks).
+int curve(int t, bool smooth, bool chained) { return curve_fine(t * 256, smooth, chained) >> 8; }
+
+// a + (b - a) * f / 65536, rounded to the nearest pixel.
+int along(int a, int b, int32_t f)
+{
+    const int64_t d = int64_t(b - a) * f;
+    return a + int(d >= 0 ? (d + 32768) >> 16 : -((-d + 32768) >> 16));
 }
 
 }
@@ -479,15 +491,19 @@ bool ComicReader::draw(gbcomic::Book& book, uint16_t* hidden, const uint16_t* sh
         }
         if(++_anim_frame >= _anim_frames) finish_anim();
         else {
-            // Even steps across the screen (an odd one is a slow copy, see
-            // turn_shift): a step of 2 pixels or more is made even, so the
-            // screen stays within a pixel of the curve; 1 pixel moves
-            // anyway (Smooth starting and stopping). The last frame lands
-            // on the target.
+            // Both ways at the same point of the curve. Across the screen the
+            // steps are even (an odd one is a slow copy, see turn_shift): a
+            // step of 2 pixels or more is made even, so the screen stays
+            // within a pixel of the curve; 1 pixel moves anyway (Smooth
+            // starting and stopping). Up and down the screen any step is a
+            // quick copy, so that way follows the curve pixel by pixel. The
+            // picture's x runs across the screen upright, its y sideways.
+            // The last frame lands on the target.
             int ax, ay;
             anim_at(_anim_frame, ax, ay);
-            _x = even_step(_x, ax);
-            _y = even_step(_y, ay);
+            const bool x_across = angle == Angle::NORMAL || angle == Angle::UPSIDE_DOWN;
+            _x = x_across ? even_step(_x, ax) : ax;
+            _y = x_across ? ay : even_step(_y, ay);
         }
     }
     if(_moved_frames > 0) --_moved_frames;
@@ -545,9 +561,9 @@ bool ComicReader::draw(gbcomic::Book& book, uint16_t* hidden, const uint16_t* sh
 void ComicReader::anim_at(int frame, int& x, int& y) const
 {
     if(frame >= _anim_frames) { x = _to_x; y = _to_y; return; }
-    const int t = curve(frame * 256 / _anim_frames, _anim_smooth, _anim_chained);
-    x = _from_x + (_to_x - _from_x) * t / 256;
-    y = _from_y + (_to_y - _from_y) * t / 256;
+    const int32_t f = curve_fine(int32_t(int64_t(frame) * 65536 / _anim_frames), _anim_smooth, _anim_chained);
+    x = along(_from_x, _to_x, f);
+    y = along(_from_y, _to_y, f);
 }
 
 bool ComicReader::prefetch(gbcomic::Book& book, int budget, uint32_t max_bytes)

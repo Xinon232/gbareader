@@ -1,10 +1,10 @@
-# gbareader 11.2
+# gbareader 11.3
 
 **Read books and comics on your Game Boy Advance.**
 
 gbareader turns a Game Boy Advance with a flashcart (SuperCard SD, EZ-Flash Omega or EverDrive GBA) into a pocket e-reader. Put your TXT and EPUB books and your comics on the SD card, pick one from the list, and start reading. Press Start to save your page, and the next time you open the book you are right back where you left off.
 
-This repository holds the complete source code of gbareader 11.2: the ROM, the gbcomic conversion software for comics (`tools/gbcomic*.py`, `tools/converter/`) and the instructions (`docs/gbareader-guide.pdf`, `docs/gbareader-full-controls.pdf`). It contains no ready-made ROM or programs. The ROM and the ready-made conversion software (Windows and Linux) are free at **[halimj.itch.io](https://halimj.itch.io/)**, or [build it yourself](#building-it-yourself).
+This repository holds the complete source code of gbareader 11.3: the ROM, the gbcomic conversion software for comics (`tools/gbcomic*.py`, `tools/converter/`) and the instructions (`docs/gbareader-guide.pdf`, `docs/gbareader-full-controls.pdf`). It contains no ready-made ROM or programs. The ROM and the ready-made conversion software (Windows and Linux) are free at **[halimj.itch.io](https://halimj.itch.io/)**, or [build it yourself](#building-it-yourself).
 
 ## What it can do
 
@@ -55,7 +55,7 @@ The conversion software runs from source with Python 3.8 or newer, Pillow and, f
 
 ## License
 
-gbareader 11.2 · © 2026 Halim Jarrar · [halimj.itch.io](https://halimj.itch.io/) · gba@halim-jarrar.de
+gbareader 11.3 · © 2026 Halim Jarrar · [halimj.itch.io](https://halimj.itch.io/) · gba@halim-jarrar.de
 
 gbareader is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version (GPL-3.0-or-later, see [LICENSE](LICENSE)).
 
