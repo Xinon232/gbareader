@@ -42,8 +42,8 @@ CELL = 8                # ink grid: one bit per 8 x 8 pixels
 PANEL_UNIT = 4096
 ORIENTATIONS = [(240, 160), (160, 240)]                         # 0 upright, 1 sideways
 KIND_FIT_PAGE, KIND_WIDTH = 0, 1
-DEFAULT_NORMAL = '1.6,1.8,2.0'
-DEFAULT_SIDEWAYS = '2.2,2.4,2.6'
+DEFAULT_NORMAL = '1.4,1.7'
+DEFAULT_SIDEWAYS = '1.8,2.2'
 # The zooms a file can have, in hundredths: upright (Normal, Upside down) and sideways (90°).
 # 1.0 is Fit width, always in the file (typing it adds nothing). Any number of
 # them: with Fit page and Fit width at most 44 zooms (the reader takes 48).

@@ -23,10 +23,10 @@ python3 tools/gbcomic.py "My Comic.cbz"                   # defaults: writes My 
 python3 tools/gbcomic.py book.pdf -o Book.gbcomic --angles sideways --sideways 2.3,2.5
 ```
 
-Copy the `.gbcomic` into `/gbareader` (or import it with `Start`). Defaults: Fit page, Fit width, 1.6x, 1.8x and 2x for the upright angles, Fit page, Fit width, 2.2x, 2.4x and 2.6x for the sideways ones, light sharpening, light margin crop: about 1.2 MB per page for a colour comic (one kind of angle only: about 0.6 MB). Options:
+Copy the `.gbcomic` into `/gbareader` (or import it with `Start`). Defaults: Fit page, Fit width, 1.4x and 1.7x for the upright angles, Fit page, Fit width, 1.8x and 2.2x for the sideways ones, light sharpening, light margin crop: about 0.65 MB per page for a colour comic (one kind of angle only: about 0.3-0.35 MB). In the window, `Save settings` keeps the zooms, angles and picture options for the next start (in `%APPDATA%\gbcomic\settings.json`, `~/.config/gbcomic/settings.json` on Linux), `My settings` brings them back and `Reset to defaults` sets these defaults (the saved settings stay saved). Options:
 
-- `--normal 1.6,1.8,2.0`: upright zooms, any of 1.1 to 3.0 in steps of 0.1.
-- `--sideways 2.2,2.4,2.6`: sideways (90°) zooms, any of 1.1 to 3.0 in steps of 0.1. Fit page and Fit width (1.0) are always there. Each zoom adds about its size squared (2x is four times Fit width).
+- `--normal 1.4,1.7`: upright zooms, any of 1.1 to 3.0 in steps of 0.1.
+- `--sideways 1.8,2.2`: sideways (90°) zooms, any of 1.1 to 3.0 in steps of 0.1. Fit page and Fit width (1.0) are always there. Each zoom adds about its size squared (2x is four times Fit width).
 - `--angles both|upright|sideways`: screens for Normal and Upside down (upright), 90° right and left (sideways), or both.
 - `--ask`: ask for the angles and zooms first (in a terminal); several comics take the same answers.
 - `--dither`: smoother colour gradients (a little larger; can look grainy on line art).

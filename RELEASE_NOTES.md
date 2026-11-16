@@ -2,6 +2,11 @@
 
 Text reading, comics, `.sav` companions, `SETTINGS0/1.DAT` and `.gbcomic` files keep working unchanged (file formats unchanged); the About page says 12.0.
 
+## Converter update (with gbareader 12.0)
+
+- New default zooms: 1.4x and 1.7x upright (Normal, Upside down), 1.8x and 2.2x sideways (90°); before 1.6x, 1.8x, 2x and 2.2x, 2.4x, 2.6x. Files about half as large (about 0.65 MB a colour page). The reader is unchanged: it reads any zooms.
+- `Save settings`: the converter keeps your zooms, angles and picture options and starts with them; `My settings` brings them back, `Reset to defaults` always sets the defaults (your saved settings stay saved).
+
 ## Comic slides: even speed, smooth movement
 
 - Slides along a row (and up or down) always take a third of a second (20 frames), at every zoom and however far they go. Before, the time followed the distance, so slides on one page could be quick or slow.

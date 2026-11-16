@@ -5,6 +5,7 @@ this file); this is only the window around it.
 
     python3 gbcomic_gui.py [comic ...]
 """
+import json
 import os
 import queue
 import sys
@@ -21,6 +22,14 @@ import gbcomic_preview as preview  # noqa: E402
 TITLE = 'gbcomic converter'
 COMIC_TYPES = [('Comics', '*.pdf *.epub *.cbz *.zip *.jpg *.jpeg *.png *.webp *.gif *.bmp *.tif *.tiff'),
                ('All files', '*.*')]
+
+
+# The settings saved with 'Save settings' (used at each start): the zooms,
+# angles and picture options, not the comics or where they are saved.
+SETTINGS_FILE = os.path.join(os.environ.get('APPDATA') or os.environ.get('XDG_CONFIG_HOME')
+                             or os.path.join(os.path.expanduser('~'), '.config'), 'gbcomic', 'settings.json')
+FACTORY = dict(angles='both', normal=gbcomic.DEFAULT_NORMAL, sideways=gbcomic.DEFAULT_SIDEWAYS,
+               sharpen='light', margins='light', spreads='auto', dpi=200, dither=False, boost=False)
 
 
 class Stop(Exception):
@@ -91,13 +100,16 @@ class Window:
                 box_.grid(row=i // 10, column=i % 10, sticky='w')
                 self.zoom_vars[orientation][value] = var
                 self.zoom_boxes[orientation][value] = box_
-        ttk.Label(screens, text=f'Fit page and Fit width are always included. Default: '
-                                f'{gbcomic.DEFAULT_NORMAL.replace(",", ", ")} and '
+        ttk.Label(screens, text=f'Fit page and Fit width are always included. Defaults: upright '
+                                f'{gbcomic.DEFAULT_NORMAL.replace(",", ", ")}, sideways '
                                 f'{gbcomic.DEFAULT_SIDEWAYS.replace(",", ", ")}. Preview: see a zoom on the GBA screen.',
                   foreground='#666').grid(row=3, column=0, columnspan=2, sticky='w', pady=(6, 0))
         side = ttk.Frame(screens)
         side.grid(row=0, column=2, rowspan=3, sticky='ne')
-        ttk.Button(side, text='Defaults', command=lambda: self.set_defaults(defaults)).pack(fill='x')
+        ttk.Button(side, text='Reset to defaults', command=self.reset_defaults).pack(fill='x')
+        ttk.Button(side, text='Save settings', command=self.save_settings).pack(fill='x', pady=(4, 0))
+        self.saved_button = ttk.Button(side, text='My settings', command=self.load_saved)
+        self.saved_button.pack(fill='x', pady=(4, 0))
         self.preview_button = ttk.Button(side, text='Preview…', command=self.open_preview)
         self.preview_button.pack(fill='x', pady=(4, 0))
         self.preview_window = None
@@ -161,6 +173,7 @@ class Window:
         self.log.grid(row=5, column=0, sticky='nsew', pady=(8, 0))
         outer.rowconfigure(5, weight=1)
 
+        self.load_saved(quiet=True)
         for f in files:
             self.add(f)
         self.update()
@@ -207,11 +220,77 @@ class Window:
     def chosen(self, orientation):
         return sorted(v for v, var in self.zoom_vars[orientation].items() if var.get())
 
-    def set_defaults(self, defaults):
-        for orientation in (0, 1):
+    def settings(self):
+        return dict(angles=self.angles.get(),
+                    normal=','.join(gbcomic.zoom_text(v) for v in self.chosen(0)),
+                    sideways=','.join(gbcomic.zoom_text(v) for v in self.chosen(1)),
+                    sharpen=self.sharpen.get(), margins=self.margins.get(), spreads=self.spreads.get(),
+                    dpi=int(self.dpi.get()), dither=bool(self.dither.get()), boost=bool(self.boost.get()))
+
+    def apply(self, s):
+        # Anything missing or not understood keeps its default.
+        s = {**FACTORY, **{k: v for k, v in s.items() if k in FACTORY}}
+        for name, choices in (('angles', ('both', 'upright', 'sideways')), ('sharpen', ('off', 'light', 'strong')),
+                              ('margins', ('off', 'light', 'strong')), ('spreads', ('auto', 'always', 'never'))):
+            if s[name] not in choices:
+                s[name] = FACTORY[name]
+        for orientation, key, choices in ((0, 'normal', gbcomic.NORMAL_CHOICES),
+                                          (1, 'sideways', gbcomic.SIDEWAYS_CHOICES)):
+            try:
+                zooms = gbcomic.factors(str(s[key]), choices, key) if s[key] else []
+            except ValueError:
+                zooms = gbcomic.factors(FACTORY[key], choices, key)
             for value, var in self.zoom_vars[orientation].items():
-                var.set(value in defaults[orientation])
+                var.set(value in zooms)
+        self.angles.set(s['angles'])
+        self.sharpen.set(s['sharpen'])
+        self.margins.set(s['margins'])
+        self.spreads.set(s['spreads'])
+        try:
+            self.dpi.set(min(400, max(100, int(s['dpi']))))
+        except (TypeError, ValueError):
+            self.dpi.set(FACTORY['dpi'])
+        self.dither.set(bool(s['dither']))
+        self.boost.set(bool(s['boost']))
         self.update()
+
+    def say(self, text):
+        if self.worker is None:
+            self.status.configure(text=text)
+
+    def reset_defaults(self):
+        # The converter's own defaults (saved settings stay saved).
+        self.apply(FACTORY)
+        self.say('Settings reset to the defaults (your saved settings are kept).')
+
+    def save_settings(self):
+        try:
+            self.dpi.get()
+        except tk.TclError:
+            self.dpi.set(FACTORY['dpi'])
+        try:
+            os.makedirs(os.path.dirname(SETTINGS_FILE), exist_ok=True)
+            with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(self.settings(), f, indent=1)
+        except OSError as e:
+            messagebox.showerror(TITLE, f'Could not save the settings:\n{e}')
+            return
+        self.say('Settings saved: used each time the converter starts ("My settings" brings them back).')
+        self.update()
+
+    def load_saved(self, quiet=False):
+        try:
+            with open(SETTINGS_FILE, encoding='utf-8') as f:
+                s = json.load(f)
+            if not isinstance(s, dict):
+                raise ValueError
+        except (OSError, ValueError):
+            if not quiet:
+                messagebox.showinfo(TITLE, 'No saved settings yet: press "Save settings" first.')
+            return
+        self.apply(s)
+        if not quiet:
+            self.say('Your saved settings.')
 
     def update(self):
         angles = self.angles.get()
@@ -227,6 +306,7 @@ class Window:
         if self.preview_window is not None:
             self.preview_window.comics_changed()
         self.cancel_button.state(['!disabled'] if busy else ['disabled'])
+        self.saved_button.state(['!disabled'] if os.path.isfile(SETTINGS_FILE) else ['disabled'])
 
     def write(self, text):
         self.log.configure(state='normal')

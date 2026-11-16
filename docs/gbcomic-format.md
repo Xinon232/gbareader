@@ -27,7 +27,7 @@ Every page record, view and picture starts on a 4-byte boundary.
 
 The zooms of each angle are listed smallest first. The converter makes Fit
 page and Fit width for each angle it makes, then the zooms asked for
-(by default 1.6x, 1.8x, 2x upright and 2.2x, 2.4x, 2.6x sideways).
+(by default 1.4x, 1.7x upright and 1.8x, 2.2x sideways; before the November 2026 converter 1.6x, 1.8x, 2x and 2.2x, 2.4x, 2.6x).
 
 ## Page table
 

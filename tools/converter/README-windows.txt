@@ -10,12 +10,15 @@ Start gbcomic.exe (or drop comics on it):
   2. Choose the angles: both, upright only (Normal, Upside down) or
      sideways only (90°).
   3. Tick the zooms you want (as many as you like) for each angle:
-       upright   1.1 to 3.0 (default 1.6, 1.8, 2.0)
-       sideways  1.1 to 3.0 (default 2.2, 2.4, 2.6)
+       upright   1.1 to 3.0 (default 1.4, 1.7)
+       sideways  1.1 to 3.0 (default 1.8, 2.2)
      Fit page and Fit width are always included. Preview... shows a page
      at a zoom on the GBA screen (240 x 160) before you convert: pages,
      A / B, D-pad and mouse to move around, page map. The window shows about
      how large the file gets per page.
+     Save settings keeps your zooms, angles and picture options for the
+     next start; My settings brings them back, Reset to defaults sets the
+     defaults above (your saved settings stay saved).
   4. Press Convert. The .gbcomic files appear next to the comics (or in
      the folder you chose). Copy them to /gbareader on the SD card, or
      import them in gbareader with Start.
